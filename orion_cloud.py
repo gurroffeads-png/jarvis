@@ -55,15 +55,17 @@ if _PG:
                     database=(_pu.path or "/").lstrip("/") or "postgres")
 
 class _PgCur:
-    """Faz o cursor do pg8000 devolver linhas estilo dict (row["coluna"]), como o sqlite3.Row."""
+    """Faz o cursor do pg8000 devolver linhas estilo dict (row["coluna"]), como o sqlite3.Row.
+    OBS: o pg8000 devolve UMA linha tambem como lista, entao fetchone e fetchall sao tratados
+    separadamente (nao da pra distinguir pelo tipo)."""
     def __init__(self, cur): self._c = cur; self.lastrowid = None
-    def _wrap(self, raw):
-        if raw is None: return None
-        cols = [d[0] for d in (self._c.description or [])]
-        if isinstance(raw, list): return [dict(zip(cols, r)) for r in raw]
-        return dict(zip(cols, raw))
-    def fetchone(self): return self._wrap(self._c.fetchone())
-    def fetchall(self): return self._wrap(self._c.fetchall()) or []
+    def _cols(self): return [d[0] for d in (self._c.description or [])]
+    def fetchone(self):
+        row = self._c.fetchone()
+        return dict(zip(self._cols(), row)) if row is not None else None
+    def fetchall(self):
+        cols = self._cols()
+        return [dict(zip(cols, r)) for r in self._c.fetchall()]
     def __iter__(self): return iter(self.fetchall())
 
 class _PgConn:
