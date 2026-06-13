@@ -19,7 +19,7 @@ Roda com Python puro (stdlib). Configuracao por variaveis de ambiente:
   PAYPAL_CLIENT_ID/PAYPAL_SECRET/PAYPAL_MODE - opcional
 """
 import os, json, time, sqlite3, hmac, hashlib, base64, datetime, secrets, threading
-import urllib.request, urllib.parse
+import urllib.request, urllib.parse, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 
@@ -105,9 +105,14 @@ def cloud_chat(system, messages, max_tokens=700):
     try:
         req = urllib.request.Request(LLM_BASE.rstrip("/") + "/chat/completions",
             data=json.dumps(body).encode(),
-            headers={"Authorization": f"Bearer {LLM_KEY}", "Content-Type": "application/json"})
+            headers={"Authorization": f"Bearer {LLM_KEY}", "Content-Type": "application/json",
+                     "User-Agent": "Mozilla/5.0"})  # Cloudflare da Groq bloqueia o UA padrao do urllib (403/1010)
         r = json.loads(urllib.request.urlopen(req, timeout=40).read().decode())
         return (r["choices"][0]["message"]["content"] or "").strip()
+    except urllib.error.HTTPError as e:
+        corpo = e.read()[:300].decode("utf-8", "ignore")
+        print("[llm]", e.code, corpo)
+        return f"Tive um problema pra pensar agora ({e.code}). Tente de novo, senhor."
     except Exception as e:
         print("[llm]", e)
         return f"Tive um problema pra pensar agora ({e}). Tente de novo, senhor."
@@ -307,12 +312,12 @@ def checkout(u, plano, provedor, burl):
 # ======================= VISAO (Groq, le grafico/foto) =======================
 def cloud_vision(b64, instr, max_tokens=600):
     if not LLM_KEY: return ""
-    model = os.environ.get("LLM_VISION_MODEL", "llama-3.2-90b-vision-preview")
+    model = os.environ.get("LLM_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
     body = {"model":model,"max_tokens":max_tokens,"temperature":0.3,"messages":[{"role":"user","content":[
         {"type":"text","text":instr},{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,"+b64}}]}]}
     try:
         req = urllib.request.Request(LLM_BASE.rstrip("/")+"/chat/completions", data=json.dumps(body).encode(),
-            headers={"Authorization":f"Bearer {LLM_KEY}","Content-Type":"application/json"})
+            headers={"Authorization":f"Bearer {LLM_KEY}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
         r = json.loads(urllib.request.urlopen(req, timeout=45).read().decode())
         return (r["choices"][0]["message"]["content"] or "").strip()
     except Exception as e:
