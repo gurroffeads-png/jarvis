@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orion - Seu assistente pessoal de IA</title>
+<meta name="description" content="Orion e um assistente pessoal de IA que conversa por voz e texto, escreve documentos, organiza sua rotina e conecta seus apps. Comece de graca.">
+<link rel="icon" href="/logo">
+<style>
+:root{--bg:#08090d;--bg2:#0d1016;--panel:#12161f;--panel2:#171c28;--line:#222a39;--line2:#2e3850;
+ --text:#eef1f6;--dim:#9aa3b5;--faint:#626b7e;--accent:#7aa2ff;--accent2:#9b8cff;--good:#46d39a;
+ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,system-ui,sans-serif;}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 24px;border-radius:12px;font-weight:700;font-size:15px;border:1px solid var(--line2);background:var(--panel2);color:var(--text);cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--accent);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#0a0c11;box-shadow:0 8px 30px rgba(122,162,255,.25)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.lg{padding:16px 32px;font-size:16px}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:50;backdrop-filter:blur(12px);background:rgba(8,9,13,.7);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:24px;height:64px}
+nav .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px}
+nav .logo img{width:30px;height:30px;border-radius:8px}
+nav .links{display:flex;gap:26px;margin-left:20px}
+nav .links a{color:var(--dim);font-size:14px;font-weight:500}
+nav .links a:hover{color:var(--text)}
+nav .sp{flex:1}
+@media(max-width:780px){nav .links{display:none}}
+
+/* HERO */
+.hero{position:relative;padding:150px 0 90px;text-align:center;overflow:hidden}
+#stars{position:absolute;inset:0;z-index:0}
+.hero .wrap{position:relative;z-index:1}
+.badge{display:inline-block;padding:6px 14px;border:1px solid var(--line2);border-radius:30px;font-size:12.5px;color:var(--accent);margin-bottom:24px;background:rgba(122,162,255,.08)}
+.hero h1{font-size:60px;line-height:1.05;font-weight:800;letter-spacing:-1.5px;margin-bottom:22px}
+.hero h1 .g{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{font-size:19px;color:var(--dim);max-width:600px;margin:0 auto 34px;line-height:1.6}
+.hero .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.hero .note{margin-top:18px;font-size:13px;color:var(--faint)}
+@media(max-width:780px){.hero h1{font-size:38px}.hero p{font-size:16px}}
+
+.section{padding:80px 0}
+.section h2{font-size:38px;font-weight:800;letter-spacing:-1px;text-align:center;margin-bottom:12px}
+.section .lead{text-align:center;color:var(--dim);font-size:17px;max-width:620px;margin:0 auto 50px;line-height:1.6}
+.kicker{text-align:center;color:var(--accent);font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px}
+
+/* FEATURES */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+.feat{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:28px}
+.feat:hover{border-color:var(--line2)}
+.feat .ic{width:46px;height:46px;border-radius:12px;background:rgba(122,162,255,.12);display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.feat .ic svg{width:24px;height:24px;color:var(--accent)}
+.feat h3{font-size:18px;margin-bottom:8px}
+.feat p{color:var(--dim);font-size:14.5px;line-height:1.6}
+
+/* USE CASES */
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+.case{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:18px;padding:26px}
+.case .who{font-size:13px;color:var(--accent);font-weight:700;margin-bottom:10px}
+.case .quote{font-size:16px;line-height:1.6;margin-bottom:14px}
+.case .res{font-size:13.5px;color:var(--dim);border-top:1px solid var(--line);padding-top:12px}
+
+/* INTEGRATIONS */
+.logos{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:880px;margin:0 auto}
+.logos .chip{padding:10px 18px;border:1px solid var(--line2);border-radius:30px;font-size:14px;color:var(--dim);background:var(--panel)}
+
+/* PRICING */
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;max-width:1000px;margin:0 auto}
+.plan{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:30px 26px;position:relative;display:flex;flex-direction:column}
+.plan.feat{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 16px 50px rgba(122,162,255,.15)}
+.plan .tag{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0c11;font-size:11px;font-weight:800;padding:5px 14px;border-radius:20px;text-transform:uppercase}
+.plan .pn{font-size:20px;font-weight:700}
+.plan .pp{font-size:40px;font-weight:800;margin:14px 0 2px}
+.plan .pp small{font-size:15px;color:var(--dim);font-weight:600}
+.plan .pdesc{color:var(--dim);font-size:13.5px;min-height:38px;margin-bottom:8px}
+.plan ul{list-style:none;margin:18px 0;display:flex;flex-direction:column;gap:11px;flex:1}
+.plan li{font-size:14px;display:flex;gap:10px;line-height:1.4}
+.plan li svg{width:17px;height:17px;color:var(--good);flex:none;margin-top:1px}
+.plan .btn{width:100%;justify-content:center}
+
+/* FAQ */
+.faq{max-width:760px;margin:0 auto}
+.qa{border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:12px;background:var(--panel)}
+.qa h4{font-size:16px;margin-bottom:8px}
+.qa p{color:var(--dim);font-size:14.5px;line-height:1.6}
+
+/* CTA + FOOTER */
+.cta-final{text-align:center;background:linear-gradient(135deg,rgba(122,162,255,.1),rgba(155,140,255,.06));border:1px solid var(--line2);border-radius:24px;padding:60px 30px;margin:0 24px}
+.cta-final h2{font-size:36px;margin-bottom:14px}
+.cta-final p{color:var(--dim);margin-bottom:28px;font-size:17px}
+footer{border-top:1px solid var(--line);padding:50px 0 40px;margin-top:80px}
+footer .cols{display:flex;flex-wrap:wrap;gap:40px;justify-content:space-between}
+footer .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;margin-bottom:10px}
+footer .logo img{width:28px;height:28px;border-radius:7px}
+footer .col h5{font-size:13px;color:var(--faint);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+footer .col a{display:block;color:var(--dim);font-size:14px;margin-bottom:8px}
+footer .col a:hover{color:var(--text)}
+footer .bottom{text-align:center;color:var(--faint);font-size:13px;margin-top:40px;border-top:1px solid var(--line);padding-top:24px}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="logo" href="#top"><img src="/logo" alt="Orion">Orion</a>
+  <div class="links">
+    <a href="#recursos">Recursos</a>
+    <a href="#casos">Casos de uso</a>
+    <a href="#integracoes">Integracoes</a>
+    <a href="#precos">Precos</a>
+  </div>
+  <div class="sp"></div>
+  <a class="btn" href="/" style="padding:9px 18px;font-size:14px">Entrar</a>
+  <a class="btn primary" href="/" style="padding:9px 18px;font-size:14px">Comecar gratis</a>
+</div></nav>
+
+<header class="hero" id="top">
+  <canvas id="stars"></canvas>
+  <div class="wrap">
+    <span class="badge">Novo: seu mordomo digital, em portugues</span>
+    <h1>O assistente pessoal de IA<br>que <span class="g">cuida do seu dia</span></h1>
+    <p>Converse por voz ou texto. O Orion escreve seus documentos, organiza sua rotina, lembra do que importa e conecta seus apps. Tudo em um lugar.</p>
+    <div class="cta">
+      <a class="btn primary lg" href="/">Comecar de graca</a>
+      <a class="btn lg" href="#precos">Ver planos</a>
+    </div>
+    <div class="note">Gratis pra sempre no plano Start. Sem cartao pra comecar.</div>
+  </div>
+</header>
+
+<section class="section" id="lista" style="padding-top:40px">
+  <div class="wrap" style="max-width:560px">
+    <div style="background:linear-gradient(135deg,rgba(122,162,255,.1),rgba(155,140,255,.06));border:1px solid var(--line2);border-radius:20px;padding:34px 28px;text-align:center">
+      <div class="kicker">Lista de espera</div>
+      <h2 style="font-size:26px;margin-bottom:10px">Seja o primeiro a usar o Orion</h2>
+      <p style="color:var(--dim);font-size:15px;margin-bottom:22px">Deixe seu e-mail e a gente avisa assim que abrir, com condicao especial de lancamento.</p>
+      <form name="lista-espera" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/obrigado.html" style="display:flex;flex-direction:column;gap:12px">
+        <input type="hidden" name="form-name" value="lista-espera">
+        <p hidden><label>Nao preencha: <input name="bot-field"></label></p>
+        <input type="text" name="nome" placeholder="Seu nome" required style="background:var(--panel);border:1px solid var(--line2);color:var(--text);border-radius:12px;padding:14px 16px;font-size:15px;font-family:inherit">
+        <input type="email" name="email" placeholder="seu@email.com" required style="background:var(--panel);border:1px solid var(--line2);color:var(--text);border-radius:12px;padding:14px 16px;font-size:15px;font-family:inherit">
+        <button type="submit" class="btn primary lg" style="justify-content:center">Quero ser avisado</button>
+      </form>
+      <div style="color:var(--faint);font-size:12px;margin-top:12px">Sem spam. So o aviso de lancamento.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="recursos">
+  <div class="wrap">
+    <div class="kicker">Tudo que voce precisa</div>
+    <h2>Um assistente, mil tarefas</h2>
+    <p class="lead">Do e-mail dificil de escrever ao treino da semana, o Orion resolve com voce.</p>
+    <div class="grid">
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg></div><h3>Voz e texto</h3><p>Fale naturalmente ou digite. O Orion entende, responde e age, com uma voz calma de mordomo.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></div><h3>Documentos prontos</h3><p>E-mails, redacoes, curriculos, contratos simples e relatorios bem escritos em segundos.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-3.5-6.6"/><path d="M20 4v5h-5"/></svg></div><h3>Rotina e progresso</h3><p>Monte rotinas de academia, estudo e habitos sustentaveis e acompanhe sua evolucao no app.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="12" r="2.4"/><path d="M8.4 6H13a3 3 0 0 1 3 3M8.4 18H13a3 3 0 0 0 3-3"/></svg></div><h3>Memoria que lembra</h3><p>Uma arvore de memoria que aprende quem voce e e fica mais util a cada conversa.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></div><h3>Conecta seus apps</h3><p>Gmail, Agenda, Drive, Notion, WhatsApp e muito mais. O Orion trabalha com as ferramentas que voce ja usa.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div><h3>Privacidade primeiro</h3><p>O cerebro padrao roda local. Senhas, cartoes e tokens nunca entram na memoria. Em conformidade com a LGPD.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="casos" style="background:var(--bg2)">
+  <div class="wrap">
+    <div class="kicker">Pra cada pessoa</div>
+    <h2>Feito pra vida real</h2>
+    <p class="lead">Nao importa quem voce e: o Orion se adapta ao seu objetivo.</p>
+    <div class="cases">
+      <div class="case"><div class="who">Estudante</div><div class="quote">"Orion, escreve uma redacao de ingles sobre meio ambiente, nivel intermediario."</div><div class="res">Texto pronto, corrigido e no tom da aula, em segundos.</div></div>
+      <div class="case"><div class="who">Pai comecando na academia</div><div class="quote">"Monta uma rotina de treino sustentavel, 3x na semana, e me acompanha."</div><div class="res">Plano semanal, check-ins diarios e grafico de progresso no app.</div></div>
+      <div class="case"><div class="who">Profissional e agencias</div><div class="quote">"Resume os e-mails de hoje e prepara minha reuniao das 15h."</div><div class="res">Caixa de entrada organizada, agenda no ponto e automacoes de trabalho.</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="integracoes">
+  <div class="wrap">
+    <div class="kicker">Integracoes</div>
+    <h2>Conecte o Orion ao seu mundo</h2>
+    <p class="lead">Email, calendario, arquivos, projetos e comunicacao. Novas integracoes toda semana.</p>
+    <div class="logos">
+      <span class="chip">Gmail</span><span class="chip">Google Agenda</span><span class="chip">Google Drive</span><span class="chip">Outlook</span>
+      <span class="chip">OneDrive</span><span class="chip">Dropbox</span><span class="chip">Box</span><span class="chip">Notion</span>
+      <span class="chip">Linear</span><span class="chip">GitHub</span><span class="chip">Slack</span><span class="chip">Discord</span>
+      <span class="chip">Trello</span><span class="chip">ClickUp</span><span class="chip">WhatsApp</span><span class="chip">Telegram</span>
+      <span class="chip">Spotify</span><span class="chip">HubSpot</span><span class="chip">Zapier</span><span class="chip">Meta Ads</span>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="precos" style="background:var(--bg2)">
+  <div class="wrap">
+    <div class="kicker">Precos</div>
+    <h2>Comece de graca</h2>
+    <p class="lead">Suba de plano quando quiser mais poder. Cancele a qualquer momento.</p>
+    <div class="plans">
+      <div class="plan">
+        <div class="pn">Start</div><div class="pp">R$ 0</div><div class="pdesc">Pra experimentar no dia a dia.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Chat de texto: 15 por dia</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Voz: 10 min por dia</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>3 documentos por mes</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>1 integracao Google</li>
+        </ul>
+        <a class="btn" href="/">Comecar gratis</a>
+      </div>
+      <div class="plan feat">
+        <span class="tag">Mais popular</span>
+        <div class="pn">Pro</div><div class="pp">R$ 59,99 <small>/mes</small></div><div class="pdesc">Pra quem usa o Orion todo dia.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Chat e voz ilimitados</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Documentos ilimitados</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Memoria de longo prazo</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Rotina e Progresso completo</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Todas as integracoes Google</li>
+        </ul>
+        <a class="btn primary js-plano" href="/">Assinar Pro</a>
+      </div>
+      <div class="plan">
+        <div class="pn">Business</div><div class="pp">R$ 109,99 <small>/mes</small></div><div class="pdesc">Pra profissionais e equipes.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Tudo do Pro</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>ClickUp, Apollo e Meta Ads</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Automacoes estilo Make</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Multi-perfis e equipe</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Suporte prioritario</li>
+        </ul>
+        <a class="btn js-plano" href="/">Assinar Business</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="kicker">Duvidas</div>
+    <h2>Perguntas frequentes</h2>
+    <div class="faq" style="margin-top:40px">
+      <div class="qa"><h4>O Orion funciona offline?</h4><p>O cerebro padrao (Ollama) roda localmente no seu computador, de graca. Voce tambem pode plugar sua propria chave de IA na nuvem se quiser, sem mudar seu plano.</p></div>
+      <div class="qa"><h4>Meus dados estao seguros?</h4><p>Sim. Senhas, cartoes e tokens nunca sao guardados na memoria. Voce pode exportar ou apagar tudo quando quiser. Seguimos a LGPD.</p></div>
+      <div class="qa"><h4>Como funciona o pagamento?</h4><p>Assinatura mensal via Mercado Pago (Pix, boleto ou cartao). Cancele quando quiser, sem multa.</p></div>
+      <div class="qa"><h4>Posso usar no celular?</h4><p>Sim, o Orion funciona no navegador do celular e tera app dedicado em breve.</p></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:40px 0 90px">
+  <div class="cta-final">
+    <h2>Pronto pra ter seu mordomo digital?</h2>
+    <p>Comece de graca hoje. Leva menos de um minuto.</p>
+    <a class="btn primary lg" href="/">Comecar de graca</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div style="max-width:280px">
+        <div class="logo"><img src="/logo" alt="Orion">Orion</div>
+        <p style="color:var(--dim);font-size:14px;line-height:1.6">Seu assistente pessoal de IA, em portugues. Cuida do seu dia a dia por voz e texto.</p>
+      </div>
+      <div class="col"><h5>Produto</h5><a href="#recursos">Recursos</a><a href="#integracoes">Integracoes</a><a href="#precos">Precos</a><a href="/">Abrir o app</a></div>
+      <div class="col"><h5>Legal</h5><a href="/#termos" onclick="abrirApp('termos');return false">Termos de Uso</a><a href="/#privacidade" onclick="abrirApp('privacidade');return false">Privacidade</a></div>
+      <div class="col"><h5>Contato</h5><a href="mailto:gurroffeads@gmail.com">gurroffeads@gmail.com</a></div>
+    </div>
+    <div class="bottom">Orion (c) 2026 - Feito no Brasil. Todos os direitos reservados.</div>
+  </div>
+</footer>
+
+<script>
+// ===================================================================
+//  COLE AQUI a URL do seu app quando ele estiver no ar (Render).
+//  Ex: const APP_URL = "https://orion.onrender.com";
+//  Deixe vazio ("") enquanto nao tiver: os botoes rolam pros precos.
+const APP_URL = "";
+// ===================================================================
+function appHref(){ return APP_URL || "#lista"; }   // sem app no ar -> manda pra lista de espera
+function abrirApp(){ location.href = appHref(); }
+// liga todos os botoes "do app" (Entrar, Comecar, Assinar) ao APP_URL
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.querySelectorAll('a').forEach(a=>{
+    const h=a.getAttribute('href');
+    if(h==='/' || h==='#planos' || h==='index.html'){
+      a.setAttribute('href', appHref());
+      if(APP_URL) a.setAttribute('target','_blank');
+    }
+  });
+  // botoes de plano: vao direto pra tela de Planos do app (se ja tiver app no ar)
+  document.querySelectorAll('.js-plano').forEach(a=>{
+    a.setAttribute('href', APP_URL ? (APP_URL.replace(/\\/$/,'') + '/?ir=planos') : '#lista');
+    if(APP_URL) a.setAttribute('target','_blank');
+  });
+});
+// starfield no hero
+const c=document.getElementById('stars'),x=c.getContext('2d');let S=[];
+function init(){c.width=c.offsetWidth;c.height=c.offsetHeight;S=[];const n=Math.floor(c.width*c.height/7000);
+ for(let i=0;i<n;i++)S.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.4+.2,a:Math.random(),s:Math.random()*.02+.003});}
+function loop(){const w=c.width,h=c.height;x.clearRect(0,0,w,h);
+ let g=x.createRadialGradient(w*.5,h*.1,0,w*.5,h*.1,w*.6);g.addColorStop(0,'rgba(122,162,255,.10)');g.addColorStop(1,'rgba(8,9,13,0)');
+ x.fillStyle=g;x.fillRect(0,0,w,h);
+ for(const s of S){s.a+=s.s;const t=.5+.5*Math.sin(s.a*6.28);x.fillStyle='rgba(200,215,255,'+(.2+t*.6)+')';x.beginPath();x.arc(s.x,s.y,s.r*(.7+t*.5),0,7);x.fill();}
+ requestAnimationFrame(loop);}
+addEventListener('resize',init);init();loop();
+</script>
+</body>
+</html>

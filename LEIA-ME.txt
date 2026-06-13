@@ -1,0 +1,72 @@
+==========================================================
+  ORION - COMO COLOCAR O APP NA NUVEM (passo a passo)
+==========================================================
+
+Esta pasta tem TUDO que precisa subir pro GitHub. Sao estes arquivos:
+  orion_cloud.py, orion_licenca.py, orion_app.html, orion_site.html,
+  orion_logo.png, orion_icon.png, orion.ico, Dockerfile, render.yaml
+
+Nao precisa entender de programacao. Siga os passos.
+
+----------------------------------------------------------
+PARTE 1 - CEREBRO GRATIS (Groq)  ~2 min
+----------------------------------------------------------
+1. Entre em  console.groq.com  e faca login (pode ser com Google).
+2. Menu "API Keys" > "Create API Key". Copie a chave (comeca com gsk_...).
+   Guarde, vai usar na Parte 3.
+
+----------------------------------------------------------
+PARTE 2 - GUARDAR OS ARQUIVOS (GitHub)  ~5 min
+----------------------------------------------------------
+1. Entre em  github.com  e crie uma conta.
+2. Botao "New" (novo repositorio). Nome: orion. Clique "Create repository".
+3. Clique no link "uploading an existing file".
+4. Arraste TODOS os arquivos desta pasta (menos este LEIA-ME).
+5. Clique "Commit changes".
+
+----------------------------------------------------------
+PARTE 3 - SUBIR O APP (Render)  ~5 min
+----------------------------------------------------------
+1. Entre em  render.com  e faca login COM O GITHUB.
+2. "New" > "Blueprint". Escolha o repositorio "orion".
+3. Ele le o render.yaml sozinho. No campo LLM_API_KEY, cole a chave do Groq.
+   (MP_ACCESS_TOKEN / PAYPAL voce cola depois, quando tiver.)
+4. Clique "Apply". Espere uns minutos.
+5. Vai aparecer um endereco tipo  https://orion-xxxx.onrender.com
+   ESSE e o seu app no ar. Abra pra testar.
+
+----------------------------------------------------------
+PARTE 4 - LIGAR O SITE AO APP  ~2 min
+----------------------------------------------------------
+1. Abra o arquivo  site/index.html  (na pasta do projeto, nao nesta).
+2. No comeco do <script> tem a linha:   const APP_URL = "";
+3. Coloque o endereco do Render:
+   const APP_URL = "https://orion-xxxx.onrender.com";
+4. Salve e re-arraste a pasta  site/  no Netlify (Drop).
+   Agora os botoes "Entrar / Assinar" do site abrem o app.
+
+----------------------------------------------------------
+PARTE 5 - PAGAMENTO  (quando tiver os tokens)
+----------------------------------------------------------
+No Render, em "Environment", cole:
+  MP_ACCESS_TOKEN   = seu token do Mercado Pago
+  PAYPAL_CLIENT_ID  / PAYPAL_SECRET / PAYPAL_MODE (live ou sandbox)
+Pronto: o "Assinar" cobra pelo servidor, sem expor nada pro cliente.
+
+----------------------------------------------------------
+PARTE 6 - APK PRA PLAY STORE  (depois do app no ar)
+----------------------------------------------------------
+1. Entre em  pwabuilder.com  e cole o endereco do Render.
+2. Ele gera o pacote Android (APK/AAB). Baixe.
+3. Crie conta no Google Play Console (US$ 25, uma vez) e suba o arquivo.
+
+==========================================================
+CHAVES DE ATIVACAO (vender sem servidor de pagamento)
+==========================================================
+- Use o programa  OrionKeys.exe  (so seu, nao distribua) pra gerar chaves.
+- Ou gere dentro do app: entre como dono > Conta & Plano > Admin > "Gerar chave".
+- Venda por um link de pagamento e entregue a chave. O cliente cola em
+  Planos > "Ja tem uma chave".
+- A MESMA chave vale no app desktop e na nuvem (mesmo sistema).
+
+Duvida em qualquer passo: manda um print que a gente resolve.

@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orion</title>
+<link rel="icon" href="/logo">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0a0c11">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Orion">
+<link rel="apple-touch-icon" href="/icon">
+<style>
+:root{
+  --bg:#0a0c11; --bg2:#0e1118; --panel:#12161f; --panel2:#161b26; --panel3:#1b2230;
+  --line:#222a39; --line2:#2e3850;
+  --text:#e7eaf0; --dim:#8b94a7; --faint:#5b6478;
+  --accent:#7aa2ff; --accent2:#9b8cff; --good:#46d39a; --warn:#ffc14d; --bad:#ff6b6b;
+  --radius:14px; --sb:268px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#222a39;border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:#2e3850}
+
+/* ===================== TOPBAR ===================== */
+.topbar{position:fixed;top:0;left:0;right:0;height:56px;z-index:60;display:flex;align-items:center;
+  gap:12px;padding:0 16px;background:rgba(10,12,17,.86);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line)}
+.menu-btn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--panel);
+  display:flex;align-items:center;justify-content:center;color:var(--text);transition:.15s}
+.menu-btn:hover{background:var(--panel2);border-color:var(--line2)}
+.menu-btn svg{width:18px;height:18px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:.5px}
+.brand img{width:28px;height:28px;border-radius:7px}
+.brand .nm{font-size:16px}
+.brand .nm b{font-weight:700}
+.topbar-sp{flex:1}
+.user-chip{display:flex;align-items:center;gap:9px;padding:5px 12px 5px 6px;border:1px solid var(--line);
+  border-radius:30px;background:var(--panel);cursor:pointer;transition:.15s}
+.user-chip:hover{background:var(--panel2);border-color:var(--line2)}
+.user-chip .av{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#0a0c11;overflow:hidden}
+.user-chip .av img{width:100%;height:100%;object-fit:cover}
+.user-chip .un{font-size:13px;font-weight:600;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plan-badge{font-size:10px;font-weight:700;letter-spacing:.6px;padding:2px 8px;border-radius:20px;text-transform:uppercase}
+.plan-free{background:rgba(139,148,167,.16);color:var(--dim)}
+.plan-pro{background:rgba(122,162,255,.18);color:var(--accent)}
+.plan-business{background:rgba(155,140,255,.2);color:var(--accent2)}
+
+/* ===================== SIDEBAR (recolhivel estilo Claude) ===================== */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:65;opacity:0;pointer-events:none;transition:.2s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sb);z-index:70;background:var(--bg2);
+  border-right:1px solid var(--line);transform:translateX(-100%);transition:transform .22s cubic-bezier(.3,.8,.3,1);
+  display:flex;flex-direction:column;padding:12px}
+.sidebar.open{transform:translateX(0);box-shadow:8px 0 40px rgba(0,0,0,.4)}
+.sb-head{display:flex;align-items:center;gap:10px;padding:6px 8px 14px}
+.sb-head img{width:30px;height:30px;border-radius:8px}
+.sb-head .t{font-weight:700;font-size:17px;letter-spacing:.5px}
+.sb-new{margin:0 4px 12px;padding:10px 12px;border-radius:11px;border:1px solid var(--line2);background:var(--panel);
+  display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:var(--text);width:calc(100% - 8px)}
+.sb-new:hover{background:var(--panel2)}
+.sb-nav{display:flex;flex-direction:column;gap:2px;overflow:auto;flex:1}
+.sb-sec{font-size:10px;letter-spacing:1.2px;color:var(--faint);text-transform:uppercase;padding:14px 12px 6px;font-weight:700}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;color:var(--dim);
+  font-size:13.5px;font-weight:500;transition:.12s;border:none;background:none;width:100%;text-align:left}
+.nav-item svg{width:17px;height:17px;flex:none;opacity:.85}
+.nav-item:hover{background:var(--panel);color:var(--text)}
+.nav-item.active{background:var(--panel2);color:var(--text)}
+.nav-item.active svg{opacity:1;color:var(--accent)}
+.nav-item .lock{margin-left:auto;font-size:10px;color:var(--faint)}
+.sb-foot{border-top:1px solid var(--line);padding:12px 8px 4px;margin-top:6px}
+.sb-plan{font-size:12px;color:var(--dim);margin-bottom:8px}
+.sb-upgrade{width:100%;padding:10px;border-radius:10px;border:none;font-weight:700;font-size:13px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0c11}
+.sb-upgrade:hover{filter:brightness(1.08)}
+
+/* ===================== MAIN / VIEWS ===================== */
+.main{position:fixed;top:56px;left:0;right:0;bottom:0;overflow:hidden}
+.view{display:none;height:100%;overflow:auto}
+.view.active{display:block}
+.page{max-width:920px;margin:0 auto;padding:32px 24px 60px}
+.page h1{font-size:24px;font-weight:700;margin-bottom:6px}
+.page .sub{color:var(--dim);font-size:14px;margin-bottom:26px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin-bottom:16px}
+.card h3{font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;font-weight:600;letter-spacing:.3px}
+.field input,.field select,.field textarea{width:100%;background:var(--bg);border:1px solid var(--line2);color:var(--text);
+  border-radius:10px;padding:11px 13px;font-size:14px;font-family:inherit;outline:none;transition:.15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+.field .hint{font-size:11.5px;color:var(--faint);margin-top:6px;line-height:1.5}
+.btn{padding:10px 18px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);color:var(--text);
+  font-size:13.5px;font-weight:600;transition:.15s}
+.btn:hover{background:var(--panel3);border-color:var(--accent)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#0a0c11}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:none}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.range-row{display:flex;align-items:center;gap:12px}
+.range-row input[type=range]{flex:1;accent-color:var(--accent)}
+.range-row .v{font-size:13px;color:var(--accent);font-weight:700;min-width:42px;text-align:right}
+
+/* ===================== HOME / CHAT ===================== */
+#viewHome{position:relative}
+.chat-wrap{position:absolute;inset:0;display:flex;flex-direction:column}
+#stars{position:absolute;inset:0;z-index:0}
+.chat-scroll{position:relative;z-index:1;flex:1;overflow:auto;padding:28px 18px 8px;display:flex;flex-direction:column;gap:16px}
+.chat-inner{max-width:780px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  gap:18px;margin:auto;padding:30px 10px}
+.orb-wrap{width:150px;height:150px;position:relative}
+#orb{width:100%;height:100%}
+.welcome h2{font-size:26px;font-weight:700}
+.welcome p{color:var(--dim);font-size:14.5px;max-width:440px;line-height:1.6}
+.suggestions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.sug{padding:10px 15px;border:1px solid var(--line2);border-radius:12px;background:rgba(18,22,31,.7);
+  font-size:13px;color:var(--dim);backdrop-filter:blur(4px)}
+.sug:hover{color:var(--text);border-color:var(--accent)}
+.msg{display:flex;gap:12px;max-width:100%}
+.msg .who{width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700}
+.msg.assistant .who{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0c11}
+.msg.user{flex-direction:row-reverse}
+.msg.user .who{background:var(--panel3);color:var(--dim)}
+.msg .bubble{padding:11px 15px;border-radius:14px;font-size:14.5px;line-height:1.55;max-width:78%;
+  background:var(--panel);border:1px solid var(--line);white-space:pre-wrap;word-wrap:break-word}
+.msg.user .bubble{background:rgba(122,162,255,.12);border-color:rgba(122,162,255,.3)}
+.msg.assistant .bubble{backdrop-filter:blur(6px);background:rgba(18,22,31,.82)}
+
+/* footer do chat: input + ticker */
+.chat-foot{position:relative;z-index:2;padding:10px 16px 0;background:linear-gradient(180deg,transparent,var(--bg) 38%)}
+.composer{max-width:780px;margin:0 auto;display:flex;align-items:flex-end;gap:10px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:8px 8px 8px 16px}
+.composer:focus-within{border-color:var(--accent)}
+.composer textarea{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:14.5px;
+  resize:none;max-height:120px;line-height:1.5;padding:6px 0;font-family:inherit}
+.composer .mic{width:42px;height:42px;border-radius:11px;border:1px solid var(--line2);background:var(--panel2);
+  display:flex;align-items:center;justify-content:center;color:var(--dim);flex:none}
+.composer .mic.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0c11;border:none}
+.composer .mic svg{width:19px;height:19px}
+.composer .send{width:42px;height:42px;border-radius:11px;border:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0c11;display:flex;align-items:center;justify-content:center;flex:none}
+.composer .send:disabled{opacity:.4;cursor:default}
+.composer .send svg{width:18px;height:18px}
+.ticker{max-width:780px;margin:8px auto 0;display:flex;align-items:center;gap:10px;height:34px;overflow:hidden;
+  border-top:1px solid var(--line)}
+.ticker .tk-lbl{font-size:10px;font-weight:800;letter-spacing:1px;color:var(--accent);padding:3px 8px;
+  border:1px solid rgba(122,162,255,.3);border-radius:6px;flex:none;text-transform:uppercase}
+.ticker .tk-track{flex:1;overflow:hidden;white-space:nowrap;position:relative;height:100%}
+.ticker .tk-move{position:absolute;white-space:nowrap;will-change:transform;animation:tkscroll 60s linear infinite;
+  display:inline-flex;align-items:center;height:100%;font-size:12.5px;color:var(--dim)}
+.ticker .tk-move span{margin:0 26px}
+.ticker .tk-move b{color:var(--text);font-weight:600}
+@keyframes tkscroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ===================== PLANOS ===================== */
+.plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-top:8px}
+.plan{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 22px;position:relative;display:flex;flex-direction:column}
+.plan.feat{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 12px 40px rgba(122,162,255,.12)}
+.plan .tag{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#0a0c11;font-size:10px;font-weight:800;letter-spacing:.8px;padding:4px 12px;border-radius:20px;text-transform:uppercase}
+.plan .pn{font-size:18px;font-weight:700;margin-bottom:4px}
+.plan .pd{font-size:12.5px;color:var(--dim);margin-bottom:16px;min-height:34px;line-height:1.5}
+.plan .pp{font-size:30px;font-weight:800;margin-bottom:2px}
+.plan .pp small{font-size:13px;font-weight:600;color:var(--dim)}
+.plan .pcur{font-size:13px;color:var(--dim);font-weight:600}
+.plan ul{list-style:none;margin:18px 0;display:flex;flex-direction:column;gap:10px;flex:1}
+.plan li{font-size:13px;color:var(--text);display:flex;gap:9px;line-height:1.4}
+.plan li svg{width:16px;height:16px;flex:none;color:var(--good);margin-top:1px}
+.plan li.no{color:var(--faint)}
+.plan li.no svg{color:var(--faint)}
+.plan .pbtn{margin-top:auto}
+
+/* ===================== AUTH OVERLAY ===================== */
+.auth{position:fixed;inset:0;z-index:200;background:radial-gradient(1200px 700px at 50% -10%,#141a28,#070910);
+  display:none;align-items:center;justify-content:center;padding:20px}
+.auth.show{display:flex}
+.auth-box{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:30px 28px}
+.auth-logo{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:6px}
+.auth-logo img{width:38px;height:38px;border-radius:9px}
+.auth-logo .t{font-size:22px;font-weight:700;letter-spacing:1px}
+.auth-st{text-align:center;color:var(--dim);font-size:13px;margin-bottom:22px}
+.auth-tabs{display:flex;background:var(--bg);border-radius:11px;padding:4px;margin-bottom:20px}
+.auth-tab{flex:1;padding:9px;text-align:center;font-size:13px;font-weight:600;color:var(--dim);border-radius:8px}
+.auth-tab.on{background:var(--panel2);color:var(--text)}
+.auth-perfis{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:14px}
+.perfil-card{width:84px;padding:10px 6px;border:1px solid var(--line2);border-radius:12px;text-align:center;cursor:pointer}
+.perfil-card:hover{border-color:var(--accent)}
+.perfil-card .pf{width:46px;height:46px;border-radius:50%;margin:0 auto 6px;background:var(--panel3);
+  display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--accent);overflow:hidden}
+.perfil-card .pf img{width:100%;height:100%;object-fit:cover}
+.perfil-card .nm{font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.auth-err{color:var(--bad);font-size:12.5px;text-align:center;min-height:16px;margin:4px 0}
+.auth-guest{text-align:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.auth-guest .lk{color:var(--accent);font-size:13px;font-weight:600;background:none;border:none}
+.auth-guest .lk:hover{text-decoration:underline}
+.acc-rows{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+.acc-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line2);border-radius:14px;cursor:pointer;transition:.15s}
+.acc-row:hover{border-color:var(--accent);background:var(--panel2)}
+.acc-row .av{width:40px;height:40px;border-radius:50%;flex:none;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0a0c11;overflow:hidden}
+.acc-row .av img{width:100%;height:100%;object-fit:cover}
+.acc-row .info{flex:1;min-width:0}
+.acc-row .info .n{font-size:14px;font-weight:600}
+.acc-row .info .e{font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-row .rm{color:var(--faint);font-size:18px;padding:4px 8px;border-radius:8px}
+.acc-row .rm:hover{color:var(--bad);background:rgba(255,107,107,.1)}
+.btn-google{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:11px;
+  border:1px solid var(--line2);border-radius:11px;background:#fff;color:#1f2329;font-weight:600;font-size:13.5px}
+.btn-google:hover{background:#f1f3f6}
+.btn-google svg{width:18px;height:18px}
+.auth-or{display:flex;align-items:center;gap:12px;color:var(--faint);font-size:11px;letter-spacing:1px;margin:14px 0}
+.auth-or::before,.auth-or::after{content:'';flex:1;height:1px;background:var(--line)}
+
+/* toast salvar */
+#saveDot{position:fixed;right:18px;bottom:16px;z-index:300;display:flex;align-items:center;gap:9px;
+  padding:8px 14px 8px 10px;border:1px solid var(--line2);border-radius:24px;background:var(--panel);
+  box-shadow:0 6px 24px rgba(0,0,0,.4);opacity:0;transform:translateY(10px);pointer-events:none;transition:.22s}
+#saveDot.on{opacity:1;transform:translateY(0)}
+#saveDot .ring{width:15px;height:15px;border-radius:50%;border:2px solid rgba(122,162,255,.25);
+  border-top-color:var(--accent);animation:spin .7s linear infinite}
+#saveDot .lbl{font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent)}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* avatar grande da pagina Conta */
+#contaAv{overflow:hidden;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0c11;font-weight:700}
+#contaAv img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+
+/* documentos */
+.doc-tpls{display:flex;flex-wrap:wrap;gap:8px}
+.doc-tpl{padding:8px 14px;border:1px solid var(--line2);border-radius:20px;background:var(--panel2);color:var(--dim);font-size:13px;font-weight:600}
+.doc-tpl:hover{color:var(--text);border-color:var(--accent)}
+.doc-tpl.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0c11;border:none}
+/* rotina */
+.rot-item{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--line);border-radius:11px;margin-bottom:8px;cursor:pointer;font-size:14px}
+.rot-item:hover{border-color:var(--line2)}
+.rot-item input{width:18px;height:18px;accent-color:var(--accent)}
+.rot-item.done span{text-decoration:line-through;color:var(--faint)}
+.apr-licao{margin:0 0 8px 30px}
+.apr-l-in{background:var(--bg);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:10px;padding:14px 16px;font-size:14px;line-height:1.65}
+/* mind map */
+#mindmap{width:100%;height:560px;border:1px solid var(--line);border-radius:16px;background:radial-gradient(900px 500px at 50% 40%,rgba(122,162,255,.06),var(--bg2));overflow:hidden;position:relative;cursor:grab}
+#mindmap.drag{cursor:grabbing}
+#mindmap svg{width:100%;height:100%}
+.mm-node{cursor:pointer}
+.mm-node rect{transition:.12s}
+.mm-node:hover rect{filter:brightness(1.2)}
+.mm-tools{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}
+/* trading */
+.tg-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.tg-kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.tg-kpi .l{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+.tg-kpi .v{font-size:24px;font-weight:800;margin-top:3px}
+.tg-grid{display:grid;grid-template-columns:230px 1fr;gap:16px}
+@media(max-width:880px){.tg-grid{grid-template-columns:1fr}}
+.tg-watch{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;height:fit-content}
+.tg-wadd{display:flex;gap:6px;margin-bottom:10px}
+.tg-wadd input{flex:1;background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:9px;padding:8px 10px;font-size:13px;text-transform:uppercase}
+.tg-wi{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent}
+.tg-wi:hover{background:var(--panel2)} .tg-wi.on{background:var(--panel2);border-color:var(--accent)}
+.tg-wi .tk{font-weight:700;font-size:13px} .tg-wi .pr{font-size:12px;color:var(--dim);text-align:right}
+.tg-wi .rm{color:var(--faint);font-size:13px;margin-left:6px;opacity:0}
+.tg-wi:hover .rm{opacity:1}
+.up{color:var(--good)} .down{color:var(--bad)}
+#tvchart{height:420px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
+.tg-order{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.tg-order input{width:90px;background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:9px;padding:9px 11px;font-size:14px}
+.btn.buy{background:linear-gradient(135deg,#2ea36b,#46d39a);border:none;color:#04130c}
+.btn.sell{background:linear-gradient(135deg,#c0413f,#ff6b6b);border:none;color:#1a0606}
+.tg-pos{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+.tg-pos th{text-align:left;color:var(--faint);font-size:11px;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line)}
+.tg-pos td{padding:8px;border-bottom:1px solid var(--line)}
+.tg-ana{background:linear-gradient(135deg,rgba(122,162,255,.1),rgba(155,140,255,.05));border:1px solid var(--line2);border-radius:14px;padding:16px;margin-top:14px}
+.tg-sig{display:inline-block;font-weight:800;font-size:12px;padding:3px 12px;border-radius:20px;letter-spacing:1px}
+.sig-compra{background:rgba(70,211,154,.18);color:var(--good)} .sig-venda{background:rgba(255,107,107,.18);color:var(--bad)} .sig-neutro{background:rgba(139,148,167,.18);color:var(--dim)}
+.tg-agente{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:12px 14px;margin-top:14px}
+.sw{width:42px;height:24px;border-radius:14px;background:var(--line2);position:relative;cursor:pointer;flex:none;transition:.2s}
+.sw.on{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.sw b{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+.sw.on b{left:21px}
+.tg-hist{max-height:200px;overflow:auto;margin-top:6px}
+.tg-h-it{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 8px;border-bottom:1px solid var(--line)}
+.tg-h-it .ag{font-size:9px;background:rgba(122,162,255,.16);color:var(--accent);border-radius:8px;padding:1px 6px;margin-left:6px}
+/* memory tree (lista, fallback) */
+.mtree{margin-top:8px}
+.mnode{margin-left:0}
+.mnode .mbranch{margin-left:18px;border-left:1px solid var(--line2);padding-left:14px}
+.mrow{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;margin:3px 0;border:1px solid transparent}
+.mrow:hover{background:var(--panel);border-color:var(--line)}
+.mrow .tw{width:18px;text-align:center;color:var(--faint);cursor:pointer;user-select:none;font-size:11px}
+.mrow .mdot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.mrow.root .mdot{background:var(--accent2)} .mrow.fixo .mdot{background:var(--good)}
+.mrow .mname{font-weight:600;font-size:13.5px}
+.mrow .mdata{color:var(--dim);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.mrow .macts{display:flex;gap:4px;opacity:0;transition:.12s}
+.mrow:hover .macts{opacity:1}
+.mrow .macts button{background:none;border:none;color:var(--faint);font-size:12px;padding:3px 6px;border-radius:6px}
+.mrow .macts button:hover{color:var(--text);background:var(--panel2)}
+.mbadge{font-size:10px;color:var(--faint);border:1px solid var(--line2);border-radius:10px;padding:1px 7px}
+.empty-soon{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;color:var(--dim);
+  padding:50px 20px;border:1px dashed var(--line2);border-radius:16px;margin-top:8px}
+.empty-soon svg{width:38px;height:38px;color:var(--faint)}
+.statusline{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:7px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.dot.ok{background:var(--good)} .dot.off{background:var(--bad)}
+@media(max-width:640px){.page{padding:22px 14px 50px}.msg .bubble{max-width:86%}}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <button class="menu-btn" onclick="toggleSidebar()" title="Menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <div class="brand"><img src="/logo" alt="Orion"><span class="nm"><b>Orion</b></span></div>
+  <div class="topbar-sp"></div>
+  <div class="statusline" id="statusLine"><span class="dot" id="stDot"></span><span id="stTxt">Conectando...</span></div>
+  <div class="user-chip" onclick="go('conta')">
+    <div class="av" id="chipAv">?</div>
+    <span class="un" id="chipName">Visitante</span>
+    <span class="plan-badge plan-free" id="chipPlan">Free</span>
+  </div>
+</div>
+
+<!-- SCRIM + SIDEBAR -->
+<div class="scrim" id="scrim" onclick="toggleSidebar(false)"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sb-head"><img src="/logo" alt=""><span class="t">Orion</span></div>
+  <button class="sb-new" onclick="novaConversa()">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    Nova conversa
+  </button>
+  <nav class="sb-nav" id="sbNav"></nav>
+  <div class="sb-foot">
+    <div class="sb-plan" id="sbPlan">Plano Free</div>
+    <button class="sb-upgrade" onclick="go('planos')">Ver planos</button>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:12px;font-size:11px">
+      <a href="#" onclick="go('termos');toggleSidebar(false);return false" style="color:var(--faint)">Termos</a>
+      <span style="color:var(--line2)">|</span>
+      <a href="#" onclick="go('privacidade');toggleSidebar(false);return false" style="color:var(--faint)">Privacidade</a>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <!-- HOME / CHAT -->
+  <section class="view active" id="viewHome">
+    <div class="chat-wrap">
+      <canvas id="stars"></canvas>
+      <div class="chat-scroll" id="chatScroll">
+        <div class="chat-inner" id="chatInner">
+          <div class="welcome" id="welcome">
+            <div class="orb-wrap"><canvas id="orb" width="300" height="300"></canvas></div>
+            <h2 id="welHi">Ola. Sou o Orion.</h2>
+            <p>Seu assistente pessoal. Posso conversar por voz ou texto, escrever documentos, organizar sua rotina, pesquisar e cuidar do seu dia a dia. Por onde comecamos?</p>
+            <div class="suggestions">
+              <button class="sug" onclick="sugere('Escreve um e-mail profissional pra mim')">Escrever um e-mail</button>
+              <button class="sug" onclick="sugere('Monta uma rotina de academia sustentavel pra iniciante')">Rotina de academia</button>
+              <button class="sug" onclick="sugere('Resume as noticias do mercado hoje')">Noticias do mercado</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chat-foot">
+        <div class="composer">
+          <button class="mic" id="attachBtn" onclick="anexar()" title="Anexar arquivo" style="margin-right:2px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg>
+          </button>
+          <input type="file" id="fileInp" style="display:none" accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.csv,.json" onchange="enviarArquivo(event)">
+          <textarea id="inp" rows="1" placeholder="Fale com o Orion ou digite aqui..." oninput="growInp(this)" onkeydown="inpKey(event)"></textarea>
+          <button class="mic" id="micBtn" onclick="toggleVoz()" title="Falar por voz">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg>
+          </button>
+          <button class="send" id="sendBtn" onclick="enviar()" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          </button>
+        </div>
+        <div class="ticker">
+          <span class="tk-lbl">Mercado</span>
+          <div class="tk-track"><div class="tk-move" id="tkMove"><span>Carregando noticias do mercado...</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOCUMENTOS -->
+  <section class="view" id="viewDocumentos"><div class="page">
+    <h1>Documentos</h1><div class="sub">Gere textos prontos e bem escritos: e-mails, redacoes, curriculos, contratos simples e mais.</div>
+    <div id="docArea"></div>
+  </div></section>
+
+  <!-- ROTINA -->
+  <section class="view" id="viewRotina"><div class="page">
+    <h1>Rotina & Progresso</h1><div class="sub">Monte uma rotina sustentavel (academia, estudos, habitos) e acompanhe seu progresso aqui dentro.</div>
+    <div id="rotinaArea"></div>
+  </div></section>
+
+  <!-- TAREFAS -->
+  <section class="view" id="viewTarefas"><div class="page">
+    <h1>Tarefas & Agenda</h1><div class="sub">Suas tarefas, lembretes e compromissos em um lugar so.</div>
+    <div id="tarefasArea"></div>
+  </div></section>
+
+  <!-- APRENDER -->
+  <section class="view" id="viewAprender"><div class="page">
+    <h1>Aprender</h1><div class="sub">Diz o que voce quer aprender a fazer. O Orion monta uma trilha passo a passo e te ensina, do zero, na linguagem que voce entende. Ate quem nunca programou.</div>
+    <div id="aprenderArea"></div>
+  </div></section>
+
+  <!-- TRADING IA -->
+  <section class="view" id="viewTrading"><div class="page" style="max-width:1180px">
+    <h1>Trading IA <span style="font-size:11px;color:var(--faint);font-weight:600;border:1px solid var(--line2);padding:2px 8px;border-radius:10px;vertical-align:middle">SIMULACAO</span></h1>
+    <div class="sub">Analise ao vivo, grafico profissional e carteira simulada. O agente opera na simulacao e voce acompanha. Sem risco, sem dinheiro real.</div>
+    <div id="tradingArea"></div>
+  </div></section>
+
+  <!-- MEMORIA -->
+  <section class="view" id="viewMemoria"><div class="page">
+    <h1>Memoria</h1><div class="sub">Tudo que o Orion sabe sobre voce, organizado como uma arvore que cresce com o tempo.</div>
+    <div id="memArea"></div>
+  </div></section>
+
+  <!-- INTEGRACOES -->
+  <section class="view" id="viewIntegracoes"><div class="page">
+    <h1>Integracoes</h1><div class="sub">Conecte suas contas pra o Orion trabalhar com seus apps.</div>
+    <div id="integraArea"></div>
+  </div></section>
+
+  <!-- CONFIGURACOES -->
+  <section class="view" id="viewConfig"><div class="page">
+    <h1>Configuracoes</h1><div class="sub">Cerebro, voz e preferencias do Orion.</div>
+    <div id="cfgArea"></div>
+  </div></section>
+
+  <!-- CONTA -->
+  <section class="view" id="viewConta"><div class="page">
+    <h1>Conta & Plano</h1><div class="sub">Gerencie seu perfil, sua assinatura e o uso do mes.</div>
+    <div id="contaArea"></div>
+  </div></section>
+
+  <!-- PLANOS -->
+  <section class="view" id="viewPlanos"><div class="page">
+    <h1>Escolha seu plano</h1><div class="sub">Comece de graca. Suba de plano quando quiser mais poder. Cancele quando quiser.</div>
+    <div class="plans-grid" id="plansGrid"></div>
+    <div class="card" style="max-width:520px;margin:24px auto 0">
+      <h3>Ja tem uma chave de ativacao?</h3>
+      <div class="hint" style="margin-bottom:10px">Comprou direto com a gente? Cole sua chave aqui pra liberar o plano na hora.</div>
+      <div class="row"><input id="licChave" placeholder="PRO-XXXX-XXXX-XXXX" style="flex:1;background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:10px;padding:11px 13px;font-size:14px;letter-spacing:1px">
+        <button class="btn primary" onclick="ativarChave()">Ativar</button></div>
+      <div id="licMsg" class="hint" style="margin-top:8px"></div>
+    </div>
+    <div style="text-align:center;margin-top:24px;color:var(--faint);font-size:12px">
+      Pagamentos processados com seguranca via Mercado Pago ou PayPal. Ao assinar voce concorda com os
+      <a href="#" onclick="go('termos');return false">Termos de Uso</a> e a
+      <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a>.
+    </div>
+  </div></section>
+
+  <!-- TERMOS -->
+  <section class="view" id="viewTermos"><div class="page" id="termosArea"></div></section>
+  <!-- PRIVACIDADE -->
+  <section class="view" id="viewPrivacidade"><div class="page" id="privArea"></div></section>
+</main>
+
+<!-- AUTH -->
+<div class="auth" id="authModal">
+  <div class="auth-box">
+    <div class="auth-logo"><img src="/logo" alt=""><span class="t">Orion</span></div>
+    <div class="auth-st" id="authSt">Bem vindo</div>
+
+    <!-- CHOOSER (contas salvas) -->
+    <div id="authChooser" style="display:none">
+      <div class="acc-rows" id="accRows"></div>
+      <button class="btn" style="width:100%;margin-bottom:10px" onclick="authAba('login')">Entrar em outra conta</button>
+      <button class="btn-google" onclick="loginGoogle()"><svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.8-6.8C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.3 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.1 5.3-4.6 7l7.1 5.5C43.6 37.5 46.1 31.6 46.1 24.5z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.9-6.1C1 16.5 0 20.1 0 24s1 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.5-2 15.3-5.5l-7.1-5.5c-2 1.3-4.6 2.1-8.2 2.1-6.4 0-11.7-3.7-13.5-9.3l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Continuar com Google</button>
+      <div class="auth-guest"><button class="lk" onclick="authConvidado()">Entrar como convidado</button></div>
+    </div>
+
+    <!-- ENTRAR / CRIAR -->
+    <div id="authForm">
+      <div class="auth-tabs">
+        <div class="auth-tab on" data-at="login" onclick="authAba('login')">Entrar</div>
+        <div class="auth-tab" data-at="criar" onclick="authAba('criar')">Criar conta</div>
+      </div>
+      <button class="btn-google" onclick="loginGoogle()"><svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.8-6.8C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.3 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.1 5.3-4.6 7l7.1 5.5C43.6 37.5 46.1 31.6 46.1 24.5z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.9-6.1C1 16.5 0 20.1 0 24s1 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.5-2 15.3-5.5l-7.1-5.5c-2 1.3-4.6 2.1-8.2 2.1-6.4 0-11.7-3.7-13.5-9.3l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Continuar com Google</button>
+      <div class="auth-or">OU</div>
+      <div id="authLogin">
+        <div class="auth-perfis" id="perfList"></div>
+        <div class="field" id="authSenhaWrap" style="display:none"><label>Senha</label><input type="password" id="authSenha" placeholder="senha do perfil">
+          <div style="text-align:right;margin-top:6px"><button class="lk" style="color:var(--accent);background:none;border:none;font-size:12px" onclick="esqueciSenha()">Esqueci a senha</button></div></div>
+        <div class="auth-err" id="authErr"></div>
+        <button class="btn primary" id="authEntrarBtn" onclick="authEntrar()" style="width:100%;display:none">Entrar</button>
+      </div>
+      <div id="authCriar" style="display:none">
+        <div class="field"><label>Seu nome</label><input type="text" id="authNome" placeholder="como devo te chamar?"></div>
+        <div class="field"><label>Como prefere ser chamado (opcional)</label><input type="text" id="authTrat" placeholder="ex: Sr. Pontes"></div>
+        <div class="field"><label>E-mail (opcional, pra recuperar a conta)</label><input type="email" id="authEmail" placeholder="seu@email.com"></div>
+        <div class="field"><label>Senha (opcional)</label><input type="password" id="authNovaSenha" placeholder="deixe vazio pra entrar sem senha"></div>
+        <div class="auth-err" id="authErr2"></div>
+        <button class="btn primary" onclick="authCriar()" style="width:100%">Criar conta e entrar</button>
+      </div>
+      <div class="auth-guest">
+        <button class="lk" onclick="authConvidado()">Entrar como convidado</button>
+        <div class="field hint" style="margin-top:6px">Sem conta. Nada da conversa fica salvo.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="saveDot"><span class="ring"></span><span class="lbl">SALVO</span></div>
+
+<script>
+// ===================== ESTADO =====================
+const ICON={
+ home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8M5 10v10h14V10"/></svg>',
+ doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg>',
+ rotina:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-3.5-6.6"/><path d="M20 4v5h-5"/></svg>',
+ tarefas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8M4 12v6a2 2 0 0 0 2 2h12"/></svg>',
+ integra:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
+ config:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1L14.5 2h-5l-.3 2.4a7 7 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 2.4h5l.3-2.4a7 7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6a7 7 0 0 0 .1-1z"/></svg>',
+ conta:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>',
+ planos:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 5 5.6.6-4 4 1 5.4L12 19l-5 3 1-5.4-4-4 5.6-.6z"/></svg>',
+ memoria:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="12" r="2.4"/><path d="M8.4 6H13a3 3 0 0 1 3 3v.6M8.4 18H13a3 3 0 0 0 3-3v-.6"/></svg>',
+ trading:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-8"/><path d="M21 8v4h-4"/></svg>',
+ aprender:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 3 2 6 2s6-1 6-2v-5"/></svg>',
+ check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+ x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+ soon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'
+};
+const NAV=[
+ {sec:'Principal'},
+ {id:'home',nome:'Inicio',icon:'home'},
+ {id:'documentos',nome:'Documentos',icon:'doc'},
+ {id:'rotina',nome:'Rotina & Progresso',icon:'rotina'},
+ {id:'aprender',nome:'Aprender',icon:'aprender'},
+ {id:'tarefas',nome:'Tarefas & Agenda',icon:'tarefas'},
+ {id:'memoria',nome:'Memoria',icon:'memoria'},
+ {id:'trading',nome:'Trading IA',icon:'trading'},
+ {id:'integracoes',nome:'Integracoes',icon:'integra'},
+ {sec:'Conta'},
+ {id:'config',nome:'Configuracoes',icon:'config'},
+ {id:'conta',nome:'Conta & Plano',icon:'conta'},
+ {id:'planos',nome:'Planos',icon:'planos'},
+];
+let USER=null, CFG={}, VIEW='home', lastChatSeq=0, vozOn=false, ESTADO='ocioso';
+function esc(t){return (t==null?'':String(t)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ===================== SIDEBAR + ROUTER =====================
+function renderNav(){
+  const n=document.getElementById('sbNav'); n.innerHTML='';
+  NAV.forEach(it=>{
+    if(it.sec){const s=document.createElement('div');s.className='sb-sec';s.textContent=it.sec;n.appendChild(s);return;}
+    const b=document.createElement('button');b.className='nav-item'+(it.id===VIEW?' active':'');b.dataset.id=it.id;
+    b.innerHTML=ICON[it.icon]+'<span>'+it.nome+'</span>';
+    b.onclick=()=>{go(it.id);toggleSidebar(false);};
+    n.appendChild(b);
+  });
+}
+function toggleSidebar(force){
+  const sb=document.getElementById('sidebar'), sc=document.getElementById('scrim');
+  const open = (force===undefined)? !sb.classList.contains('open') : force;
+  sb.classList.toggle('open',open); sc.classList.toggle('on',open);
+}
+function go(id){
+  VIEW=id;
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const map={home:'viewHome',documentos:'viewDocumentos',rotina:'viewRotina',tarefas:'viewTarefas',
+    memoria:'viewMemoria',aprender:'viewAprender',trading:'viewTrading',integracoes:'viewIntegracoes',config:'viewConfig',conta:'viewConta',planos:'viewPlanos',
+    termos:'viewTermos',privacidade:'viewPrivacidade'};
+  document.getElementById(map[id]).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.id===id));
+  if(id==='config') renderConfig();
+  if(id==='conta') renderConta();
+  if(id==='planos') renderPlanos();
+  if(id==='integracoes') renderIntegra();
+  if(id==='documentos') renderDocs();
+  if(id==='rotina') renderRotina();
+  if(id==='tarefas') renderTarefas();
+  if(id==='memoria') renderMemoria();
+  if(id==='aprender') renderAprender();
+  if(id==='trading') renderTrading();
+  else stopTradingPoll();
+  if(id==='termos') renderTermos();
+  if(id==='privacidade') renderPriv();
+  document.querySelector('.main').scrollTop=0;
+}
+
+// ===================== CHAT =====================
+function growInp(t){t.style.height='auto';t.style.height=Math.min(120,t.scrollHeight)+'px';
+  document.getElementById('sendBtn').disabled=!t.value.trim();}
+function inpKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviar();} }
+function sugere(t){ const i=document.getElementById('inp'); i.value=t; growInp(i); i.focus(); }
+function novaConversa(){ go('home'); }
+async function enviar(){
+  const i=document.getElementById('inp'); const txt=i.value.trim(); if(!txt) return;
+  i.value=''; growInp(i);
+  // mostra imediatamente a fala do usuario (o poll confirma depois)
+  addMsg('user',txt,'local');
+  try{ const j=await (await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frase:txt})})).json();
+    if(j && j.reply){ addMsg('assistant', j.reply); } }   // nuvem: resposta direta (desktop usa o poll)
+  catch(e){ addMsg('assistant','Nao consegui falar com o servidor, senhor.'); }
+}
+function addMsg(role,text,tag){
+  const wel=document.getElementById('welcome'); if(wel) wel.remove();
+  const inner=document.getElementById('chatInner');
+  const m=document.createElement('div'); m.className='msg '+role; if(tag) m.dataset.tag=tag;
+  m.innerHTML='<div class="who">'+(role==='user'?(USER?(USER.nome||'?')[0].toUpperCase():'V'):'O')+'</div><div class="bubble"></div>';
+  m.querySelector('.bubble').textContent=text;
+  inner.appendChild(m);
+  const sc=document.getElementById('chatScroll'); sc.scrollTop=sc.scrollHeight;
+}
+function toggleVoz(){
+  vozOn=!vozOn;
+  document.getElementById('micBtn').classList.toggle('on',vozOn);
+  fetch('/poder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ligado:vozOn})});
+}
+function anexar(){ document.getElementById('fileInp').click(); }
+async function enviarArquivo(ev){
+  const f=ev.target.files[0]; if(!f) return; ev.target.value='';
+  const MB=f.size/1048576;
+  if(MB>40){ addMsg('assistant','Esse arquivo tem '+MB.toFixed(0)+'MB, senhor. O limite por enquanto e 40MB.'); return; }
+  addMsg('user','Anexei: '+f.name+' ('+MB.toFixed(1)+'MB)','local');
+  addMsg('assistant','Recebendo "'+f.name+'"... um instante.');
+  const r=new FileReader();
+  r.onload=async()=>{
+    try{
+      const j=await (await fetch('/upload',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({nome:f.name,conteudo:r.result,acao:'analisar'})})).json();
+      // a resposta/resumo chega pelo transcript (falar -> chat_push), entao so confirmamos erro
+      if(!j.ok){ addMsg('assistant','Nao consegui processar o arquivo: '+(j.erro||'erro')); }
+      piscarSave('ARQUIVO');
+    }catch(e){ addMsg('assistant','Falha no upload, senhor.'); }
+  };
+  r.readAsDataURL(f);
+}
+
+// ===================== POLL ESTADO =====================
+async function poll(){
+  try{
+    const e=await (await fetch('/estado')).json();
+    ESTADO=e.status||'ocioso';
+    // status line
+    const map={ouvindo:['Ouvindo','ok'],pensando:['Pensando...','ok'],falando:['Falando','ok'],
+      ocioso:['Pronto','ok'],dormir:['Standby','off'],desligado:['Voz desligada','off']};
+    const s=map[ESTADO]||['Pronto','ok'];
+    document.getElementById('stTxt').textContent=s[0];
+    document.getElementById('stDot').className='dot '+s[1];
+    vozOn = (ESTADO!=='desligado'&&ESTADO!=='dormir');
+    document.getElementById('micBtn').classList.toggle('on',vozOn);
+    // usuario
+    if(e.user && (!USER || USER.nome!==e.user.nome)){ USER=e.user; aplicaUser(); }
+    if(!e.user && USER){ USER=null; document.getElementById('authModal').classList.add('show'); }
+    // chat novo
+    if(e.chat){ e.chat.forEach(m=>{ if(m.seq>lastChatSeq){
+      if(m.role==='user'){ // ja pode ter sido mostrado localmente
+        const locals=[...document.querySelectorAll('.msg.user[data-tag=local] .bubble')].filter(b=>b.textContent===m.text);
+        if(locals.length){ locals[0].closest('.msg').dataset.tag=''; lastChatSeq=m.seq; return; }
+      }
+      addMsg(m.role,m.text); lastChatSeq=m.seq;
+    }}); }
+    // noticias ticker
+    if(e.noticias && e.noticias.length) setTicker(e.noticias);
+  }catch(err){}
+  setTimeout(poll, 1100);
+}
+function aplicaUser(){
+  const nm=USER?USER.nome:'Visitante';
+  document.getElementById('chipName').textContent=nm;
+  document.getElementById('welHi').textContent='Ola'+(USER&&!USER.convidado?(', '+nm):'')+'. Sou o Orion.';
+  const av=document.getElementById('chipAv');
+  if(USER&&USER.foto){av.innerHTML='<img src="'+USER.foto+'">';} else {av.textContent=(nm||'?')[0].toUpperCase();}
+  const plano=(USER&&USER.plano)||'free';
+  setPlanoBadge(plano);
+  // re-renderiza a pagina atual que depende do usuario (corrige painel de dono nao aparecer no 1o load)
+  if(VIEW==='conta') renderConta(); else if(VIEW==='config') renderConfig(); else if(VIEW==='planos') renderPlanos();
+}
+function setPlanoBadge(plano){
+  const b=document.getElementById('chipPlan');
+  const labels={free:'Free',pro:'Pro',business:'Business'};
+  b.textContent=labels[plano]||'Free';
+  b.className='plan-badge plan-'+(plano||'free');
+  document.getElementById('sbPlan').textContent='Plano '+(labels[plano]||'Free');
+}
+let _tkSig='';
+function setTicker(noticias){
+  const sig=noticias.map(n=>n[1]).join('|'); if(sig===_tkSig) return; _tkSig=sig;
+  const items=noticias.map(n=>'<span><b>'+(n[0]||'').toString().toUpperCase()+'</b> &middot; '+(n[1]||'')+'</span>').join('');
+  document.getElementById('tkMove').innerHTML=items+items; // duplica p/ loop continuo
+}
+
+// ===================== ORB (presenca) =====================
+const oc=document.getElementById('orb'), ox=oc&&oc.getContext('2d'); let oph=0;
+function orb(){
+  if(!ox || VIEW!=='home' || !document.getElementById('welcome')){requestAnimationFrame(orb);return;}
+  const w=oc.width,h=oc.height,cx=w/2,cy=h/2; oph+=0.02; ox.clearRect(0,0,w,h);
+  let col=[122,162,255], pulse=0.5;
+  if(ESTADO==='pensando'){col=[255,193,77];pulse=0.7+0.3*Math.sin(oph*3);}
+  else if(ESTADO==='falando'){col=[122,162,255];pulse=0.7+0.3*Math.sin(oph*4);}
+  else if(ESTADO==='ouvindo'){col=[122,162,255];pulse=0.8;}
+  else if(ESTADO==='desligado'||ESTADO==='dormir'){col=[91,100,120];pulse=0.35;}
+  const c='rgba('+col.join(',');
+  // glow
+  const g=ox.createRadialGradient(cx,cy,10,cx,cy,120);
+  g.addColorStop(0,c+','+(0.30*pulse)+')'); g.addColorStop(1,c+',0)');
+  ox.fillStyle=g; ox.beginPath(); ox.arc(cx,cy,120,0,7); ox.fill();
+  // aneis
+  for(let i=0;i<3;i++){const r=46+i*20+Math.sin(oph*1.5+i)*3;
+    ox.strokeStyle=c+','+(0.5-i*0.13)*pulse+')'; ox.lineWidth=2;
+    ox.beginPath(); ox.arc(cx,cy,r,oph*(0.5+i*0.3),oph*(0.5+i*0.3)+Math.PI*1.4); ox.stroke();}
+  // nucleo
+  ox.fillStyle=c+',0.9)'; ox.beginPath(); ox.arc(cx,cy,16+3*Math.sin(oph*2.5)*pulse,0,7); ox.fill();
+  requestAnimationFrame(orb);
+}
+orb();
+
+// ===================== STARFIELD (fundo do chat) =====================
+const sc2=document.getElementById('stars'), sx=sc2.getContext('2d'); let STARSARR=[],sph=0;
+function initStars(){
+  sc2.width=sc2.offsetWidth; sc2.height=sc2.offsetHeight; STARSARR=[];
+  const n=Math.floor(sc2.width*sc2.height/9000);
+  for(let i=0;i<n;i++) STARSARR.push({x:Math.random()*sc2.width,y:Math.random()*sc2.height,
+    r:Math.random()*1.3+0.2,a:Math.random(),s:Math.random()*0.02+0.003});
+}
+function stars(){
+  if(!sx || VIEW!=='home'){requestAnimationFrame(stars);return;}   // so anima na home (economiza CPU)
+  const w=sc2.width,h=sc2.height; sph+=0.004;
+  // nebula de fundo
+  sx.clearRect(0,0,w,h);
+  let nb=sx.createRadialGradient(w*0.7,h*0.25,0,w*0.7,h*0.25,w*0.7);
+  nb.addColorStop(0,'rgba(40,40,90,.22)'); nb.addColorStop(1,'rgba(10,12,20,0)');
+  sx.fillStyle=nb; sx.fillRect(0,0,w,h);
+  let nb2=sx.createRadialGradient(w*0.2,h*0.8,0,w*0.2,h*0.8,w*0.6);
+  nb2.addColorStop(0,'rgba(60,40,90,.18)'); nb2.addColorStop(1,'rgba(10,12,20,0)');
+  sx.fillStyle=nb2; sx.fillRect(0,0,w,h);
+  for(const st of STARSARR){
+    st.a+=st.s; const tw=0.5+0.5*Math.sin(st.a*6.28);
+    sx.fillStyle='rgba(200,215,255,'+(0.25+tw*0.6)+')';
+    sx.beginPath(); sx.arc(st.x,st.y,st.r*(0.7+tw*0.5),0,7); sx.fill();
+  }
+  requestAnimationFrame(stars);
+}
+addEventListener('resize',()=>{initStars();});
+
+// ===================== CONFIG =====================
+const VOZ_LABEL={'pt-PT-DuarteNeural':'Duarte (PT, mordomo)','pt-PT-RaquelNeural':'Raquel (PT)',
+  'pt-BR-AntonioNeural':'Antonio (BR)','pt-BR-FranciscaNeural':'Francisca (BR)',
+  'pt-BR-ThalitaMultilingualNeural':'Thalita (BR, multilingue)'};
+function vozLabel(v){ return VOZ_LABEL[v]||v; }
+async function renderConfig(){
+  try{ CFG=await (await fetch('/config')).json(); }catch(e){ CFG={}; }
+  let integ={}; try{ integ=await (await fetch('/integra/status')).json(); }catch(e){}
+  const mods=CFG.modelos_ollama||['qwen2.5'];
+  const modsA=CFG.modelos_anthropic||[];
+  const vozes=CFG.vozes||['pt-PT-DuarteNeural'];
+  const vol=(CFG.volume!=null?CFG.volume:90), rate=(CFG.rate!=null?CFG.rate:0);
+  const a=document.getElementById('cfgArea');
+  a.innerHTML=`
+  <div class="card"><h3>Cerebro (a inteligencia do Orion)</h3>
+    <div class="field"><label>Motor</label>
+      <select id="cfgCerebro">
+        <option value="ollama">Ollama local (gratis, padrao)</option>
+        <option value="anthropic">Claude / Anthropic (sua chave)</option>
+      </select>
+      <div class="hint">O Ollama roda no seu computador, de graca. Se voce tiver uma chave da Anthropic, pode pluga-la pra usar o Claude. O seu plano nao muda por causa disso, muda so a inteligencia.</div>
+    </div>
+    <div class="field" id="cfgOllamaWrap"><label>Modelo Ollama</label>
+      <select id="cfgModelo">${mods.map(m=>`<option value="${m}">${m}</option>`).join('')}</select>
+    </div>
+    <div class="field" id="cfgModeloAWrap" style="display:none"><label>Modelo Claude</label>
+      <select id="cfgModeloA">${modsA.map(m=>`<option value="${m}">${m}</option>`).join('')}</select>
+    </div>
+    <div class="field" id="cfgKeyWrap" style="display:none"><label>Chave Anthropic ${CFG.tem_chave_anthropic?'(ja configurada)':'(opcional)'}</label>
+      <input type="password" id="cfgAnthropic" placeholder="${CFG.tem_chave_anthropic?'********':'sk-ant-...'}">
+      <div class="hint">Fica guardada so no seu aparelho. Nunca compartilhamos suas chaves.</div>
+    </div>
+  </div>
+  <div class="card"><h3>Visao / analise de imagem ${integ.groq?'<span class="mbadge" style="color:var(--good);margin-left:6px">Groq ligado</span>':''}</h3>
+    <div class="hint" style="margin-bottom:10px">Pra a analise de print (gráfico) e fotos ficarem boas <b>de graca</b>, cole uma chave do <b>Groq</b> (console.groq.com &gt; API Keys). Sem ela, uso o modelo local (mais fraco). A leitura de grafico melhora muito com isso.</div>
+    <div class="field"><input type="password" id="cfgGroq" placeholder="${integ.groq?'******** (ja configurada)':'gsk_...'}"></div>
+  </div>
+  <div class="card"><h3>Voz</h3>
+    <div class="field"><label>Voz</label><select id="cfgVoz">${vozes.map(v=>`<option value="${v}">${vozLabel(v)}</option>`).join('')}</select></div>
+    <div class="field"><label>Volume</label><div class="range-row"><input type="range" id="cfgVol" min="0" max="100" value="${vol}"><span class="v" id="cfgVolV">${vol}</span></div></div>
+    <div class="field"><label>Velocidade da fala</label><div class="range-row"><input type="range" id="cfgRate" min="-30" max="40" value="${rate}"><span class="v" id="cfgRateV">${rate}</span></div></div>
+    <div class="row"><button class="btn" onclick="testarVoz()">Testar voz</button></div>
+  </div>
+  <div class="card"><h3>Microfone</h3>
+    <div class="field"><label>Ganho de entrada</label><div class="range-row"><input type="range" id="cfgGanho" min="0.5" max="3" step="0.1" value="${CFG.mic_ganho??1}"><span class="v" id="cfgGanhoV">${CFG.mic_ganho??1}x</span></div></div>
+    <div class="field"><label>Sensibilidade (limiar de ruido)</label><div class="range-row"><input type="range" id="cfgSens" min="100" max="2000" step="50" value="${CFG.mic_sens??400}"><span class="v" id="cfgSensV">${CFG.mic_sens??400}</span></div></div>
+    <div class="field"><label><input type="checkbox" id="cfgRuido" ${CFG.mic_ruido?'checked':''} style="width:auto;vertical-align:middle"> Supressao de ruido</label></div>
+  </div>
+  <div class="card"><h3>Privacidade e dados</h3>
+    <div class="hint" style="margin-bottom:12px">O cerebro padrao roda local. Senhas, cartoes e tokens nunca sao guardados na memoria.</div>
+    <div class="row">
+      <button class="btn" onclick="exportarDados()">Exportar meus dados</button>
+      <button class="btn" onclick="limparMemoria()">Limpar memoria</button>
+      <button class="btn ghost" style="color:var(--bad)" onclick="apagarConta()">Apagar minha conta</button>
+    </div>
+  </div>
+  ${(USER&&USER.criador)?`<div class="card" style="border-color:var(--line2)"><h3>Pagamento</h3>
+    <div class="hint" style="margin-bottom:12px">So o dono ve isto. Configure pelo menos um meio pra ativar o checkout dos planos. Pode usar os dois.</div>
+    <div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="dot ${integ.mercadopago?'ok':''}"></span><b>Mercado Pago</b> <span class="hint" style="margin-left:auto">${integ.mercadopago?'Configurado':'Pix, boleto, cartao (Brasil)'}</span></div>
+      <div class="field" style="margin-bottom:8px"><input type="password" id="cfgMP" placeholder="${integ.mercadopago?'********':'APP_USR-... (Access Token)'}"></div>
+      <button class="btn" onclick="salvarMP()">Salvar Mercado Pago</button>
+    </div>
+    <div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="dot ${integ.paypal?'ok':''}"></span><b>PayPal</b> <span class="hint" style="margin-left:auto">${integ.paypal?('Configurado ('+(integ.paypal_mode||'sandbox')+')'):'Cartao internacional'}</span></div>
+      <div class="field" style="margin-bottom:8px"><label>Client ID</label><input type="text" id="cfgPPID" placeholder="${integ.paypal?'********':'Client ID'}"></div>
+      <div class="field" style="margin-bottom:8px"><label>Secret</label><input type="password" id="cfgPPSEC" placeholder="${integ.paypal?'********':'Secret'}"></div>
+      <div class="field" style="margin-bottom:8px"><label>Modo</label><select id="cfgPPMODE"><option value="sandbox" ${integ.paypal_mode!=='live'?'selected':''}>Teste (sandbox)</option><option value="live" ${integ.paypal_mode==='live'?'selected':''}>Producao (live)</option></select></div>
+      <button class="btn" onclick="salvarPP()">Salvar PayPal</button>
+    </div>
+    <button class="btn primary" onclick="testarPagamento()">Testar conexao</button>
+    <div id="payTest" class="hint" style="margin-top:8px"></div>
+  </div>`:''}
+  <div class="card"><h3>Sobre</h3>
+    <div class="hint">Orion v1.0. <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
+  </div>
+  <div class="row"><button class="btn primary" onclick="salvarConfig()">Salvar configuracoes</button></div>`;
+  if(CFG.cerebro) document.getElementById('cfgCerebro').value=CFG.cerebro;
+  if(CFG.model_ollama){ const sel=document.getElementById('cfgModelo'); const w=CFG.model_ollama;
+    const o=[...sel.options].find(x=>x.value===w||x.value.split(':')[0]===w.split(':')[0]); if(o) sel.value=o.value; }
+  if(CFG.model_anthropic) try{document.getElementById('cfgModeloA').value=CFG.model_anthropic;}catch(e){}
+  if(CFG.voz) try{document.getElementById('cfgVoz').value=CFG.voz;}catch(e){}
+  const upd=()=>{document.getElementById('cfgVolV').textContent=document.getElementById('cfgVol').value;
+    document.getElementById('cfgRateV').textContent=document.getElementById('cfgRate').value;
+    document.getElementById('cfgGanhoV').textContent=document.getElementById('cfgGanho').value+'x';
+    document.getElementById('cfgSensV').textContent=document.getElementById('cfgSens').value;
+    const isOll=document.getElementById('cfgCerebro').value==='ollama';
+    document.getElementById('cfgOllamaWrap').style.display=isOll?'block':'none';
+    document.getElementById('cfgModeloAWrap').style.display=isOll?'none':'block';
+    document.getElementById('cfgKeyWrap').style.display=isOll?'none':'block';};
+  ['cfgVol','cfgRate','cfgGanho','cfgSens'].forEach(i=>document.getElementById(i).oninput=upd);
+  document.getElementById('cfgCerebro').onchange=upd; upd();
+}
+async function salvarMP(){
+  const t=(document.getElementById('cfgMP')||{}).value; if(!t||t==='********'){ alert('Cole o token, senhor.'); return; }
+  try{ await fetch('/integra/cred',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mercadopago_token:t})});
+    piscarSave('PAGAMENTO'); renderConfig(); }catch(e){ alert('Erro ao salvar.'); }
+}
+async function salvarPP(){
+  const id=(document.getElementById('cfgPPID')||{}).value, sec=(document.getElementById('cfgPPSEC')||{}).value, mode=document.getElementById('cfgPPMODE').value;
+  const body={paypal_mode:mode};
+  if(id && id!=='********') body.paypal_client_id=id;
+  if(sec && sec!=='********') body.paypal_secret=sec;
+  try{ await fetch('/integra/cred',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    piscarSave('PAYPAL'); renderConfig(); }catch(e){ alert('Erro ao salvar.'); }
+}
+async function testarPagamento(){
+  const box=document.getElementById('payTest'); box.textContent='Testando...';
+  try{ const r=await (await fetch('/pagamento/testar',{method:'POST'})).json();
+    let txt=[];
+    if(r.mercadopago) txt.push('Mercado Pago: '+(r.mercadopago.ok?('OK ('+(r.mercadopago.conta||'conta')+')'):('falhou - '+(r.mercadopago.erro||''))));
+    if(r.paypal) txt.push('PayPal: '+(r.paypal.ok?('OK ('+r.paypal.modo+')'):('falhou - '+(r.paypal.erro||''))));
+    if(r.nenhum) txt.push('Nenhum meio configurado ainda.');
+    box.style.color=(r.mercadopago&&r.mercadopago.ok)||(r.paypal&&r.paypal.ok)?'var(--good)':'var(--warn)';
+    box.innerHTML=txt.join('<br>')||'Sem resposta.';
+  }catch(e){ box.textContent='Erro ao testar.'; }
+}
+async function exportarDados(){
+  try{ const m=await (await fetch('/memoria')).json();
+    const blob=new Blob([JSON.stringify({usuario:USER,memoria:m},null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='orion_meus_dados.json'; a.click();
+    piscarSave('EXPORTADO'); }catch(e){ alert('Nao consegui exportar agora.'); }
+}
+async function limparMemoria(){ if(!confirm('Limpar toda a memoria do Orion sobre voce?')) return;
+  await fetch('/memoria',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'clear'})}); piscarSave('MEMORIA'); }
+async function apagarConta(){ if(!USER||USER.convidado){ alert('Voce esta como convidado.'); return; }
+  if(!confirm('Apagar sua conta e todo o perfil deste aparelho? Nao da pra desfazer.')) return;
+  await fetch('/usuario/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:USER.id})});
+  USER=null; location.reload(); }
+async function salvarConfig(){
+  const body={cerebro:document.getElementById('cfgCerebro').value,
+    model_ollama:document.getElementById('cfgModelo')?document.getElementById('cfgModelo').value:undefined,
+    model_anthropic:document.getElementById('cfgModeloA')?document.getElementById('cfgModeloA').value:undefined,
+    voz:document.getElementById('cfgVoz').value,
+    volume:parseInt(document.getElementById('cfgVol').value,10),
+    rate:parseInt(document.getElementById('cfgRate').value,10),
+    mic_ganho:parseFloat(document.getElementById('cfgGanho').value),
+    mic_sens:parseInt(document.getElementById('cfgSens').value,10),
+    mic_ruido:document.getElementById('cfgRuido').checked};
+  const key=(document.getElementById('cfgAnthropic')||{}).value;
+  if(key && key!=='********'){ try{ await fetch('/integra/cred',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({anthropic_key:key})}); }catch(e){} }
+  const gq=(document.getElementById('cfgGroq')||{}).value;
+  if(gq && gq!=='********'){ try{ await fetch('/integra/cred',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({groq_key:gq})}); }catch(e){} }
+  try{ const j=await (await fetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+    if(j.ok){CFG=j.config; piscarSave('SALVO');} }catch(e){}
+}
+async function testarVoz(){
+  await fetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voz:document.getElementById('cfgVoz').value,volume:parseInt(document.getElementById('cfgVol').value,10),rate:parseInt(document.getElementById('cfgRate').value,10)})});
+  fetch('/falar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:'Ola, senhor. Esta e a minha voz.'})});
+}
+
+// ===================== INTEGRACOES (catalogo) =====================
+const INTEGRA_CAT=[
+ {sec:'E-mail e calendario'},
+ {id:'google',nome:'Gmail + Google Agenda',desc:'Ler, resumir e enviar e-mails; criar eventos.',acao:'google'},
+ {id:'outlook',nome:'Outlook',desc:'E-mail e calendario da Microsoft.'},
+ {id:'gcontacts',nome:'Google Contatos',desc:'Seus contatos sempre a mao.'},
+ {id:'fastmail',nome:'Fastmail / IMAP',desc:'Qualquer caixa de e-mail por IMAP.'},
+ {sec:'Conhecimento e projetos'},
+ {id:'notion',nome:'Notion',desc:'Buscar, criar e atualizar paginas.'},
+ {id:'linear',nome:'Linear',desc:'Issues e ciclos do produto.'},
+ {id:'github',nome:'GitHub',desc:'Repositorios, issues e pull requests.'},
+ {id:'jira',nome:'Jira',desc:'Tarefas e sprints da equipe.'},
+ {id:'confluence',nome:'Confluence',desc:'Documentacao e wikis.'},
+ {id:'trello',nome:'Trello',desc:'Quadros e cartoes.'},
+ {id:'clickup',nome:'ClickUp',desc:'Tarefas e projetos.',acao:'clickup'},
+ {id:'asana',nome:'Asana',desc:'Gestao de projetos.'},
+ {sec:'Armazenamento de arquivos'},
+ {id:'gdrive',nome:'Google Drive',desc:'Seus arquivos do Google.',acao:'google'},
+ {id:'onedrive',nome:'OneDrive',desc:'Arquivos da Microsoft.'},
+ {id:'dropbox',nome:'Dropbox',desc:'Arquivos na nuvem.'},
+ {id:'box',nome:'Box',desc:'Arquivos corporativos.'},
+ {id:'sharepoint',nome:'SharePoint',desc:'Documentos da empresa.'},
+ {sec:'Comunicacao'},
+ {id:'whatsapp',nome:'WhatsApp',desc:'Abrir conversas e mandar mensagem.',pronto:true},
+ {id:'telegram',nome:'Telegram',desc:'Mensagens e alertas.'},
+ {id:'slack',nome:'Slack',desc:'Mensagens e canais da equipe.'},
+ {id:'discord',nome:'Discord',desc:'Comunidades e servidores.'},
+ {sec:'Marketing, vendas e dados'},
+ {id:'meta',nome:'Meta Ads',desc:'Campanhas e metricas de anuncios.',acao:'meta'},
+ {id:'apollo',nome:'Apollo',desc:'Prospeccao e listas de leads.',acao:'apollo'},
+ {id:'hubspot',nome:'HubSpot',desc:'CRM, contatos e negocios.'},
+ {id:'salesforce',nome:'Salesforce',desc:'CRM corporativo.'},
+ {id:'analytics',nome:'Google Analytics',desc:'Trafego e conversoes do site.'},
+ {sec:'Vida e automacao'},
+ {id:'spotify',nome:'Spotify',desc:'Tocar musica e playlists.'},
+ {id:'gcal',nome:'Calendarios (iCal)',desc:'Assine qualquer calendario.'},
+ {id:'home',nome:'Home Assistant',desc:'Controle a casa inteligente.'},
+ {id:'zapier',nome:'Zapier / Make',desc:'Conecte a 5000+ apps por automacao.'},
+ {id:'mcp',nome:'Conector MCP',desc:'Pluga qualquer servidor MCP (avancado).'},
+];
+async function renderIntegra(){
+  let s={}; try{ s=await (await fetch('/integra/status')).json(); }catch(e){}
+  const conectado=(it)=>({google:s.google,clickup:s.clickup,apollo:s.apollo,meta:s.meta})[it.id]||false;
+  const card=(it)=>{ const ok=conectado(it);
+    const btn = it.acao==='google'?'<button class="btn primary" style="width:100%;margin-top:10px" onclick="conectarGoogle()">Conectar</button>'
+      : ok?'<button class="btn" style="width:100%;margin-top:10px" disabled>Conectado</button>'
+      : '<button class="btn" style="width:100%;margin-top:10px" onclick="pedirIntegra(\''+it.nome.replace(/'/g,"")+'\')">Conectar</button>';
+    return `<div class="card" style="margin:0;padding:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span class="dot ${ok?'ok':''}"></span><b style="font-size:14px">${it.nome}</b>
+        ${ok?'':'<span class="plan-badge plan-free" style="margin-left:auto">'+(it.pronto?'Pronto':'Em breve')+'</span>'}
+      </div><div class="hint">${it.desc}</div>${btn}</div>`; };
+  let html='<div class="card" style="background:linear-gradient(135deg,rgba(122,162,255,.1),rgba(155,140,255,.06))"><h3>Conecte o Orion ao seu mundo</h3><div class="hint" style="margin-top:-6px">Quanto mais voce conecta, mais o Orion resolve por voz ou texto. Novas integracoes entram toda semana.</div></div>';
+  let grid=null;
+  INTEGRA_CAT.forEach(it=>{
+    if(it.sec){ if(grid!==null) html+=grid+'</div>'; html+=`<div class="sb-sec" style="padding:18px 2px 8px">${it.sec}</div>`;
+      grid='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">'; return; }
+    grid+=card(it);
+  });
+  if(grid!==null) html+=grid+'</div>';
+  document.getElementById('integraArea').innerHTML=html;
+}
+function conectarGoogle(){ fetch('/integra/google_connect',{method:'POST'}); piscarSave('ABRINDO'); }
+function pedirIntegra(nome){ alert('A integracao com '+nome+' esta a caminho, senhor. Quer prioridade? Mande pelo chat: "quero conectar o '+nome+'".'); }
+
+// ===================== APRENDER (tutor de IA) =====================
+const APR_SUG=['Criar um site sem ser programador','Usar IA no meu trabalho','Fazer um curriculo que chama atencao',
+  'Comecar a investir do zero','Montar uma rotina de academia','Criar um app simples com vibe coding','Aprender ingles do basico','Vender pela internet'];
+async function renderAprender(){
+  if(USER&&USER.convidado){ document.getElementById('aprenderArea').innerHTML=soon('Crie uma conta pra montar suas trilhas e o Orion lembrar do seu progresso.'); return; }
+  let st={trilhas:[]}; try{ st=await (await fetch('/aprender')).json(); }catch(e){}
+  const sug=APR_SUG.map(s=>`<button class="doc-tpl" onclick="document.getElementById('aprObj').value='${s.replace(/'/g,"")}'">${s}</button>`).join('');
+  const trilhas=(st.trilhas||[]).map(t=>{
+    const pct=t.passos.length?Math.round(t.feitos.length/t.passos.length*100):0;
+    const itens=t.passos.map((p,i)=>`<div>
+      <label class="rot-item ${t.feitos.includes(i)?'done':''}"><input type="checkbox" ${t.feitos.includes(i)?'checked':''} onchange="aprCheck(${t.id},${i})">
+        <span style="flex:1">${esc(p)}</span>
+        <button class="btn" style="padding:4px 10px;font-size:12px" onclick="event.preventDefault();aprLicao(${t.id},${i},this)">Ensinar</button></label>
+      <div class="apr-licao" id="apr-${t.id}-${i}"></div></div>`).join('');
+    return `<div class="card"><h3>${esc(t.objetivo)} <span class="mbadge" style="margin-left:8px">${t.nivel}</span>
+      <button class="btn ghost" style="margin-left:auto;color:var(--bad);font-size:12px" onclick="aprDel(${t.id})">excluir</button></h3>
+      <div style="height:8px;background:var(--bg);border-radius:6px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></div></div>
+      ${itens}</div>`;
+  }).join('');
+  document.getElementById('aprenderArea').innerHTML=`
+    <div class="card"><h3>O que voce quer aprender a fazer?</h3>
+      <div class="field"><input id="aprObj" placeholder="ex: criar um site, investir, usar IA no trabalho..."></div>
+      <div class="doc-tpls" style="margin-bottom:14px">${sug}</div>
+      <div class="row"><select id="aprNivel" style="background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px">
+        <option value="iniciante">Sou iniciante (nunca fiz)</option><option value="intermediario">Ja sei o basico</option><option value="avancado">Quero aprofundar</option></select>
+        <button class="btn primary" id="aprGo" onclick="aprMontar()">Montar minha trilha</button></div>
+    </div>
+    ${trilhas}`;
+}
+async function aprMontar(){ const obj=document.getElementById('aprObj').value.trim(); if(!obj){alert('Diz o que quer aprender.');return;}
+  const b=document.getElementById('aprGo'); b.disabled=true; b.textContent='Montando...';
+  try{ await fetch('/aprender/trilha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({objetivo:obj,nivel:document.getElementById('aprNivel').value})}); piscarSave('TRILHA'); renderAprender(); }
+  catch(e){ alert('Erro'); b.disabled=false; b.textContent='Montar minha trilha'; } }
+async function aprCheck(id,passo){ await fetch('/aprender',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'checkin',id,passo})}); renderAprender(); }
+async function aprDel(id){ if(!confirm('Excluir esta trilha?'))return; await fetch('/aprender',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'del',id})}); renderAprender(); }
+async function aprLicao(id,idx,btn){
+  const box=document.getElementById('apr-'+id+'-'+idx); if(box.innerHTML){ box.innerHTML=''; return; }
+  const t=(await (await fetch('/aprender')).json()).trilhas.find(x=>x.id===id); if(!t) return;
+  box.innerHTML='<div class="apr-l-in">O Orion esta preparando a licao...</div>'; if(btn)btn.textContent='...';
+  try{ const r=await (await fetch('/aprender/licao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({objetivo:t.objetivo,passo:t.passos[idx],nivel:t.nivel})})).json();
+    box.innerHTML='<div class="apr-l-in">'+esc(r.licao||'nao consegui').replace(/\n/g,'<br>')+'</div>';
+  }catch(e){ box.innerHTML='<div class="apr-l-in">Erro na licao.</div>'; }
+  if(btn)btn.textContent='Ensinar';
+}
+
+// ===================== TRADING IA =====================
+let TG={sel:null, estado:{}, poll:null, tvLoaded:false};
+function fmtBRL(v){ return (v<0?'-':'')+'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function tvSymbol(t){ t=(t||'').toUpperCase(); if(t.includes('-USD')) return 'BINANCE:'+t.replace('-USD','')+'USDT'; return 'BMFBOVESPA:'+t; }
+function stopTradingPoll(){ if(TG.poll){ clearInterval(TG.poll); TG.poll=null; } }
+function startTradingPoll(){ stopTradingPoll(); TG.poll=setInterval(async()=>{ if(VIEW!=='trading'){stopTradingPoll();return;}
+  try{ TG.estado=await (await fetch('/trading')).json(); tgRenderKPIs(); tgRenderWatch(); tgRenderPos(); }catch(e){} }, 12000); }
+async function renderTrading(){
+  if(USER&&USER.convidado){ document.getElementById('tradingArea').innerHTML=soon('Crie uma conta pra usar o Trading IA e acompanhar sua carteira simulada.'); return; }
+  let s={}; try{ s=await (await fetch('/trading')).json(); }catch(e){}
+  TG.estado=s; if(!TG.sel) TG.sel=(s.watchlist&&s.watchlist[0])||'PETR4'; if(!TG.modo) TG.modo='ativo';
+  document.getElementById('tradingArea').innerHTML=`
+    <div class="tg-top" id="tgKpis"></div>
+    <div class="mm-tools">
+      <button class="doc-tpl ${TG.modo==='ativo'?'on':''}" onclick="tgModo('ativo')">Por ativo (ao vivo)</button>
+      <button class="doc-tpl ${TG.modo==='print'?'on':''}" onclick="tgModo('print')">Por print (envie um grafico)</button>
+    </div>
+    <div id="tgModoBox"></div>
+    <div class="card"><h3>Carteira simulada</h3><div id="tgPos"></div></div>
+    <div class="card"><h3>Historico <button class="btn ghost" style="margin-left:auto;font-size:12px" onclick="tgReset()">Resetar carteira</button></h3><div class="tg-hist" id="tgHist"></div></div>`;
+  tgRenderKPIs(); tgRenderModo(); tgRenderPos(); tgRenderHist(); startTradingPoll();
+}
+function tgModo(m){ TG.modo=m; renderTrading(); }
+function tgRenderModo(){
+  const box=document.getElementById('tgModoBox'); if(!box) return;
+  if(TG.modo==='print'){
+    box.innerHTML=`<div class="card">
+      <h3>Analise por print do grafico</h3>
+      <div class="hint" style="margin-bottom:12px">Manda o screenshot de um grafico (TradingView, app da corretora, etc.). O Orion le a imagem e devolve um plano: entrada, stop loss, take profit e o fundamento.</div>
+      <input id="tgPrintCtx" placeholder="contexto opcional (ex: day trade, swing, PETR4...)" style="width:100%;background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:10px;padding:11px 13px;font-size:14px;margin-bottom:10px">
+      <div id="tgDrop" onclick="document.getElementById('tgPrintInp').click()" style="border:1px dashed var(--line2);border-radius:14px;padding:34px 20px;text-align:center;cursor:pointer;color:var(--dim)">
+        Clique pra escolher uma imagem, ou cole (Ctrl+V) o print do grafico aqui
+      </div>
+      <input type="file" id="tgPrintInp" accept="image/*" style="display:none" onchange="tgPrintFile(event)">
+      <div id="tgPrintResult"></div>
+    </div>`;
+  } else {
+    box.innerHTML=`<div class="tg-grid">
+      <div class="tg-watch">
+        <div class="tg-wadd"><input id="tgAdd" placeholder="ex: MGLU3, BTC-USD" onkeydown="if(event.key==='Enter')tgWatchAdd()"><button class="btn" onclick="tgWatchAdd()">+</button></div>
+        <div id="tgWatch"></div>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div id="tgSelName" style="font-size:20px;font-weight:800"></div>
+          <div id="tgSelPrice" style="font-size:15px;font-weight:600"></div>
+        </div>
+        <div id="tvchart"></div>
+        <div class="tg-order">
+          <input id="tgQtd" type="number" value="100" min="1">
+          <button class="btn buy" onclick="tgOrdem('comprar')">Comprar</button>
+          <button class="btn sell" onclick="tgOrdem('vender')">Vender</button>
+          <button class="btn" onclick="tgAnalise()" style="margin-left:auto">Analisar com IA</button>
+        </div>
+        <div id="tgAnalise"></div>
+        <div class="tg-agente">
+          <div class="sw" id="tgSw" onclick="tgAgente()"><b></b></div>
+          <div style="flex:1"><b>Agente automatico (simulacao)</b><div class="hint">O Orion opera sua watchlist sozinho, na simulacao, por medias moveis. Voce so assiste.</div></div>
+        </div>
+      </div>
+    </div>
+    <div id="tgRealBox" style="margin-top:14px"></div>`;
+    tgRenderWatch(); tgChart(TG.sel); tgRenderReal();
+    const sw=document.getElementById('tgSw'); if(sw) sw.classList.toggle('on',!!TG.estado.agente);
+  }
+}
+function tgPrintFile(ev){ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>tgAnalisePrint(r.result); r.readAsDataURL(f); }
+async function tgAnalisePrint(dataUrl){
+  const box=document.getElementById('tgPrintResult'); const ctx=(document.getElementById('tgPrintCtx')||{}).value||'';
+  const drop=document.getElementById('tgDrop'); if(drop) drop.innerHTML='<img src="'+dataUrl+'" style="max-height:240px;border-radius:10px;max-width:100%">';
+  box.innerHTML='<div class="tg-ana" style="margin-top:12px">O Orion esta lendo o grafico, senhor...</div>';
+  try{ const r=await (await fetch('/trading/analise_imagem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imagem:dataUrl,contexto:ctx})})).json();
+    if(!r.ok){ box.innerHTML='<div class="tg-ana" style="margin-top:12px;color:var(--warn)">'+esc(r.erro||'nao consegui ler')+'</div>'; return; }
+    box.innerHTML=tgPlanoHTML(r.campos||{}, r.texto||''); piscarSave('ANALISADO');
+  }catch(e){ box.innerHTML='<div class="tg-ana" style="margin-top:12px">Erro na analise.</div>'; }
+}
+function tgPlanoHTML(c, raw){
+  const ent=(c.ENTRADA||'').toUpperCase(); const sig=/COMPRA/.test(ent)?'compra':/VENDA/.test(ent)?'venda':'neutro';
+  const row=(l,v,cor)=> v?`<div style="display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--line)"><span class="hint">${l}</span><b style="${cor||''};text-align:right">${esc(v)}</b></div>`:'';
+  if(Object.keys(c).length>=3){
+    return `<div class="tg-ana" style="margin-top:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><b>Plano de trade (lido da imagem)</b><span class="tg-sig sig-${sig}">${esc((ent.match(/COMPRA|VENDA/)||['NEUTRO'])[0])}</span><span class="hint" style="margin-left:auto">${esc(c.ATIVO||'')}</span></div>
+      ${row('Tendencia',c.TENDENCIA)}
+      ${row('Suporte',c.SUPORTE)}
+      ${row('Resistencia',c.RESISTENCIA)}
+      ${row('Entrada',c.ENTRADA,'color:var(--accent)')}
+      ${row('Stop loss',c.STOP,'color:var(--bad)')}
+      ${row('Take profit',c.ALVO,'color:var(--good)')}
+      ${c.FUNDAMENTO?'<div style="margin-top:10px;font-size:14px;line-height:1.6">'+esc(c.FUNDAMENTO)+'</div>':''}
+      <div class="hint" style="margin-top:10px">Leitura tecnica da imagem, nao e recomendacao garantida. A decisao e sua, senhor.</div></div>`;
+  }
+  return '<div class="tg-ana" style="margin-top:12px;white-space:pre-wrap;line-height:1.6">'+esc(raw)+'</div>';
+}
+function tgRenderKPIs(){
+  const s=TG.estado; const box=document.getElementById('tgKpis'); if(!box) return;
+  const lucro=s.lucro_total||0; const cls=lucro>=0?'up':'down';
+  box.innerHTML=`
+    <div class="tg-kpi"><div class="l">Patrimonio</div><div class="v">${fmtBRL(s.patrimonio||0)}</div></div>
+    <div class="tg-kpi"><div class="l">Lucro / Prejuizo</div><div class="v ${cls}">${fmtBRL(lucro)} <span style="font-size:14px">(${(s.lucro_pct||0).toFixed(2)}%)</span></div></div>
+    <div class="tg-kpi"><div class="l">Saldo livre</div><div class="v">${fmtBRL(s.saldo||0)}</div></div>
+    <div class="tg-kpi"><div class="l">Agente</div><div class="v" style="color:${s.agente?'var(--good)':'var(--faint)'}">${s.agente?'Operando':'Parado'}</div></div>`;
+  const sw=document.getElementById('tgSw'); if(sw) sw.classList.toggle('on',!!s.agente);
+}
+function tgRenderWatch(){
+  const box=document.getElementById('tgWatch'); if(!box) return;
+  box.innerHTML=(TG.estado.watch||[]).map(w=>{
+    const cls=(w.pct||0)>=0?'up':'down'; const pr=w.price!=null?(w.moeda==='USD'?'$':'R$')+' '+w.price.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'--';
+    return `<div class="tg-wi ${w.ticker===TG.sel?'on':''}" onclick="tgSelect('${w.ticker}')">
+      <span class="tk">${w.ticker}</span>
+      <span style="display:flex;align-items:center"><span class="pr">${pr}<br><span class="${cls}" style="font-size:11px">${(w.pct||0).toFixed(2)}%</span></span>
+      <span class="rm" onclick="event.stopPropagation();tgWatchDel('${w.ticker}')">&#10005;</span></span></div>`;
+  }).join('')||'<div class="hint">Adicione ativos acima.</div>';
+  // atualiza preco do selecionado no topo
+  const sel=(TG.estado.watch||[]).find(w=>w.ticker===TG.sel);
+  if(sel){ const n=document.getElementById('tgSelName'); if(n)n.textContent=TG.sel;
+    const p=document.getElementById('tgSelPrice'); if(p&&sel.price!=null){ p.className=(sel.pct>=0?'up':'down'); p.textContent=(sel.moeda==='USD'?'$':'R$')+' '+sel.price.toFixed(2)+' ('+sel.pct.toFixed(2)+'%)'; } }
+}
+function tgRenderPos(){
+  const box=document.getElementById('tgPos'); if(!box) return; const ps=TG.estado.posicoes||[];
+  if(!ps.length){ box.innerHTML='<div class="hint">Nenhuma posicao aberta. Compre um ativo ou ligue o agente.</div>'; return; }
+  box.innerHTML='<table class="tg-pos"><tr><th>Ativo</th><th>Qtd</th><th>Medio</th><th>Atual</th><th>Resultado</th></tr>'+
+    ps.map(p=>`<tr><td><b>${p.ticker}</b></td><td>${p.qtd}</td><td>${p.preco_medio.toFixed(2)}</td><td>${(p.preco_atual||0).toFixed(2)}</td>
+      <td class="${p.pl>=0?'up':'down'}">${fmtBRL(p.pl)} (${p.plpct.toFixed(2)}%)</td></tr>`).join('')+'</table>';
+}
+function tgRenderHist(){
+  const box=document.getElementById('tgHist'); if(!box) return; const h=TG.estado.historico||[];
+  box.innerHTML=h.map(x=>{const d=new Date(x.t*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="tg-h-it"><span><b class="${x.acao==='compra'?'up':'down'}">${x.acao.toUpperCase()}</b> ${x.qtd} ${x.ticker} @ ${x.preco.toFixed(2)}${x.origem==='agente'?'<span class="ag">AGENTE</span>':''}</span><span style="color:var(--faint)">${d}</span></div>`;
+  }).join('')||'<div class="hint">Sem operacoes ainda.</div>';
+}
+function tgChart(ticker){
+  const make=()=>{ const el=document.getElementById('tvchart'); if(!el||!window.TradingView) return; el.innerHTML='';
+    new TradingView.widget({container_id:'tvchart',symbol:tvSymbol(ticker),interval:'D',theme:'dark',style:'1',
+      locale:'br',autosize:true,hide_side_toolbar:true,allow_symbol_change:false,
+      backgroundColor:'#12161f',gridColor:'rgba(122,162,255,0.06)'}); };
+  if(window.TradingView){ make(); }
+  else if(!TG.tvLoaded){ TG.tvLoaded=true; const sc=document.createElement('script'); sc.src='https://s3.tradingview.com/tv.js'; sc.onload=make; document.head.appendChild(sc); }
+  else { setTimeout(()=>tgChart(ticker),500); }
+}
+function tgSelect(t){ TG.sel=t; tgRenderWatch(); tgChart(t); document.getElementById('tgAnalise').innerHTML=''; }
+async function tgWatchAdd(){ const i=document.getElementById('tgAdd'); const t=(i.value||'').trim().toUpperCase(); if(!t)return; i.value='';
+  TG.estado=(await (await fetch('/trading',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'watch_add',ticker:t})})).json()).estado; TG.sel=t; tgRenderWatch(); tgChart(t); }
+async function tgWatchDel(t){ TG.estado=(await (await fetch('/trading',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'watch_del',ticker:t})})).json()).estado; if(TG.sel===t)TG.sel=(TG.estado.watchlist||[])[0]; tgRenderWatch(); }
+async function tgOrdem(tipo){ const qtd=parseInt(document.getElementById('tgQtd').value,10)||0;
+  const r=await (await fetch('/trading',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'ordem',tipo,ticker:TG.sel,qtd})})).json();
+  if(r.ok){ TG.estado=r.estado; tgRenderKPIs(); tgRenderWatch(); tgRenderPos(); tgRenderHist(); piscarSave(tipo==='comprar'?'COMPRADO':'VENDIDO'); }
+  else alert(r.erro||'erro'); }
+async function tgAnalise(){ const box=document.getElementById('tgAnalise'); box.innerHTML='<div class="tg-ana">O Orion esta analisando '+TG.sel+'...</div>';
+  try{ const r=await (await fetch('/trading/analise',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker:TG.sel})})).json();
+    if(!r.ok){ box.innerHTML='<div class="tg-ana" style="color:var(--warn)">'+(r.erro||'nao consegui analisar')+'</div>'; return; }
+    const sig=/COMPRA/i.test(r.analise)?'compra':/VENDA/i.test(r.analise)?'venda':'neutro';
+    box.innerHTML=`<div class="tg-ana"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><b>Analise IA - ${r.ticker}</b><span class="tg-sig sig-${sig}">${sig.toUpperCase()}</span><span class="hint" style="margin-left:auto">tendencia ${r.tendencia}</span></div><div style="font-size:14px;line-height:1.6">${esc(r.analise)}</div><div class="hint" style="margin-top:8px">Analise tecnica simples, nao e recomendacao. A decisao e sua, senhor.</div></div>`;
+  }catch(e){ box.innerHTML='<div class="tg-ana">Erro na analise.</div>'; } }
+async function tgAgente(){ const ligado=!(TG.estado.agente);
+  TG.estado=(await (await fetch('/trading',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'agente',ligado})})).json()).estado;
+  tgRenderKPIs(); piscarSave(ligado?'AGENTE ON':'AGENTE OFF'); }
+async function tgReset(){ if(!confirm('Zerar a carteira simulada (volta pra R$ 100.000)?'))return;
+  TG.estado=(await (await fetch('/trading',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'reset'})})).json()).estado;
+  tgRenderKPIs(); tgRenderPos(); tgRenderHist(); }
+// ----- operacoes REAIS (Binance) -----
+async function tgRenderReal(){
+  const box=document.getElementById('tgRealBox'); if(!box) return;
+  if(window.ORION_CLOUD){ box.innerHTML='<div class="card"><h3>Operacoes reais</h3><div class="hint">As operacoes reais (Binance) ficam na versao desktop do Orion, por seguranca. Aqui na web voce tem analise, simulacao e o print.</div></div>'; return; }
+  let c={}; try{ c=await (await fetch('/binance/conta')).json(); }catch(e){ c={ok:false,erro:'sem conexao'}; }
+  const disc='<div class="hint" style="color:var(--warn);margin-top:10px">ATENCAO: aqui e DINHEIRO REAL. Toda ordem e validada, mostra os detalhes e so executa depois que voce confirma. Tem teto de seguranca por ordem (US$ 200). Comece com pouco, senhor.</div>';
+  if(!c.ok){
+    box.innerHTML=`<div class="card" style="border-color:var(--warn)"><h3>Operacoes reais (Binance) <span class="mbadge" style="margin-left:8px">DINHEIRO REAL</span></h3>
+      <div class="hint" style="margin-bottom:10px">Conecte sua conta Binance pra operar cripto de verdade. Crie uma API Key em Binance &gt; API Management com permissao de Spot Trading. Suas chaves ficam so no seu aparelho.</div>
+      <div class="field" style="margin-bottom:8px"><input id="bnKey" placeholder="API Key" style="width:100%;background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:10px;padding:11px 13px;font-size:13px"></div>
+      <div class="field" style="margin-bottom:8px"><input id="bnSec" type="password" placeholder="API Secret" style="width:100%;background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:10px;padding:11px 13px;font-size:13px"></div>
+      <button class="btn primary" onclick="tgRealConnect()">Conectar Binance</button>
+      ${(c.erro&&!/conecte|nao conectada/i.test(c.erro))?'<div class="hint" style="color:var(--bad);margin-top:8px">'+esc(c.erro)+'</div>':''}</div>`;
+    return;
+  }
+  const saldos=(c.saldos||[]).slice(0,10).map(s=>`<span class="mbadge" style="margin:2px">${esc(s.moeda)}: ${(''+s.livre).slice(0,10)}</span>`).join(' ');
+  box.innerHTML=`<div class="card" style="border-color:var(--warn)"><h3>Operacoes reais (Binance) <span class="mbadge" style="margin-left:8px;color:var(--good)">conectada${c.podeOperar?'':' (sem permissao de trade)'}</span></h3>
+    <div style="margin-bottom:10px;line-height:1.9">${saldos||'<span class="hint">sem saldo</span>'}</div>
+    <div class="tg-order">
+      <input id="bnPar" value="BTCUSDT" style="width:150px;text-transform:uppercase;background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:9px;padding:9px 11px">
+      <input id="bnVal" type="number" value="20" style="width:90px">
+      <button class="btn buy" onclick="tgRealOrdem('BUY')">Comprar real</button>
+      <button class="btn sell" onclick="tgRealOrdem('SELL')">Vender real</button>
+    </div>
+    <div id="bnResult"></div>${disc}</div>`;
+}
+async function tgRealConnect(){
+  const k=(document.getElementById('bnKey')||{}).value, s=(document.getElementById('bnSec')||{}).value;
+  if(!k||!s){ alert('Cole a API Key e o Secret.'); return; }
+  await fetch('/integra/cred',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({binance_key:k,binance_secret:s})});
+  piscarSave('BINANCE'); tgRenderReal();
+}
+let _bnPend=null;
+async function tgRealOrdem(side){
+  const par=(document.getElementById('bnPar').value||'').toUpperCase().trim(); const val=parseFloat(document.getElementById('bnVal').value)||0;
+  const box=document.getElementById('bnResult'); box.innerHTML='<div class="hint">Validando a ordem na Binance...</div>';
+  try{ const r=await (await fetch('/binance/ordem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:par,side,valor:val,confirmar:false})})).json();
+    if(!r.ok){ box.innerHTML='<div class="hint" style="color:var(--bad)">'+esc(r.erro||'erro')+'</div>'; return; }
+    _bnPend={symbol:par,side,valor:val};
+    box.innerHTML=`<div class="tg-ana" style="margin-top:10px"><b>${side==='BUY'?'COMPRA':'VENDA'} REAL</b><br>${esc(r.msg)}<br>
+      <button class="btn sell" style="margin-top:10px" onclick="tgRealConfirm()">Confirmar e executar DE VERDADE</button>
+      <button class="btn ghost" style="margin-top:10px;margin-left:6px" onclick="document.getElementById('bnResult').innerHTML='';_bnPend=null">Cancelar</button></div>`;
+  }catch(e){ box.innerHTML='<div class="hint" style="color:var(--bad)">erro de conexao</div>'; }
+}
+async function tgRealConfirm(){
+  if(!_bnPend) return; const box=document.getElementById('bnResult'); box.innerHTML='<div class="hint">Executando...</div>';
+  try{ const r=await (await fetch('/binance/ordem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({confirmar:true},_bnPend))})).json();
+    _bnPend=null;
+    if(r.ok){ box.innerHTML='<div class="tg-ana" style="margin-top:10px;border-left-color:var(--good)"><b style="color:var(--good)">Ordem executada de verdade!</b><br>'+esc(JSON.stringify(r.executada))+'</div>'; piscarSave('ORDEM REAL'); setTimeout(tgRenderReal,1500); }
+    else box.innerHTML='<div class="hint" style="color:var(--bad)">'+esc(r.erro||'erro')+'</div>';
+  }catch(e){ box.innerHTML='<div class="hint" style="color:var(--bad)">erro de conexao</div>'; }
+}
+
+// ===================== MEMORIA (memory tree) =====================
+let MEM_OPEN={root:true,voce:true,diretrizes:true,mundo:true};
+let MEM_VIEW='mapa', MEM_TREE=null;
+async function renderMemoria(){
+  if(USER&&USER.convidado){ document.getElementById('memArea').innerHTML=soon('Em modo convidado nada e salvo. Crie uma conta pra o Orion lembrar de voce e construir seu mapa mental.'); return; }
+  try{ MEM_TREE=await (await fetch('/memoria/grafo')).json(); }catch(e){ MEM_TREE=null; }
+  if(!MEM_TREE){ document.getElementById('memArea').innerHTML='<div class="card">Nao consegui carregar a memoria.</div>'; return; }
+  document.getElementById('memArea').innerHTML=`
+   <div class="card" style="background:linear-gradient(135deg,rgba(122,162,255,.08),rgba(155,140,255,.05))">
+     <div class="hint">Seu mapa mental se organiza em tres ramos: <b>Voce</b>, <b>Diretrizes</b> e <b>Mundo</b>. Clique num no pra adicionar, editar ou remover. Ele cresce sozinho conforme o Orion aprende.</div></div>
+   <div class="mm-tools">
+     <button class="doc-tpl ${MEM_VIEW==='mapa'?'on':''}" onclick="MEM_VIEW='mapa';renderMemoria()">Mapa mental</button>
+     <button class="doc-tpl ${MEM_VIEW==='lista'?'on':''}" onclick="MEM_VIEW='lista';renderMemoria()">Lista</button>
+     <span id="mmSel" style="margin-left:auto;display:flex;gap:6px;align-items:center"></span>
+   </div>
+   ${MEM_VIEW==='mapa'?'<div id="mindmap"></div>':'<div class="mtree" id="mtree">'+nodeHTML(MEM_TREE,true)+'</div>'}`;
+  if(MEM_VIEW==='mapa') buildMindmap(MEM_TREE);
+}
+// ----- MIND MAP (radial) -----
+function mmLeaves(n){ const k=n.filhos||[]; return k.length?k.reduce((s,c)=>s+mmLeaves(c),0):1; }
+function buildMindmap(tree){
+  const cx=0, cy=0, ring=170;
+  const pos=[]; const edges=[];
+  (function layout(node,depth,a0,a1,parent){
+    const mid=(a0+a1)/2, R=depth*ring;
+    const x=depth===0?cx:cx+R*Math.cos(mid), y=depth===0?cy:cy+R*Math.sin(mid);
+    const me={node,x,y,depth}; pos.push(me);
+    if(parent) edges.push([parent,me]);
+    const kids=node.filhos||[];
+    if(kids.length){ const tot=kids.reduce((s,k)=>s+mmLeaves(k),0); let a=a0;
+      for(const k of kids){ const span=(a1-a0)*(mmLeaves(k)/tot); layout(k,depth+1,a,a+span,me); a+=span; } }
+  })(tree,0,0,Math.PI*2,null);
+  // bounding box
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  pos.forEach(p=>{const w=nodeW(p);minx=Math.min(minx,p.x-w/2);maxx=Math.max(maxx,p.x+w/2);miny=Math.min(miny,p.y-18);maxy=Math.max(maxy,p.y+18);});
+  const pad=40, vbW=(maxx-minx)+pad*2, vbH=(maxy-miny)+pad*2;
+  const col=(p)=>p.depth===0?'#9b8cff':(p.node.fixo?'#46d39a':'#7aa2ff');
+  let svg=`<svg viewBox="${minx-pad} ${miny-pad} ${vbW} ${vbH}" preserveAspectRatio="xMidYMid meet">`;
+  edges.forEach(([a,b])=>{ const mx=(a.x+b.x)/2;
+    svg+=`<path d="M ${a.x} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x} ${b.y}" fill="none" stroke="rgba(122,162,255,.35)" stroke-width="1.6"/>`; });
+  pos.forEach(p=>{ const w=nodeW(p), c=col(p), label=esc(p.node.name)+(p.node.data&&!p.node.fixo?'':'' );
+    const sub=(p.node.data&&!p.node.fixo)?`<title>${esc(p.node.data)}</title>`:'';
+    svg+=`<g class="mm-node" onclick="mmSelect('${p.node.id}')">${sub}
+      <rect x="${p.x-w/2}" y="${p.y-16}" width="${w}" height="32" rx="9" fill="rgba(18,22,31,.92)" stroke="${c}" stroke-width="1.6"/>
+      <circle cx="${p.x-w/2+13}" cy="${p.y}" r="4" fill="${c}"/>
+      <text x="${p.x-w/2+24}" y="${p.y+4}" fill="#e7eaf0" font-size="13" font-family="system-ui">${label}</text></g>`; });
+  svg+='</svg>';
+  document.getElementById('mindmap').innerHTML=svg;
+}
+function nodeW(p){ const t=(p.node.name||'')+''; return Math.max(70, Math.min(220, t.length*7.5+44)); }
+function mmSelect(id){
+  function find(n){ if(n.id===id) return n; for(const c of (n.filhos||[])){const r=find(c); if(r) return r;} return null; }
+  const n=find(MEM_TREE); if(!n) return;
+  const sel=document.getElementById('mmSel');
+  const ed=n.fixo?'':`<button class="btn" style="padding:6px 12px;font-size:12px" onclick="memEdit('${n.id}','${encodeURIComponent(n.name)}','${encodeURIComponent(n.data||'')}')">Editar</button>
+    <button class="btn ghost" style="padding:6px 12px;font-size:12px;color:var(--bad)" onclick="memDel('${n.id}')">Excluir</button>`;
+  sel.innerHTML=`<span class="hint">${esc(n.name)}</span><button class="btn" style="padding:6px 12px;font-size:12px" onclick="memAdd('${n.id}')">+ Adicionar</button>${ed}`;
+}
+function nodeHTML(n,root){
+  const open=MEM_OPEN[n.id]!==false;
+  const tw=(n.filhos&&n.filhos.length)?(open?'&#9662;':'&#9656;'):'&nbsp;';
+  const cls=root?'root':(n.fixo?'fixo':'');
+  const acts = root? '' :
+    `<div class="macts">
+       <button title="adicionar" onclick="memAdd('${n.id}')">+</button>
+       ${n.fixo?'':`<button title="editar" onclick="memEdit('${n.id}','${encodeURIComponent(n.name)}','${encodeURIComponent(n.data||'')}')">&#9998;</button>
+       <button title="excluir" onclick="memDel('${n.id}')">&#10005;</button>`}
+     </div>`;
+  let inner=`<div class="mrow ${cls}">
+      <span class="tw" onclick="memToggle('${n.id}')">${tw}</span>
+      <span class="mdot"></span>
+      <span class="mname">${esc(n.name)}</span>
+      ${n.data?`<span class="mdata">${esc(n.data)}</span>`:''}
+      ${(n.fixo&&!root)?`<span class="mbadge">${(n.filhos||[]).length}</span>`:''}
+      ${acts}
+    </div>`;
+  if(n.filhos&&n.filhos.length&&open){
+    inner+='<div class="mbranch">'+n.filhos.map(f=>nodeHTML(f,false)).join('')+'</div>';
+  }
+  return `<div class="mnode">${inner}</div>`;
+}
+function memToggle(id){ MEM_OPEN[id]=MEM_OPEN[id]===false?true:false; renderMemoria(); }
+async function memGrafo(body){ const j=await (await fetch('/memoria/grafo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+  if(j.ok){ piscarSave('MEMORIA'); renderMemoria(); } else if(j.erro){ alert(j.erro); } }
+function memAdd(parent){ const d=prompt('O que adicionar nesse ramo?'); if(d&&d.trim()) memGrafo({acao:'add',parent,data:d.trim()}); }
+function memEdit(id,nm,data){ const d=prompt('Editar memoria:', decodeURIComponent(data)); if(d!=null) memGrafo({acao:'edit',id,data:d.trim(),name:(decodeURIComponent(nm))}); }
+function memDel(id){ if(confirm('Excluir essa memoria?')) memGrafo({acao:'del',id}); }
+
+// ===================== LEGAL =====================
+function renderTermos(){
+  document.getElementById('termosArea').innerHTML=`
+  <h1>Termos de Uso</h1><div class="sub">Ultima atualizacao: 2026</div>
+  <div class="card"><h3>1. Aceitacao</h3><div class="hint" style="font-size:13px;line-height:1.7">Ao usar o Orion voce concorda com estes Termos. O Orion e um assistente pessoal de IA que conversa por voz e texto, gera documentos, organiza tarefas e conecta integracoes. Se nao concordar, nao utilize o servico.</div></div>
+  <div class="card"><h3>2. Planos e pagamento</h3><div class="hint" style="font-size:13px;line-height:1.7">Oferecemos um plano gratuito com limites diarios e planos pagos (Pro e Business) por assinatura mensal, cobrados via Mercado Pago. Voce pode cancelar quando quiser; o acesso pago continua ate o fim do periodo ja pago. Valores podem ser reajustados com aviso previo.</div></div>
+  <div class="card"><h3>3. Uso aceitavel</h3><div class="hint" style="font-size:13px;line-height:1.7">Voce se compromete a nao usar o Orion para atividades ilegais, geracao de conteudo abusivo, spam ou violacao de direitos de terceiros. Podemos suspender contas que violem estas regras.</div></div>
+  <div class="card"><h3>4. Conteudo e responsabilidade</h3><div class="hint" style="font-size:13px;line-height:1.7">As respostas de IA podem conter erros. Confira informacoes importantes antes de agir. O Orion e uma ferramenta de apoio e nao substitui aconselhamento profissional (juridico, medico, financeiro).</div></div>
+  <div class="card"><h3>5. Suas chaves e integracoes</h3><div class="hint" style="font-size:13px;line-height:1.7">Chaves de IA (ex: Anthropic) e tokens de integracoes ficam no seu aparelho e sao usados apenas para executar o que voce pede. Voce e responsavel por manter suas credenciais seguras.</div></div>
+  <div class="card"><h3>6. Contato</h3><div class="hint" style="font-size:13px;line-height:1.7">Duvidas: gurroffeads@gmail.com</div></div>`;
+}
+function renderPriv(){
+  document.getElementById('privArea').innerHTML=`
+  <h1>Politica de Privacidade</h1><div class="sub">Em conformidade com a LGPD (Lei 13.709/2018). Ultima atualizacao: 2026</div>
+  <div class="card"><h3>1. Quais dados coletamos</h3><div class="hint" style="font-size:13px;line-height:1.7">Nome, como prefere ser chamado, e-mail e foto (se voce fornecer), alem das conversas e preferencias necessarias pro Orion funcionar. No modo convidado, nada e salvo.</div></div>
+  <div class="card"><h3>2. O que NUNCA guardamos</h3><div class="hint" style="font-size:13px;line-height:1.7">Senhas, numeros de cartao, tokens e credenciais privadas nao sao armazenados nos nossos registros de memoria. Dados sensiveis sao automaticamente filtrados antes de qualquer gravacao.</div></div>
+  <div class="card"><h3>3. Como usamos</h3><div class="hint" style="font-size:13px;line-height:1.7">Para personalizar suas respostas, lembrar do seu contexto e operar as integracoes que voce conectar. O cerebro padrao (Ollama) roda localmente no seu aparelho. Se voce ativar um cerebro de nuvem com sua propria chave, os dados daquela requisicao seguem a politica do provedor escolhido.</div></div>
+  <div class="card"><h3>4. Seus direitos (LGPD)</h3><div class="hint" style="font-size:13px;line-height:1.7">Voce pode acessar, corrigir, exportar ou apagar seus dados a qualquer momento em Conta & Plano. Apagar a conta remove o perfil e a memoria associada.</div></div>
+  <div class="card"><h3>5. Compartilhamento</h3><div class="hint" style="font-size:13px;line-height:1.7">Nao vendemos seus dados. Compartilhamos apenas com processadores essenciais (ex: Mercado Pago para pagamento) e somente o necessario.</div></div>
+  <div class="card"><h3>6. Encarregado de dados (DPO)</h3><div class="hint" style="font-size:13px;line-height:1.7">Contato para assuntos de privacidade: gurroffeads@gmail.com</div></div>`;
+}
+
+// ===================== CONTA =====================
+let CONTA_FOTO=null, CONTA_CAM=null;   // foto nova (base64) e stream da webcam
+function renderConta(){
+  const u=USER||{}; const nm=u.nome||'Visitante';
+  const plano=u.plano||'free'; const labels={free:'Free',pro:'Pro',business:'Business'};
+  const conv=u.convidado; CONTA_FOTO=null;
+  const fotoCur=u.foto?`<img src="${u.foto}">`:`${(nm||'?')[0].toUpperCase()}`;
+  document.getElementById('contaArea').innerHTML=`
+  ${conv?`<div class="card" style="border-color:var(--accent)"><h3>Voce esta como convidado</h3>
+    <div class="field hint" style="margin-top:-6px">Nada da conversa fica salvo. Crie uma conta pra guardar seu progresso, foto e preferencias.</div>
+    <button class="btn primary" onclick="abrirAuth('criar')">Criar minha conta</button></div>`:''}
+  <div class="card"><h3>Perfil</h3>
+    <div class="row" style="gap:18px;align-items:flex-start">
+      <div style="text-align:center">
+        <div class="av" id="contaAv" style="width:96px;height:96px;border-radius:50%;font-size:34px;margin-bottom:10px">${fotoCur}</div>
+        <video id="contaCam" autoplay playsinline muted style="display:none;width:160px;height:120px;border-radius:12px;background:#000"></video>
+        <div class="row" style="justify-content:center;gap:8px">
+          <button class="btn" onclick="contaUploadFoto()">Enviar foto</button>
+          <button class="btn" id="contaCamBtn" onclick="contaTirarFoto()">Tirar foto</button>
+        </div>
+        <input type="file" id="contaFotoInp" accept="image/*" style="display:none" onchange="contaFotoArquivo(event)">
+      </div>
+      <div style="flex:1;min-width:220px">
+        <div class="field"><label>Nome de exibicao</label><input id="contaNome" value="${esc(u.nome||'')}" placeholder="como aparece no app"></div>
+        <div class="field"><label>Nome real (completo)</label><input id="contaNomeReal" value="${esc(u.nome_real||'')}" placeholder="seu nome completo"></div>
+        <div class="field"><label>Como prefere ser chamado</label><input id="contaTrat" value="${esc(u.tratamento||'')}" placeholder="ex: Sr. Pontes, Murilo, chefe..."><div class="hint">O Orion vai te tratar exatamente assim.</div></div>
+      </div>
+    </div>
+    <div class="field"><label>E-mail</label><input id="contaEmail" type="email" value="${esc(u.email||'')}" placeholder="seu@email.com"></div>
+    <div class="field"><label>Nova senha (opcional)</label><input id="contaSenha" type="password" placeholder="deixe vazio pra nao mudar"></div>
+    <div class="row"><button class="btn primary" onclick="salvarConta()" ${conv?'disabled':''}>Salvar perfil</button>
+      ${conv?'':'<button class="btn ghost" onclick="sairConta()">Sair da conta</button>'}</div>
+  </div>
+  <div class="card"><h3>Seu plano</h3>
+    <div class="row" style="justify-content:space-between">
+      <div><div style="font-size:22px;font-weight:800">${labels[plano]}</div>
+      <div class="hint">${plano==='free'?'Plano gratuito com limites diarios.':'Assinatura ativa.'}</div></div>
+      <span class="plan-badge plan-${plano}">${labels[plano]}</span>
+    </div>
+    <div id="usoBox" style="margin-top:14px"></div>
+    <div class="row" style="margin-top:10px"><button class="btn primary" onclick="go('planos')">${plano==='free'?'Fazer upgrade':'Mudar de plano'}</button></div>
+  </div>
+  ${(u.criador)?'<div class="card" id="adminCard"><h3>Admin - contas e planos</h3><div class="hint" style="margin-bottom:10px">So o dono ve isto. Marque voce e seu socio como Business vitalicio, ou defina o plano de qualquer conta.</div><div id="adminLista">carregando...</div></div>':''}`;
+  carregarUso();
+  if(u.criador) carregarAdmin();
+}
+async function carregarAdmin(){
+  const box=document.getElementById('adminLista'); if(!box) return;
+  let r={usuarios:[]}; try{ r=await (await fetch('/admin/usuarios')).json(); }catch(e){}
+  let keys={}; try{ keys=await (await fetch('/licenca/chaves')).json(); }catch(e){}
+  const chavesHtml = keys.ok?`<div style="border:1px solid var(--line2);border-radius:12px;padding:14px;margin-bottom:14px">
+    <b style="font-size:13px">Gerar chaves de ativacao (pra vender)</b>
+    <div class="hint" style="margin:6px 0 10px">Cada clique gera uma chave UNICA e valida. Venda pelo seu link do Mercado Pago/PayPal e entregue a chave pro cliente. Ele cola em Planos &gt; "Ja tem uma chave".</div>
+    <div class="row" style="margin-bottom:10px"><button class="btn primary" onclick="gerarChave('pro')">Gerar chave Pro</button><button class="btn primary" onclick="gerarChave('business')">Gerar chave Business</button></div>
+    <div id="chaveNova"></div>
+    <div class="hint" style="margin-top:10px">Chaves mestras (sempre validas, pra teste): <code style="color:var(--accent);cursor:pointer" onclick="navigator.clipboard.writeText('${keys.pro}');piscarSave('COPIADO')">${keys.pro}</code> &middot; <code style="color:var(--accent2);cursor:pointer" onclick="navigator.clipboard.writeText('${keys.business}');piscarSave('COPIADO')">${keys.business}</code></div>
+  </div>`:'';
+  box.innerHTML=chavesHtml+(r.usuarios||[]).map(u=>`<div class="tk">
+    <span>${u.foto?'<img src="'+u.foto+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px">':''}<b>${esc(u.nome)}</b>${u.criador?' <span class="mbadge">dono</span>':''}<br><span style="color:var(--faint);font-size:12px">${esc(u.email||'local')}</span></span>
+    <span style="display:flex;gap:8px;align-items:center">
+      <select onchange="adminPlano(${u.id},this.value)" ${u.criador?'disabled':''} style="background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:6px 8px;font-size:12px">
+        <option value="free" ${u.plano==='free'?'selected':''}>Free</option>
+        <option value="pro" ${u.plano==='pro'?'selected':''}>Pro</option>
+        <option value="business" ${u.plano==='business'?'selected':''}>Business</option>
+      </select>
+      ${u.criador?'':`<button class="btn ${u.socio?'primary':''}" style="padding:6px 10px;font-size:12px" onclick="adminSocio(${u.id},${!u.socio})">${u.socio?'Socio':'Tornar socio'}</button>`}
+    </span></div>`).join('')||'<div class="hint">Nenhuma conta.</div>';
+}
+async function gerarChave(plano){
+  try{ const r=await (await fetch('/licenca/gerar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plano})})).json();
+    const box=document.getElementById('chaveNova');
+    if(r.ok){ navigator.clipboard.writeText(r.chave); piscarSave('CHAVE COPIADA');
+      box.innerHTML=`<div class="tk" style="background:var(--panel2)"><span><b>${plano.toUpperCase()}</b> (copiada)</span><code style="color:var(--good);cursor:pointer" onclick="navigator.clipboard.writeText('${r.chave}');piscarSave('COPIADO')">${r.chave}</code></div>`; }
+    else box.innerHTML='<div class="hint" style="color:var(--warn)">'+(r.erro||'erro')+'</div>';
+  }catch(e){}
+}
+async function adminPlano(id,plano){ await fetch('/admin/plano',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,plano})}); piscarSave('PLANO'); carregarAdmin(); }
+async function adminSocio(id,socio){ await fetch('/admin/socio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,socio})}); piscarSave('SOCIO'); carregarAdmin(); }
+async function carregarUso(){
+  const box=document.getElementById('usoBox'); if(!box) return;
+  try{ const u=await (await fetch('/uso')).json();
+    if(u.ilimitado){ box.innerHTML='<div class="hint">Uso ilimitado neste plano. Aproveite, senhor.</div>'; return; }
+    const pct=Math.min(100, Math.round(u.msgs_hoje/Math.max(1,u.msgs_cap)*100));
+    box.innerHTML=`<div class="hint" style="margin-bottom:6px">Mensagens de hoje: <b style="color:var(--text)">${u.msgs_hoje} de ${u.msgs_cap}</b></div>
+      <div style="height:8px;background:var(--bg);border-radius:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></div></div>`;
+  }catch(e){}
+}
+function contaUploadFoto(){ document.getElementById('contaFotoInp').click(); }
+function contaFotoArquivo(ev){ const f=ev.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ CONTA_FOTO=r.result; document.getElementById('contaAv').innerHTML='<img src="'+r.result+'">'; }; r.readAsDataURL(f); }
+async function contaTirarFoto(){
+  const v=document.getElementById('contaCam'), btn=document.getElementById('contaCamBtn');
+  if(!CONTA_CAM){
+    try{ CONTA_CAM=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240},audio:false});
+      v.srcObject=CONTA_CAM; v.style.display='inline-block'; btn.textContent='Capturar'; }
+    catch(e){ alert('Sem acesso a camera: '+e.message); }
+    return;
+  }
+  // captura o frame
+  const c=document.createElement('canvas'); c.width=240; c.height=240;
+  const cx=c.getContext('2d'); cx.translate(c.width,0); cx.scale(-1,1);
+  const s=Math.min(v.videoWidth||320,v.videoHeight||240);
+  cx.drawImage(v,((v.videoWidth||320)-s)/2,((v.videoHeight||240)-s)/2,s,s,0,0,240,240);
+  CONTA_FOTO=c.toDataURL('image/jpeg',0.85);
+  document.getElementById('contaAv').innerHTML='<img src="'+CONTA_FOTO+'">';
+  CONTA_CAM.getTracks().forEach(t=>t.stop()); CONTA_CAM=null;
+  v.style.display='none'; btn.textContent='Tirar foto';
+}
+async function salvarConta(){
+  if(!USER||USER.convidado) return;
+  const body={id:USER.id, nome:document.getElementById('contaNome').value.trim(),
+    nome_real:document.getElementById('contaNomeReal').value.trim(),
+    tratamento:document.getElementById('contaTrat').value.trim(),
+    email:document.getElementById('contaEmail').value.trim()};
+  const senha=document.getElementById('contaSenha').value; if(senha) body.senha=senha;
+  if(CONTA_FOTO) body.foto=CONTA_FOTO;
+  try{ const j=await (await fetch('/usuario/atualizar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+    if(j.ok){ if(j.user) USER=Object.assign(USER,j.user); aplicaUser(); piscarSave('PERFIL'); }
+    else alert(j.erro||'Nao consegui salvar.'); }catch(e){ alert('Erro de conexao'); }
+}
+async function sairConta(){ if(CONTA_CAM){CONTA_CAM.getTracks().forEach(t=>t.stop());CONTA_CAM=null;}
+  await fetch('/usuario/logout',{method:'POST'}); USER=null; location.reload(); }
+
+// ===================== PLANOS =====================
+const PLANOS=[
+ {id:'free',nome:'Free',preco:'R$ 0',sub:'pra sempre',desc:'Pra experimentar o Orion no dia a dia.',
+  feats:[['Chat de texto: 15 mensagens por dia',1],['Conversa por voz: 10 min por dia',1],['3 documentos por mes',1],['Tarefas e lembretes basicos',1],['1 integracao Google',1],['Memoria de longo prazo',0],['Rotina & Progresso',0],['Integracoes de trabalho',0]],cta:'Comecar de graca'},
+ {id:'pro',nome:'Pro',preco:'R$ 59,99',sub:'/mes',desc:'Pra quem usa o Orion todo dia, de verdade.',feat:true,
+  feats:[['Chat e voz ilimitados',1],['Documentos ilimitados (todos os modelos)',1],['Agenda e tarefas sem limite',1],['Todas as integracoes Google',1],['Memoria de longo prazo',1],['Rotina & Progresso completo',1],['Pesquisa web e noticias do seu mercado',1],['Integracoes de trabalho',0]],cta:'Assinar Pro'},
+ {id:'business',nome:'Business',preco:'R$ 109,99',sub:'/mes',desc:'Pra profissionais, agencias e equipes.',
+  feats:[['Tudo do Pro',1],['ClickUp, Apollo e Meta Ads',1],['Automacoes (fluxos estilo Make)',1],['Multi-perfis e equipe',1],['Documentos avancados (planilhas, slides)',1],['Comandos do PC (abrir apps, controle local)',1],['Suporte prioritario',1],['Atualizacoes antecipadas',1]],cta:'Assinar Business'},
+];
+function renderPlanos(){
+  const plano=(USER&&USER.plano)||'free';
+  document.getElementById('plansGrid').innerHTML=PLANOS.map(p=>`
+   <div class="plan ${p.feat?'feat':''}">
+     ${p.feat?'<span class="tag">Mais popular</span>':''}
+     <div class="pn">${p.nome}</div>
+     <div class="pd">${p.desc}</div>
+     <div class="pp">${p.preco} <small>${p.sub}</small></div>
+     <ul>${p.feats.map(f=>`<li class="${f[1]?'':'no'}">${f[1]?ICON.check:ICON.x}<span>${f[0]}</span></li>`).join('')}</ul>
+     <div class="pbtn">${plano===p.id?'<button class="btn" style="width:100%" disabled>Seu plano atual</button>':`<button class="btn ${p.feat?'primary':''}" style="width:100%" onclick="assinar('${p.id}')">${p.cta}</button>`}</div>
+   </div>`).join('');
+}
+async function ativarChave(){
+  const ch=document.getElementById('licChave').value.trim(); const m=document.getElementById('licMsg');
+  if(!ch){ m.textContent='Cole a chave.'; return; }
+  m.textContent='Verificando...';
+  try{ const r=await (await fetch('/licenca/ativar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chave:ch})})).json();
+    if(r.ok){ if(r.user) USER=Object.assign(USER||{},r.user); aplicaUser(); piscarSave('PLANO ATIVO'); m.style.color='var(--good)'; m.textContent='Plano '+(r.plano||'').toUpperCase()+' ativado! Aproveite, senhor.'; renderPlanos(); }
+    else { m.style.color='var(--warn)'; m.textContent=r.erro||'Chave invalida.'; }
+  }catch(e){ m.textContent='Erro de conexao.'; }
+}
+async function assinar(id){
+  if(id==='free'){ alert('Voce ja pode usar o plano Free agora mesmo.'); return; }
+  try{
+    const j=await (await fetch('/pagamento/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plano:id})})).json();
+    if(j.url){ window.open(j.url,'_blank'); }
+    else alert(j.msg||'Checkout em configuracao. Em breve via Mercado Pago.');
+  }catch(e){ alert('Checkout em configuracao. Em breve via Mercado Pago.'); }
+}
+
+// ===================== DOCS / ROTINA / TAREFAS (scaffold) =====================
+function soon(txt){ return `<div class="empty-soon">${ICON.soon}<div><b>Chegando em breve.</b><br>${txt}</div></div>`; }
+
+// ---------- DOCUMENTOS ----------
+let DOC_TPL='email', DOC_LISTA=[];
+async function renderDocs(){
+  if(USER&&USER.convidado){ document.getElementById('docArea').innerHTML=soon('Crie uma conta pra gerar e salvar documentos.'); return; }
+  let data={templates:[],docs:[]}; try{ data=await (await fetch('/documentos')).json(); }catch(e){}
+  DOC_LISTA=data.docs||[];
+  const tpls=data.templates||[];
+  const cards=tpls.map(t=>`<button class="doc-tpl ${t.id===DOC_TPL?'on':''}" onclick="DOC_TPL='${t.id}';renderDocs()">${esc(t.nome)}</button>`).join('');
+  const saved=DOC_LISTA.map(d=>`<div class="tk" style="cursor:pointer" onclick="docView(${d.id})"><span><b>${esc(d.titulo)}</b> &middot; <span style="color:var(--faint)">${esc(d.quando)}</span><br><span style="color:var(--dim);font-size:12px">${esc((d.contexto||'').slice(0,70))}</span></span><button class="btn ghost" style="color:var(--bad)" onclick="event.stopPropagation();docDel(${d.id})">remover</button></div>`).join('')||'<div class="hint">Nenhum documento ainda.</div>';
+  document.getElementById('docArea').innerHTML=`
+  <div class="card"><h3>Gerar documento</h3>
+    <div class="doc-tpls">${cards}</div>
+    <div class="field" style="margin-top:14px"><label>Sobre o que? Pra quem? Da os detalhes.</label>
+      <textarea id="docCtx" rows="3" placeholder="ex: um e-mail pedindo prorrogacao de prazo de entrega pro cliente Joao, tom educado e firme"></textarea></div>
+    <button class="btn primary" id="docGoBtn" onclick="docGerar()">Gerar com o Orion</button>
+  </div>
+  <div id="docResult"></div>
+  <div class="card"><h3>Meus documentos</h3>${saved}</div>`;
+}
+async function docGerar(){
+  const ctx=document.getElementById('docCtx').value.trim(); if(!ctx){ alert('Diz os detalhes, senhor.'); return; }
+  const btn=document.getElementById('docGoBtn'); btn.disabled=true; btn.textContent='Gerando...';
+  document.getElementById('docResult').innerHTML='<div class="card"><div class="hint">O Orion esta escrevendo...</div></div>';
+  try{ const j=await (await fetch('/documento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo:DOC_TPL,contexto:ctx})})).json();
+    if(j.ok){ mostraDoc(j.doc); piscarSave('DOCUMENTO'); renderDocsList(); }
+    else { document.getElementById('docResult').innerHTML=`<div class="card"><div class="hint" style="color:var(--warn)">${esc(j.erro||'erro')}</div>${j.upgrade?'<button class="btn primary" onclick="go(\'planos\')">Fazer upgrade</button>':''}</div>`; }
+  }catch(e){ document.getElementById('docResult').innerHTML='<div class="card">Erro de conexao.</div>'; }
+  btn.disabled=false; btn.textContent='Gerar com o Orion';
+}
+function mostraDoc(d){ window._docAtual=d;
+  document.getElementById('docResult').innerHTML=`<div class="card"><h3>${esc(d.titulo)}
+    <span style="margin-left:auto;display:flex;gap:8px"><button class="btn" onclick="docCopy()">Copiar</button><button class="btn" onclick="docDownload()">Baixar</button></span></h3>
+    <div style="white-space:pre-wrap;line-height:1.6;font-size:14.5px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;max-height:420px;overflow:auto">${esc(d.texto)}</div></div>`;
+}
+async function docView(id){ const d=DOC_LISTA.find(x=>x.id===id); if(d){ mostraDoc(d); document.getElementById('docResult').scrollIntoView({behavior:'smooth'}); } }
+function docCopy(){ if(window._docAtual){ navigator.clipboard.writeText(window._docAtual.texto); piscarSave('COPIADO'); } }
+function docDownload(){ const d=window._docAtual; if(!d) return; const b=new Blob([d.texto],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=(d.titulo||'documento')+'.txt'; a.click(); }
+async function docDel(id){ if(!confirm('Remover este documento?')) return; await fetch('/documento/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); renderDocs(); }
+async function renderDocsList(){ try{ const data=await (await fetch('/documentos')).json(); DOC_LISTA=data.docs||[]; }catch(e){} }
+
+// ---------- ROTINA & PROGRESSO ----------
+async function renderRotina(){
+  if(USER&&USER.convidado){ document.getElementById('rotinaArea').innerHTML=soon('Crie uma conta pra montar sua rotina e acompanhar o progresso.'); return; }
+  let st={rotinas:[],hoje:{},stats:{}}; try{ st=await (await fetch('/rotina')).json(); }catch(e){}
+  const s=st.stats||{}; const hist=s.hist||[];
+  const maxH=Math.max(1,...hist.map(h=>h.feitos));
+  const bars=hist.map(h=>{const d=new Date(h.dia+'T00:00');const dn=['D','S','T','Q','Q','S','S'][d.getDay()];
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:60%;height:${6+h.feitos/maxH*70}px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:4px"></div><span style="font-size:10px;color:var(--faint)">${dn}</span></div>`;}).join('');
+  const rotinas=(st.rotinas||[]).map(r=>{
+    const done=(st.hoje&&st.hoje[r.id])||[];
+    const itens=r.itens.map((it,i)=>`<label class="rot-item ${done.includes(i)?'done':''}"><input type="checkbox" ${done.includes(i)?'checked':''} onchange="rotCheck(${r.id},${i})"><span>${esc(it)}</span></label>`).join('');
+    return `<div class="card"><h3>${esc(r.nome)} <button class="btn ghost" style="margin-left:auto;color:var(--bad);font-size:12px" onclick="rotDel(${r.id})">excluir</button></h3>${itens||'<div class="hint">Sem itens.</div>'}</div>`;
+  }).join('');
+  document.getElementById('rotinaArea').innerHTML=`
+  <div class="card" style="background:linear-gradient(135deg,rgba(122,162,255,.08),rgba(155,140,255,.05))">
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+      <div><div style="font-size:30px;font-weight:800">${s.streak||0}</div><div class="hint">dias seguidos</div></div>
+      <div><div style="font-size:30px;font-weight:800">${s.feitos||0}/${s.total||0}</div><div class="hint">itens hoje</div></div>
+      <div style="flex:1;min-width:200px"><div class="hint" style="margin-bottom:6px">Ultimos 7 dias</div><div style="display:flex;gap:6px;align-items:flex-end;height:84px">${bars}</div></div>
+    </div>
+  </div>
+  <div class="card"><h3>Nova rotina</h3>
+    <div class="field"><label>Qual seu objetivo?</label><input id="rotObj" placeholder="ex: treino sustentavel pra iniciante, 3x na semana"></div>
+    <div class="row"><button class="btn primary" id="rotGen" onclick="rotGerar()">Montar com o Orion</button>
+      <button class="btn" onclick="rotManual()">Criar manualmente</button></div>
+  </div>
+  ${rotinas}`;
+}
+async function rotCheck(rid,idx){ await fetch('/rotina',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'checkin',rotina_id:rid,idx})}); renderRotina(); }
+async function rotDel(id){ if(!confirm('Excluir esta rotina?')) return; await fetch('/rotina',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'del',id})}); renderRotina(); }
+async function rotGerar(){ const obj=document.getElementById('rotObj').value.trim(); if(!obj){ alert('Diz seu objetivo.'); return; }
+  const b=document.getElementById('rotGen'); b.disabled=true; b.textContent='Montando...';
+  await fetch('/rotina',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'gerar',objetivo:obj})}); piscarSave('ROTINA'); renderRotina(); }
+async function rotManual(){ const nome=prompt('Nome da rotina:'); if(!nome) return;
+  const itens=prompt('Itens separados por virgula:');
+  await fetch('/rotina',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'criar',nome,itens:(itens||'').split(',')})}); piscarSave('ROTINA'); renderRotina(); }
+
+function renderTarefas(){ document.getElementById('tarefasArea').innerHTML=soon('Suas tarefas, lembretes e compromissos. Por enquanto, peca no chat: "lembra de me alongar as 18h".'); }
+
+// ===================== AUTH =====================
+async function authCheck(){
+  try{ const j=await (await fetch('/usuarios')).json();
+    if(j.ativo){ USER=j.ativo; aplicaUser(); document.getElementById('authModal').classList.remove('show'); return; }
+    authMostrarLogin(j.lista||[]);
+  }catch(e){}
+}
+let AUTH_SEL=null, PERFIS=[];
+function authMostrarLogin(perfis){
+  PERFIS=perfis||[];
+  const chooser=document.getElementById('authChooser'), form=document.getElementById('authForm');
+  if(PERFIS.length){
+    document.getElementById('authSt').textContent='Que bom que voce voltou. Escolha uma conta para continuar.';
+    chooser.style.display='block'; form.style.display='none';
+    renderAccRows();
+  }else{
+    document.getElementById('authSt').textContent='Bem vindo ao Orion. Crie sua conta ou entre como convidado.';
+    chooser.style.display='none'; form.style.display='block'; authAba('criar');
+  }
+  // popula tambem os cards pequenos da aba Entrar
+  const el=document.getElementById('perfList'); el.innerHTML='';
+  PERFIS.forEach(p=>{ const c=document.createElement('div');c.className='perfil-card';
+    c.innerHTML=(p.foto?'<div class="pf"><img src="'+p.foto+'"></div>':'<div class="pf">'+(p.nome||'?')[0].toUpperCase()+'</div>')+'<div class="nm">'+esc(p.nome)+'</div>';
+    c.onclick=()=>authSel(p,c); el.appendChild(c); });
+  document.getElementById('authModal').classList.add('show');
+}
+function renderAccRows(){
+  const box=document.getElementById('accRows'); box.innerHTML='';
+  PERFIS.forEach(p=>{ const row=document.createElement('div'); row.className='acc-row';
+    const av=p.foto?'<img src="'+p.foto+'">':esc((p.nome||'?')[0].toUpperCase());
+    row.innerHTML='<div class="av">'+av+'</div><div class="info"><div class="n">'+esc(p.nome)+(p.origem==='google'?' &middot; Google':'')+'</div><div class="e">'+esc(p.email||'perfil local')+'</div></div><span class="rm" title="remover">&#10005;</span>';
+    row.querySelector('.info').onclick=()=>authSel(p);
+    row.querySelector('.av').onclick=()=>authSel(p);
+    row.querySelector('.rm').onclick=(ev)=>{ev.stopPropagation();removerConta(p);};
+    box.appendChild(row); });
+}
+async function removerConta(p){
+  if(!confirm('Remover a conta "'+p.nome+'" deste aparelho? Isso apaga o perfil local.')) return;
+  await fetch('/usuario/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id})});
+  const j=await (await fetch('/usuarios')).json(); authMostrarLogin(j.lista||[]);
+}
+function abrirAuth(aba){ document.getElementById('authModal').classList.add('show');
+  document.getElementById('authChooser').style.display='none'; document.getElementById('authForm').style.display='block';
+  authAba(aba||'login'); }
+async function loginGoogle(){
+  const st=document.getElementById('authSt'); const prev=st.textContent;
+  st.textContent='Conectando com o Google...';
+  try{ const r=await (await fetch('/usuario/google_login',{method:'POST'})).json();
+    if(r.ok){ entrou(r.user); return; }
+    st.textContent=prev;
+    alert(r.erro||'Nao consegui logar com o Google. Pode criar sua conta com e-mail.');
+    if(r.precisa_conectar){ authAba('criar'); }   // ja deixa o cadastro por e-mail a mao
+  }catch(e){ st.textContent=prev; alert('Login Google indisponivel agora. Crie sua conta com e-mail, leva 10 segundos.'); authAba('criar'); }
+}
+function authSel(p,c){ AUTH_SEL=p; document.querySelectorAll('.perfil-card').forEach(x=>x.style.borderColor='');
+  c.style.borderColor='var(--accent)';
+  document.getElementById('authSenhaWrap').style.display=p.tem_senha?'block':'none';
+  document.getElementById('authEntrarBtn').style.display='block';
+  document.getElementById('authEntrarBtn').textContent='Entrar como '+p.nome;
+  if(!p.tem_senha) setTimeout(authEntrar,150);
+}
+async function esqueciSenha(){
+  if(!AUTH_SEL){ alert('Escolha o perfil primeiro.'); return; }
+  if(!confirm('Remover a senha de "'+AUTH_SEL.nome+'" neste aparelho? Voce entra sem senha e pode definir uma nova depois em Conta.')) return;
+  const r=await (await fetch('/usuario/reset_senha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:AUTH_SEL.id})})).json();
+  if(r.ok){ AUTH_SEL.tem_senha=false; document.getElementById('authSenhaWrap').style.display='none'; authEntrar(); }
+  else alert(r.erro||'Nao consegui resetar.');
+}
+async function authEntrar(){ if(!AUTH_SEL) return;
+  const senha=document.getElementById('authSenha').value; const err=document.getElementById('authErr'); err.textContent='';
+  const r=await (await fetch('/usuario/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:AUTH_SEL.nome,senha})})).json();
+  if(r.ok){ entrou(r.user); } else if(r.precisa_senha){ document.getElementById('authSenhaWrap').style.display='block'; err.textContent='Esse perfil precisa de senha.'; } else err.textContent=r.erro||'erro';
+}
+function authAba(q){ document.getElementById('authChooser').style.display='none'; document.getElementById('authForm').style.display='block';
+  document.querySelectorAll('.auth-tab').forEach(t=>t.classList.toggle('on',t.dataset.at===q));
+  document.getElementById('authLogin').style.display=q==='login'?'block':'none';
+  document.getElementById('authCriar').style.display=q==='criar'?'block':'none'; }
+async function authCriar(){ const nome=document.getElementById('authNome').value.trim();
+  const err=document.getElementById('authErr2'); err.textContent=''; if(!nome){err.textContent='Diz seu nome.';return;}
+  const r=await (await fetch('/usuario/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,tratamento:document.getElementById('authTrat').value.trim(),senha:document.getElementById('authNovaSenha').value,email:document.getElementById('authEmail').value.trim()})})).json();
+  if(r.ok) entrou(r.user); else err.textContent=r.erro||'erro';
+}
+async function authConvidado(){ const r=await (await fetch('/usuario/convidado',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:'Convidado'})})).json();
+  if(r.ok) entrou(r.user); }
+function entrou(u){ USER=u; aplicaUser(); document.getElementById('authModal').classList.remove('show'); piscarSave('BEM VINDO'); go('home'); }
+
+// ===================== SAVE TOAST =====================
+let _sv=null;
+function piscarSave(t){ const el=document.getElementById('saveDot'); if(t)el.querySelector('.lbl').textContent=t;
+  el.classList.add('on'); clearTimeout(_sv); _sv=setTimeout(()=>el.classList.remove('on'),1600); }
+
+// ===================== RETORNO DO PAGAMENTO (Mercado Pago) =====================
+async function checkRetornoPagamento(){
+  const q=new URLSearchParams(location.search);
+  const pago=q.get('pago');
+  if(!pago) return;
+  if(pago==='falhou'){ alert('O pagamento nao foi concluido. Tente de novo quando quiser.'); }
+  else if(pago==='pendente'){ alert('Seu pagamento esta pendente. Assim que aprovar, seu plano e liberado.'); }
+  else {
+    const prov=q.get('prov')||'mp';
+    const pid=(prov==='paypal')?(q.get('token')):(q.get('payment_id')||q.get('collection_id'));
+    try{ const r=await (await fetch('/pagamento/confirmar',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({payment_id:pid,plano:pago,provedor:prov})})).json();
+      if(r.ok){ if(r.user) USER=Object.assign(USER||{},r.user); aplicaUser(); piscarSave('PLANO ATIVO');
+        alert('Tudo certo! Seu plano '+(r.plano||'').toUpperCase()+' esta ativo.'); }
+      else alert(r.erro||'Nao consegui confirmar o pagamento ainda.');
+    }catch(e){}
+  }
+  // limpa a URL
+  history.replaceState({},'',location.pathname);
+}
+
+// colar (Ctrl+V) um print do grafico no modo Trading > Por print
+document.addEventListener('paste', (e)=>{
+  if(VIEW!=='trading' || TG.modo!=='print') return;
+  const it=[...(e.clipboardData&&e.clipboardData.items||[])].find(x=>x.type&&x.type.startsWith('image'));
+  if(it){ const f=it.getAsFile(); const r=new FileReader(); r.onload=()=>tgAnalisePrint(r.result); r.readAsDataURL(f); }
+});
+
+// ===================== PWA =====================
+if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }catch(e){} }
+// modo nuvem: esconde recursos que so existem no desktop (microfone/voz local)
+if(window.ORION_CLOUD){ try{ var _mb=document.getElementById('micBtn'); if(_mb)_mb.style.display='none'; }catch(e){} }
+
+// ===================== INIT =====================
+renderNav(); initStars(); stars();
+authCheck(); poll(); checkRetornoPagamento();
+// deep-link vindo do site (ex: ?ir=planos abre direto na tela de Planos)
+(function(){ const ir=new URLSearchParams(location.search).get('ir');
+  const validos=['home','documentos','rotina','tarefas','memoria','integracoes','config','conta','planos'];
+  if(ir && validos.includes(ir)) setTimeout(()=>go(ir), 400); })();
+</script>
+</body>
+</html>
