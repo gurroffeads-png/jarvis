@@ -93,7 +93,10 @@ class _PgConn:
 
 def _db():
     if _PG:
-        return _PgConn(_pg.connect(ssl_context=_ssl.create_default_context(), **_PG_ARGS))
+        conn = _pg.connect(ssl_context=_ssl.create_default_context(), **_PG_ARGS)
+        try: conn.autocommit = True   # evita conflito de transacao/portal (ex: COUNT + INSERT no mesmo bloco)
+        except Exception: pass
+        return _PgConn(conn)
     c = sqlite3.connect(DB_PATH)
     c.row_factory = sqlite3.Row
     return c
@@ -657,6 +660,12 @@ class H(BaseHTTPRequestHandler):
     def do_OPTIONS(self): self._send(b"",204)
 
     def do_GET(self):
+        try: self._get()
+        except Exception as e:
+            print("[GET]", self.path, repr(e))
+            try: self._send({"erro":f"erro interno: {e}"}, 500)
+            except Exception: pass
+    def _get(self):
         path = self.path.split("?",1)[0]
         u = self._user()
         if path in ("/","/index.html"):
@@ -715,6 +724,12 @@ class H(BaseHTTPRequestHandler):
         else: self._send({"erro":"nao encontrado","path":path},404)
 
     def do_POST(self):
+        try: self._post()
+        except Exception as e:
+            print("[POST]", self.path, repr(e))
+            try: self._send({"ok":False,"erro":f"erro interno: {e}"}, 500)
+            except Exception: pass
+    def _post(self):
         path = self.path
         d = self._body()
         u = self._user()
