@@ -20,6 +20,8 @@ Roda com Python puro (stdlib). Configuracao por variaveis de ambiente:
 """
 import os, json, time, sqlite3, hmac, hashlib, base64, datetime, secrets, threading
 import urllib.request, urllib.parse, urllib.error
+import re, html as _html
+import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 
@@ -35,21 +37,78 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile")
 HTML_FILE = os.path.join(PASTA, "orion_app.html")
 SITE_FILE = os.path.join(PASTA, "orion_site.html")
 
-# ======================= BANCO (SQLite, isolado por usuario) =======================
+# ======================= BANCO (SQLite local OU Postgres na nuvem) =======================
+# Se existir DATABASE_URL (ex: Neon), usa Postgres (dados PERSISTEM entre deploys).
+# Senao, SQLite num arquivo (local/desktop). As duas falam a mesma API que o resto do codigo usa.
 _lock = threading.Lock()
+_DBURL = os.environ.get("DATABASE_URL", "").strip()
+_PG = _DBURL.startswith("postgres")
+INTEGRITY_ERRORS = (sqlite3.IntegrityError,)
+if _PG:
+    import ssl as _ssl
+    import pg8000.dbapi as _pg
+    INTEGRITY_ERRORS = (sqlite3.IntegrityError, _pg.IntegrityError)
+    _pu = urllib.parse.urlparse(_DBURL)
+    _PG_ARGS = dict(user=urllib.parse.unquote(_pu.username or ""),
+                    password=urllib.parse.unquote(_pu.password or ""),
+                    host=_pu.hostname, port=_pu.port or 5432,
+                    database=(_pu.path or "/").lstrip("/") or "postgres")
+
+class _PgCur:
+    """Faz o cursor do pg8000 devolver linhas estilo dict (row["coluna"]), como o sqlite3.Row."""
+    def __init__(self, cur): self._c = cur; self.lastrowid = None
+    def _wrap(self, raw):
+        if raw is None: return None
+        cols = [d[0] for d in (self._c.description or [])]
+        if isinstance(raw, list): return [dict(zip(cols, r)) for r in raw]
+        return dict(zip(cols, raw))
+    def fetchone(self): return self._wrap(self._c.fetchone())
+    def fetchall(self): return self._wrap(self._c.fetchall()) or []
+    def __iter__(self): return iter(self.fetchall())
+
+class _PgConn:
+    """Embrulha a conexao pg8000 pra aceitar placeholders '?' e os SQLs que o codigo ja usa."""
+    def __init__(self, conn): self._c = conn
+    def execute(self, sql, params=()):
+        ins_user = sql.lstrip().upper().startswith("INSERT INTO USERS")
+        if sql.lstrip().upper().startswith("INSERT OR REPLACE INTO KV"):
+            sql = "INSERT INTO kv(user_id,k,v) VALUES(?,?,?) ON CONFLICT (user_id,k) DO UPDATE SET v=EXCLUDED.v"
+        sql = sql.replace("?", "%s")
+        if ins_user: sql += " RETURNING id"
+        cur = self._c.cursor(); cur.execute(sql, tuple(params))
+        pc = _PgCur(cur)
+        if ins_user:
+            try:
+                row = cur.fetchone(); pc.lastrowid = (row[0] if row else None)
+            except Exception: pass
+        return pc
+    def commit(self): self._c.commit()
+    def __enter__(self): return self
+    def __exit__(self, et, ev, tb):
+        try: self._c.commit() if et is None else self._c.rollback()
+        except Exception: pass
+        try: self._c.close()
+        except Exception: pass
+        return False
+
 def _db():
+    if _PG:
+        return _PgConn(_pg.connect(ssl_context=_ssl.create_default_context(), **_PG_ARGS))
     c = sqlite3.connect(DB_PATH)
     c.row_factory = sqlite3.Row
     return c
+
 def init_db():
+    pk = "BIGSERIAL PRIMARY KEY" if _PG else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    uid_t = "BIGINT" if _PG else "INTEGER"
     with _db() as c:
-        c.execute("""CREATE TABLE IF NOT EXISTS users(
-            id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT, email TEXT UNIQUE,
+        c.execute(f"""CREATE TABLE IF NOT EXISTS users(
+            id {pk}, nome TEXT, email TEXT UNIQUE,
             senha_hash TEXT, nome_real TEXT, tratamento TEXT, foto TEXT,
             plano TEXT DEFAULT 'free', socio INTEGER DEFAULT 0, criador INTEGER DEFAULT 0,
             origem TEXT DEFAULT 'local', criado TEXT)""")
-        c.execute("""CREATE TABLE IF NOT EXISTS kv(
-            user_id INTEGER, k TEXT, v TEXT, PRIMARY KEY(user_id,k))""")
+        c.execute(f"""CREATE TABLE IF NOT EXISTS kv(
+            user_id {uid_t}, k TEXT, v TEXT, PRIMARY KEY(user_id,k))""")
         c.commit()
 init_db()
 
@@ -65,6 +124,19 @@ def get_user(uid):
     with _db() as c:
         r = c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
         return r
+def google_upsert(email, nome, foto):
+    """Acha o usuario por e-mail ou cria um novo (origem google). Devolve o id."""
+    with _db() as c:
+        r = c.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        if r:
+            if foto and not (r["foto"] or ""):
+                c.execute("UPDATE users SET foto=? WHERE id=?", (foto, r["id"])); c.commit()
+            return r["id"]
+        n = c.execute("SELECT COUNT(*) n FROM users").fetchone()["n"]
+        cur = c.execute("INSERT INTO users(nome,email,senha_hash,nome_real,tratamento,foto,plano,criador,origem,criado) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (nome.title(), email, None, nome, "", foto, "free", 1 if n==0 else 0, "google",
+             datetime.datetime.now().strftime("%d/%m/%Y %H:%M")))
+        c.commit(); return cur.lastrowid
 def get_blob(uid, k, default):
     with _db() as c:
         r = c.execute("SELECT v FROM kv WHERE user_id=? AND k=?", (uid,k)).fetchone()
@@ -116,6 +188,94 @@ def cloud_chat(system, messages, max_tokens=700):
     except Exception as e:
         print("[llm]", e)
         return f"Tive um problema pra pensar agora ({e}). Tente de novo, senhor."
+
+# ======================= BUSCA WEB + NOTICIAS =======================
+_UA_WEB = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+def _ddg_link(href):
+    try:
+        if "uddg=" in href: return urllib.parse.unquote(href.split("uddg=",1)[1].split("&",1)[0])
+    except Exception: pass
+    return href
+def web_search(q):
+    """Pesquisa na web. Devolve (resumo, fontes). Usa DuckDuckGo (sem chave)."""
+    fontes=[]
+    try:
+        u="https://api.duckduckgo.com/?"+urllib.parse.urlencode({"q":q,"format":"json","no_html":1,"skip_disambig":1})
+        d=json.loads(urllib.request.urlopen(urllib.request.Request(u,headers=_UA_WEB),timeout=8).read().decode())
+        if d.get("AbstractURL"): fontes.append({"titulo":d.get("Heading") or "DuckDuckGo","url":d["AbstractURL"]})
+        partes=[d.get("Answer") or "", d.get("AbstractText") or ""]
+        for t in d.get("RelatedTopics",[])[:6]:
+            if isinstance(t,dict) and t.get("Text"): partes.append(t["Text"])
+        txt=" ".join(p for p in partes if p).strip()
+        if len(txt)>60: return txt[:1700], fontes
+    except Exception: pass
+    try:
+        data=urllib.parse.urlencode({"q":q}).encode()
+        page=urllib.request.urlopen(urllib.request.Request("https://lite.duckduckgo.com/lite/",data=data,headers=_UA_WEB),timeout=10).read().decode("utf-8","ignore")
+        for href,title in re.findall(r"href=['\"]([^'\"]+)['\"][^>]*class=['\"]result-link['\"][^>]*>(.*?)</a>", page, re.S)[:6]:
+            fontes.append({"titulo":_html.unescape(re.sub(r'<[^>]+>','',title)).strip()[:90],"url":_ddg_link(href)})
+        snips=re.findall(r"class=['\"]result-snippet['\"][^>]*>(.*?)</td>", page, re.S)
+        clean=[re.sub(r'\s+',' ',_html.unescape(re.sub(r'<[^>]+>',' ',s)).strip()) for s in snips]
+        txt=" | ".join([c for c in clean if c][:6])[:1700].strip()
+        return (txt or None), fontes
+    except Exception: return None, fontes
+
+def cloud_chat_web(system, messages, max_tokens=700):
+    """Chat com ferramenta de busca: o modelo pesquisa na web quando precisa. Cai pro cloud_chat se algo falhar."""
+    if not LLM_KEY: return cloud_chat(system, messages, max_tokens)
+    tools=[{"type":"function","function":{"name":"buscar_web",
+        "description":"Pesquisa na internet. Use SEMPRE que a pergunta for sobre fatos atuais, noticias, precos, eventos recentes, datas ou qualquer coisa que voce nao saiba com certeza.",
+        "parameters":{"type":"object","properties":{"consulta":{"type":"string","description":"o termo de busca"}},"required":["consulta"]}}}]
+    msgs=[{"role":"system","content":system}]+list(messages)
+    def _call(body):
+        req=urllib.request.Request(LLM_BASE.rstrip("/")+"/chat/completions",data=json.dumps(body).encode(),
+            headers={"Authorization":f"Bearer {LLM_KEY}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
+        return json.loads(urllib.request.urlopen(req,timeout=40).read().decode())
+    try:
+        for _ in range(2):
+            r=_call({"model":LLM_MODEL,"max_tokens":max_tokens,"temperature":0.5,"messages":msgs,"tools":tools,"tool_choice":"auto"})
+            msg=r["choices"][0]["message"]; tcs=msg.get("tool_calls") or []
+            if not tcs: return (msg.get("content") or "").strip()
+            msgs.append({"role":"assistant","content":msg.get("content") or "","tool_calls":tcs})
+            for tc in tcs:
+                try: args=json.loads(tc["function"].get("arguments") or "{}")
+                except Exception: args={}
+                q=args.get("consulta") or args.get("query") or ""
+                resumo,fontes=web_search(q) if q else (None,[])
+                cont=(resumo or "Nada encontrado.")
+                if fontes: cont+=" || Fontes: "+"; ".join(f.get("url","") for f in fontes[:3])
+                msgs.append({"role":"tool","tool_call_id":tc.get("id"),"name":"buscar_web","content":cont[:1800]})
+        r=_call({"model":LLM_MODEL,"max_tokens":max_tokens,"temperature":0.5,"messages":msgs})  # resposta final sem ferramenta
+        return (r["choices"][0]["message"].get("content") or "").strip()
+    except Exception as e:
+        print("[llm-web]", e); return cloud_chat(system, messages, max_tokens)
+
+_FEEDS=[("MERCADO","https://www.infomoney.com.br/feed/"),
+        ("BRASIL","https://g1.globo.com/rss/g1/economia/"),
+        ("MUNDO","https://g1.globo.com/rss/g1/mundo/"),
+        ("MERCADO","https://news.google.com/rss/search?q=mercado+financeiro&hl=pt-BR&gl=BR&ceid=BR:pt-BR")]
+_NOTICIAS=[]
+def _atualiza_noticias():
+    global _NOTICIAS
+    out=[]; vistos=set()
+    for cat,url in _FEEDS:
+        try:
+            xml=urllib.request.urlopen(urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0"}),timeout=10).read()
+            n=0
+            for item in ET.fromstring(xml).iter("item"):
+                t=item.find("title")
+                if t is not None and t.text:
+                    titulo=t.text.rsplit(" - ",1)[0].strip()
+                    if titulo and titulo not in vistos:
+                        vistos.add(titulo); out.append([cat,titulo]); n+=1
+                if n>=4: break
+        except Exception: continue
+    if out: _NOTICIAS=out
+def loop_noticias():
+    while True:
+        try: _atualiza_noticias()
+        except Exception: pass
+        time.sleep(600)
 
 # ======================= PLANOS / LIMITES =======================
 PLANOS_PRECO = {"free":0.0, "pro":59.99, "business":109.99}
@@ -277,6 +437,7 @@ def base_url(handler):
     return f"{proto}://{host}"
 def mp_token(): return os.environ.get("MP_ACCESS_TOKEN","")
 def pp_creds(): return (os.environ.get("PAYPAL_CLIENT_ID",""), os.environ.get("PAYPAL_SECRET",""), os.environ.get("PAYPAL_MODE","sandbox"))
+def google_creds(): return (os.environ.get("GOOGLE_CLIENT_ID",""), os.environ.get("GOOGLE_CLIENT_SECRET",""))
 def checkout(u, plano, provedor, burl):
     plano = (plano or "pro").lower()
     if plano not in PLANOS_PRECO or plano == "free": return {"ok":False,"msg":"Plano invalido."}
@@ -460,6 +621,39 @@ class H(BaseHTTPRequestHandler):
         uid = session_uid(tok)
         return get_user(uid) if uid else None
 
+    def _redir(self, location, cookie=None):
+        self.send_response(302)
+        if cookie: self.send_header("Set-Cookie", f"orion_sess={cookie}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000")
+        self.send_header("Location", location); self.end_headers()
+
+    def _google_start(self):
+        cid, _ = google_creds()
+        if not cid: return self._redir("/?login=google_off")
+        params = urllib.parse.urlencode({
+            "client_id": cid, "redirect_uri": base_url(self)+"/auth/google/callback",
+            "response_type": "code", "scope": "openid email profile",
+            "access_type": "online", "prompt": "select_account"})
+        self._redir("https://accounts.google.com/o/oauth2/v2/auth?"+params)
+
+    def _google_callback(self):
+        cid, sec = google_creds()
+        qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
+        code = (qs.get("code") or [""])[0]
+        if not (code and cid and sec): return self._redir("/?login=google_err")
+        try:
+            data = urllib.parse.urlencode({"code":code,"client_id":cid,"client_secret":sec,
+                "redirect_uri":base_url(self)+"/auth/google/callback","grant_type":"authorization_code"}).encode()
+            tok = json.loads(urllib.request.urlopen(urllib.request.Request("https://oauth2.googleapis.com/token",
+                data=data, headers={"Content-Type":"application/x-www-form-urlencoded","User-Agent":"Mozilla/5.0"}),timeout=20).read().decode())
+            info = json.loads(urllib.request.urlopen(urllib.request.Request("https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization":"Bearer "+tok.get("access_token",""),"User-Agent":"Mozilla/5.0"}),timeout=20).read().decode())
+            email = (info.get("email") or "").strip().lower()
+            if not email: return self._redir("/?login=google_err")
+            uid = google_upsert(email, info.get("name") or email.split("@")[0], info.get("picture") or "")
+            self._redir("/?login=ok", cookie=make_session(uid))
+        except Exception as e:
+            print("[google]", e); self._redir("/?login=google_err")
+
     def do_OPTIONS(self): self._send(b"",204)
 
     def do_GET(self):
@@ -484,8 +678,10 @@ class H(BaseHTTPRequestHandler):
         elif path == "/.well-known/assetlinks.json":
             # necessario pro APK (TWA) verificar que o site e seu. Cole o JSON do PWABuilder na env ASSETLINKS_JSON.
             self._send(os.environ.get("ASSETLINKS_JSON", "[]"), 200, "application/json")
+        elif path == "/auth/google": self._google_start()
+        elif path == "/auth/google/callback": self._google_callback()
         elif path == "/estado":
-            self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":[]})
+            self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
         elif path == "/usuarios":
             with _db() as c:
                 lst = [{"id":x["id"],"nome":x["nome"],"email":x["email"] or "","foto":x["foto"] or "",
@@ -526,6 +722,8 @@ class H(BaseHTTPRequestHandler):
         if path == "/usuario/criar":
             nome = (d.get("nome") or "").strip()
             if not nome: self._send({"ok":False,"erro":"Diga seu nome."}); return
+            if not d.get("aceitou_termos"): self._send({"ok":False,"erro":"Voce precisa aceitar os Termos de Uso e a Privacidade pra criar a conta."}); return
+            if len(d.get("senha") or "") < 8: self._send({"ok":False,"erro":"A senha precisa de pelo menos 8 caracteres, senhor."}); return
             try:
                 with _db() as c:
                     n_users = c.execute("SELECT COUNT(*) n FROM users").fetchone()["n"]
@@ -535,7 +733,7 @@ class H(BaseHTTPRequestHandler):
                          "free", 1 if n_users==0 else 0, "local", datetime.datetime.now().strftime("%d/%m/%Y %H:%M")))
                     c.commit(); uid = cur.lastrowid
                 self._send({"ok":True,"user":_pub(get_user(uid))}, cookie=make_session(uid))
-            except sqlite3.IntegrityError:
+            except INTEGRITY_ERRORS:
                 self._send({"ok":False,"erro":"Ja existe conta com esse e-mail."})
         elif path == "/usuario/login":
             with _db() as c:
@@ -584,9 +782,11 @@ class H(BaseHTTPRequestHandler):
             if not pode["ok"]: self._send({"ok":True,"reply":pode["motivo"]+" Abra os Planos pra liberar tudo."}); return
             uso_reg(u, "msg")
             trat = (u["tratamento"] or "").strip()
-            sysp = PERSONA + (f" Trate o usuario como '{trat}'." if trat else "")
+            hoje = datetime.date.today().strftime("%d/%m/%Y")
+            sysp = (PERSONA + f" Hoje e {hoje}." + (f" Trate o usuario como '{trat}'." if trat else "")
+                    + " Voce tem a ferramenta buscar_web: use-a para qualquer pergunta sobre fatos atuais, noticias, precos ou coisas que nao saiba, e cite a fonte.")
             hist = get_blob(u["id"], "hist", [])[-8:]
-            reply = cloud_chat(sysp, hist + [{"role":"user","content":frase}])
+            reply = cloud_chat_web(sysp, hist + [{"role":"user","content":frase}])
             hist = (hist + [{"role":"user","content":frase},{"role":"assistant","content":reply}])[-12:]
             set_blob(u["id"], "hist", hist)
             # aprende fato simples
@@ -649,6 +849,7 @@ class H(BaseHTTPRequestHandler):
 
 def main():
     print(f"[orion-cloud] porta {PORT} | cerebro: {'configurado ('+LLM_MODEL+')' if LLM_KEY else 'NAO configurado (defina LLM_API_KEY)'} | db: {DB_PATH}")
+    threading.Thread(target=loop_noticias, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
 
 if __name__ == "__main__":

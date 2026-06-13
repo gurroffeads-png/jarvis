@@ -503,7 +503,11 @@ button{font-family:inherit;cursor:pointer}
         <div class="field"><label>Seu nome</label><input type="text" id="authNome" placeholder="como devo te chamar?"></div>
         <div class="field"><label>Como prefere ser chamado (opcional)</label><input type="text" id="authTrat" placeholder="ex: Sr. Pontes"></div>
         <div class="field"><label>E-mail (opcional, pra recuperar a conta)</label><input type="email" id="authEmail" placeholder="seu@email.com"></div>
-        <div class="field"><label>Senha (opcional)</label><input type="password" id="authNovaSenha" placeholder="deixe vazio pra entrar sem senha"></div>
+        <div class="field"><label>Senha (minimo 8 caracteres)</label><input type="password" id="authNovaSenha" placeholder="crie uma senha forte"></div>
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--dim);margin:2px 0 10px;cursor:pointer">
+          <input type="checkbox" id="authTermos" style="margin-top:2px;flex:none">
+          <span>Li e aceito os <a href="#" onclick="go('termos');return false" style="color:var(--accent)">Termos de Uso</a> e a <a href="#" onclick="go('privacidade');return false" style="color:var(--accent)">Politica de Privacidade</a>.</span>
+        </label>
         <div class="auth-err" id="authErr2"></div>
         <button class="btn primary" onclick="authCriar()" style="width:100%">Criar conta e entrar</button>
       </div>
@@ -1621,6 +1625,7 @@ function abrirAuth(aba){ document.getElementById('authModal').classList.add('sho
   document.getElementById('authChooser').style.display='none'; document.getElementById('authForm').style.display='block';
   authAba(aba||'login'); }
 async function loginGoogle(){
+  if(window.ORION_CLOUD){ window.location.href='/auth/google'; return; }  // nuvem: OAuth hospedado (redirect)
   const st=document.getElementById('authSt'); const prev=st.textContent;
   st.textContent='Conectando com o Google...';
   try{ const r=await (await fetch('/usuario/google_login',{method:'POST'})).json();
@@ -1655,7 +1660,10 @@ function authAba(q){ document.getElementById('authChooser').style.display='none'
   document.getElementById('authCriar').style.display=q==='criar'?'block':'none'; }
 async function authCriar(){ const nome=document.getElementById('authNome').value.trim();
   const err=document.getElementById('authErr2'); err.textContent=''; if(!nome){err.textContent='Diz seu nome.';return;}
-  const r=await (await fetch('/usuario/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,tratamento:document.getElementById('authTrat').value.trim(),senha:document.getElementById('authNovaSenha').value,email:document.getElementById('authEmail').value.trim()})})).json();
+  const senha=document.getElementById('authNovaSenha').value;
+  if((senha||'').length<8){err.textContent='A senha precisa de pelo menos 8 caracteres.';return;}
+  if(!document.getElementById('authTermos').checked){err.textContent='Aceite os Termos e a Privacidade pra continuar.';return;}
+  const r=await (await fetch('/usuario/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,tratamento:document.getElementById('authTrat').value.trim(),senha,email:document.getElementById('authEmail').value.trim(),aceitou_termos:true})})).json();
   if(r.ok) entrou(r.user); else err.textContent=r.erro||'erro';
 }
 async function authConvidado(){ const r=await (await fetch('/usuario/convidado',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:'Convidado'})})).json();
@@ -1703,6 +1711,10 @@ if(window.ORION_CLOUD){ try{ var _mb=document.getElementById('micBtn'); if(_mb)_
 // ===================== INIT =====================
 renderNav(); initStars(); stars();
 authCheck(); poll(); checkRetornoPagamento();
+(function(){ const lg=new URLSearchParams(location.search).get('login'); if(!lg) return;
+  if(lg==='google_off') alert('O login com Google ainda nao foi ligado no servidor, senhor. Por enquanto crie conta por e-mail, leva 10 segundos.');
+  else if(lg==='google_err') alert('Nao consegui completar o login com Google. Tente de novo, ou crie conta por e-mail.');
+  try{ history.replaceState({},'',location.pathname); }catch(e){} })();
 // deep-link vindo do site (ex: ?ir=planos abre direto na tela de Planos)
 (function(){ const ir=new URLSearchParams(location.search).get('ir');
   const validos=['home','documentos','rotina','tarefas','memoria','integracoes','config','conta','planos'];
