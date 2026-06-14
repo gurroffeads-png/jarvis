@@ -309,17 +309,77 @@ button{font-family:inherit;cursor:pointer}
 .statusline{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:7px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}
 .dot.ok{background:var(--good)} .dot.off{background:var(--bad)}
-@media(max-width:640px){.page{padding:22px 14px 50px}.msg .bubble{max-width:86%}}
+@media(max-width:640px){.page{padding:22px 14px 50px}.msg .bubble{max-width:86%}
+  .composer{gap:6px;padding:6px 6px 6px 12px}
+  .composer .mic,.composer .send{width:38px;height:38px}
+  .composer .mic svg{width:17px;height:17px}}
+/* ABERTURA (splash) + MASCOTE animado */
+#splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  background:radial-gradient(circle at 50% 38%, #131a31 0%, #0a0c11 72%);transition:opacity .5s ease}
+#splash.hide{opacity:0;pointer-events:none}
+.sp-inner{display:flex;flex-direction:column;align-items:center;gap:8px}
+.sp-name{font-size:30px;font-weight:800;letter-spacing:1px;color:#fff;animation:spIn .6s .15s both}
+.sp-tag{font-size:13px;color:var(--dim);animation:spIn .6s .32s both}
+.mascote{filter:drop-shadow(0 10px 34px rgba(91,140,255,.45));animation:spIn .6s both}
+.mascote .orb{animation:spFloat 3s ease-in-out infinite;transform-origin:100px 100px}
+.mascote .glow{animation:spPulse 2.4s ease-in-out infinite;transform-origin:100px 100px}
+.mascote .ring{transform-origin:100px 100px}
+.mascote .ring.r1{animation:spSpin 16s linear infinite}
+.mascote .ring.r2{animation:spSpinR 22s linear infinite}
+.mascote .belt circle{animation:spTwinkle 2s ease-in-out infinite}
+.mascote .belt circle:nth-child(2){animation-delay:.5s}.mascote .belt circle:nth-child(3){animation-delay:1s}.mascote .belt circle:nth-child(4){animation-delay:1.5s}
+.mascote .eyes{animation:spBlink 4.5s infinite;transform-origin:100px 102px}
+@keyframes spIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes spFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes spPulse{0%,100%{opacity:.45;transform:scale(1)}50%{opacity:.85;transform:scale(1.07)}}
+@keyframes spSpin{to{transform:rotate(360deg)}}
+@keyframes spSpinR{to{transform:rotate(-360deg)}}
+@keyframes spTwinkle{0%,100%{opacity:.25}50%{opacity:1}}
+@keyframes spBlink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
 </style>
 </head>
 <body>
+
+<!-- ABERTURA / MASCOTE -->
+<div id="splash" onclick="hideSplash()">
+  <div class="sp-inner">
+    <svg class="mascote" viewBox="0 0 200 200" width="148" height="148" aria-label="Orion">
+      <defs>
+        <radialGradient id="orbG" cx="50%" cy="34%" r="72%">
+          <stop offset="0%" stop-color="#cfdcff"/><stop offset="46%" stop-color="#5b8cff"/><stop offset="100%" stop-color="#2a36c8"/>
+        </radialGradient>
+        <radialGradient id="glowG" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#7aa2ff" stop-opacity=".55"/><stop offset="100%" stop-color="#7aa2ff" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <circle class="glow" cx="100" cy="100" r="94" fill="url(#glowG)"/>
+      <circle class="ring r1" cx="100" cy="100" r="64" fill="none" stroke="#7aa2ff" stroke-width="1.3" stroke-opacity=".55" stroke-dasharray="6 12"/>
+      <circle class="ring r2" cx="100" cy="100" r="80" fill="none" stroke="#9b8cff" stroke-width="1" stroke-opacity=".35" stroke-dasharray="3 16"/>
+      <g class="belt">
+        <circle cx="38" cy="58" r="2.6" fill="#cfe0ff"/><circle cx="152" cy="46" r="2" fill="#cfe0ff"/>
+        <circle cx="168" cy="122" r="2.4" fill="#cfe0ff"/><circle cx="50" cy="152" r="1.8" fill="#cfe0ff"/>
+      </g>
+      <g class="orb">
+        <circle cx="100" cy="100" r="46" fill="url(#orbG)"/>
+        <ellipse cx="100" cy="80" rx="24" ry="11" fill="#ffffff" fill-opacity=".18"/>
+        <g class="eyes">
+          <circle cx="88" cy="99" r="6" fill="#0a0c11"/><circle cx="112" cy="99" r="6" fill="#0a0c11"/>
+          <circle cx="90.2" cy="96.5" r="1.9" fill="#fff"/><circle cx="114.2" cy="96.5" r="1.9" fill="#fff"/>
+        </g>
+        <path class="smile" d="M88 113 q12 9 24 0" fill="none" stroke="#0a0c11" stroke-width="3" stroke-linecap="round"/>
+      </g>
+    </svg>
+    <div class="sp-name">Orion</div>
+    <div class="sp-tag">Seu assistente pessoal de IA</div>
+  </div>
+</div>
 
 <!-- TOPBAR -->
 <div class="topbar">
   <button class="menu-btn" onclick="toggleSidebar()" title="Menu">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
   </button>
-  <div class="brand"><img src="/logo" alt="Orion"><span class="nm"><b>Orion</b></span></div>
+  <div class="brand"><svg width="28" height="28" viewBox="0 0 100 100" aria-label="Orion"><circle cx="50" cy="50" r="36" fill="#4a6cf0"/><ellipse cx="50" cy="35" rx="19" ry="9" fill="#fff" fill-opacity=".18"/><circle cx="41" cy="49" r="4.8" fill="#0a0c11"/><circle cx="59" cy="49" r="4.8" fill="#0a0c11"/><circle cx="42.5" cy="47" r="1.5" fill="#fff"/><circle cx="60.5" cy="47" r="1.5" fill="#fff"/><path d="M41 60 q9 7 18 0" fill="none" stroke="#0a0c11" stroke-width="2.6" stroke-linecap="round"/></svg><span class="nm"><b>Orion</b></span></div>
   <div class="topbar-sp"></div>
   <div class="statusline" id="statusLine"><span class="dot" id="stDot"></span><span id="stTxt">Conectando...</span></div>
   <div class="user-chip" onclick="go('conta')">
@@ -362,6 +422,7 @@ button{font-family:inherit;cursor:pointer}
             <h2 id="welHi">Ola. Sou o Orion.</h2>
             <p>Seu assistente pessoal. Posso conversar por voz ou texto, escrever documentos, organizar sua rotina, pesquisar e cuidar do seu dia a dia. Por onde comecamos?</p>
             <div class="suggestions">
+              <button class="sug" onclick="briefing()">Resumo do dia</button>
               <button class="sug" onclick="sugere('Escreve um e-mail profissional pra mim')">Escrever um e-mail</button>
               <button class="sug" onclick="sugere('Monta uma rotina de academia sustentavel pra iniciante')">Rotina de academia</button>
               <button class="sug" onclick="sugere('Resume as noticias do mercado hoje')">Noticias do mercado</button>
@@ -378,6 +439,9 @@ button{font-family:inherit;cursor:pointer}
           <textarea id="inp" rows="1" placeholder="Fale com o Orion ou digite aqui..." oninput="growInp(this)" onkeydown="inpKey(event)"></textarea>
           <button class="mic" id="micBtn" onclick="toggleVoz()" title="Falar por voz">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg>
+          </button>
+          <button class="mic" id="vozBtn" onclick="toggleVozFala()" title="Orion ler as respostas em voz alta" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a8 8 0 0 1 0 14"/></svg>
           </button>
           <button class="send" id="sendBtn" onclick="enviar()" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -501,7 +565,7 @@ button{font-family:inherit;cursor:pointer}
       </div>
       <div id="authCriar" style="display:none">
         <div class="field"><label>Seu nome</label><input type="text" id="authNome" placeholder="como devo te chamar?"></div>
-        <div class="field"><label>Como prefere ser chamado (opcional)</label><input type="text" id="authTrat" placeholder="ex: Sr. Pontes"></div>
+        <div class="field"><label>Como prefere ser chamado (opcional)</label><input type="text" id="authTrat" placeholder="ex: chefe, Dra. Ana, capitao"></div>
         <div class="field"><label>E-mail (opcional, pra recuperar a conta)</label><input type="email" id="authEmail" placeholder="seu@email.com"></div>
         <div class="field"><label>Senha (minimo 8 caracteres)</label><input type="password" id="authNovaSenha" placeholder="crie uma senha forte"></div>
         <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--dim);margin:2px 0 10px;cursor:pointer">
@@ -603,14 +667,46 @@ function growInp(t){t.style.height='auto';t.style.height=Math.min(120,t.scrollHe
 function inpKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviar();} }
 function sugere(t){ const i=document.getElementById('inp'); i.value=t; growInp(i); i.focus(); }
 function novaConversa(){ go('home'); }
+function setVozFala(on){ VOZ_ON=!!on; localStorage.setItem('orion_voz', VOZ_ON?'1':'0');
+  var b=document.getElementById('vozBtn'); if(b) b.classList.toggle('on',VOZ_ON);
+  if(!VOZ_ON){ try{speechSynthesis.cancel();}catch(e){} } }
+function briefing(){ go('home'); const i=document.getElementById('inp'); if(!i) return;
+  i.value='Me da um briefing rapido do dia, senhor: um cumprimento curto, depois as principais noticias de hoje (mercado e Brasil) em 4 ou 5 linhas curtas, e termina perguntando como pode ajudar.';
+  growInp(i); enviar(); }
 async function enviar(){
   const i=document.getElementById('inp'); const txt=i.value.trim(); if(!txt) return;
   i.value=''; growInp(i);
   // mostra imediatamente a fala do usuario (o poll confirma depois)
   addMsg('user',txt,'local');
   try{ const j=await (await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frase:txt})})).json();
-    if(j && j.reply){ addMsg('assistant', j.reply); } }   // nuvem: resposta direta (desktop usa o poll)
+    if(j && j.reply){ addMsg('assistant', j.reply); speakOrion(j.reply); } }   // nuvem: resposta direta (desktop usa o poll)
   catch(e){ addMsg('assistant','Nao consegui falar com o servidor, senhor.'); }
+}
+// ===== VOZ NO NAVEGADOR (celular/web): Orion fala as respostas + ditado por voz =====
+let VOZ_ON = (localStorage.getItem('orion_voz')==='1');
+let _vozBR = null;
+function _carregaVozes(){ try{ const vs=(window.speechSynthesis&&speechSynthesis.getVoices())||[];
+  _vozBR = vs.find(v=>/pt[-_]?BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || null; }catch(e){} }
+if('speechSynthesis' in window){ _carregaVozes(); speechSynthesis.onvoiceschanged=_carregaVozes; }
+function speakOrion(txt){ if(!VOZ_ON || !('speechSynthesis' in window) || !txt) return;
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(String(txt).slice(0,600));
+    if(_vozBR) u.voice=_vozBR; u.lang='pt-BR'; u.rate=1.03; speechSynthesis.speak(u); }catch(e){} }
+function toggleVozFala(){ VOZ_ON=!VOZ_ON; localStorage.setItem('orion_voz', VOZ_ON?'1':'0');
+  const b=document.getElementById('vozBtn'); if(b) b.classList.toggle('on',VOZ_ON);
+  if(!VOZ_ON){ try{speechSynthesis.cancel();}catch(e){} }
+  else { try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance('Pronto, senhor. Vou ler minhas respostas em voz alta.'); if(_vozBR)u.voice=_vozBR; u.lang='pt-BR'; speechSynthesis.speak(u); }catch(e){} } }  // 1a fala dentro do toque "destrava" o audio no celular
+let _rec=null, _recOn=false;
+function toggleEscuta(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ alert('Seu navegador nao suporta ditado por voz, senhor. Use o Chrome.'); return; }
+  if(_recOn){ try{_rec.stop();}catch(e){} return; }
+  _rec=new SR(); _rec.lang='pt-BR'; _rec.interimResults=false; _rec.maxAlternatives=1;
+  const mb=document.getElementById('micBtn');
+  _rec.onstart=()=>{ _recOn=true; if(mb)mb.classList.add('on'); };
+  _rec.onend=()=>{ _recOn=false; if(mb)mb.classList.remove('on'); };
+  _rec.onerror=()=>{ _recOn=false; if(mb)mb.classList.remove('on'); };
+  _rec.onresult=(e)=>{ const t=e.results[0][0].transcript; const inp=document.getElementById('inp'); inp.value=t; growInp(inp); enviar(); };
+  try{ _rec.start(); }catch(e){}
 }
 function addMsg(role,text,tag){
   const wel=document.getElementById('welcome'); if(wel) wel.remove();
@@ -791,6 +887,7 @@ async function renderConfig(){
     <div class="field"><input type="password" id="cfgGroq" placeholder="${integ.groq?'******** (ja configurada)':'gsk_...'}"></div>
   </div>
   <div class="card"><h3>Voz</h3>
+    ${window.ORION_CLOUD?`<div class="field"><label style="cursor:pointer"><input type="checkbox" id="cfgVozFala" ${VOZ_ON?'checked':''} onchange="setVozFala(this.checked)" style="width:auto;vertical-align:middle"> Ler as respostas em voz alta (neste aparelho)</label><div class="hint">Desligado por padrao. Tambem da pra ligar/desligar no botao de alto-falante, ao lado do campo de mensagem.</div></div>`:''}
     <div class="field"><label>Voz</label><select id="cfgVoz">${vozes.map(v=>`<option value="${v}">${vozLabel(v)}</option>`).join('')}</select></div>
     <div class="field"><label>Volume</label><div class="range-row"><input type="range" id="cfgVol" min="0" max="100" value="${vol}"><span class="v" id="cfgVolV">${vol}</span></div></div>
     <div class="field"><label>Velocidade da fala</label><div class="range-row"><input type="range" id="cfgRate" min="-30" max="40" value="${rate}"><span class="v" id="cfgRateV">${rate}</span></div></div>
@@ -1361,7 +1458,7 @@ function renderConta(){
       <div style="flex:1;min-width:220px">
         <div class="field"><label>Nome de exibicao</label><input id="contaNome" value="${esc(u.nome||'')}" placeholder="como aparece no app"></div>
         <div class="field"><label>Nome real (completo)</label><input id="contaNomeReal" value="${esc(u.nome_real||'')}" placeholder="seu nome completo"></div>
-        <div class="field"><label>Como prefere ser chamado</label><input id="contaTrat" value="${esc(u.tratamento||'')}" placeholder="ex: Sr. Pontes, Murilo, chefe..."><div class="hint">O Orion vai te tratar exatamente assim.</div></div>
+        <div class="field"><label>Como prefere ser chamado</label><input id="contaTrat" value="${esc(u.tratamento||'')}" placeholder="ex: chefe, Dra. Ana, capitao..."><div class="hint">O Orion vai te tratar exatamente assim.</div></div>
       </div>
     </div>
     <div class="field"><label>E-mail</label><input id="contaEmail" type="email" value="${esc(u.email||'')}" placeholder="seu@email.com"></div>
@@ -1481,13 +1578,16 @@ function renderPlanos(){
    </div>`).join('');
 }
 async function ativarChave(){
-  const ch=document.getElementById('licChave').value.trim(); const m=document.getElementById('licMsg');
-  if(!ch){ m.textContent='Cole a chave.'; return; }
-  m.textContent='Verificando...';
-  try{ const r=await (await fetch('/licenca/ativar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chave:ch})})).json();
-    if(r.ok){ if(r.user) USER=Object.assign(USER||{},r.user); aplicaUser(); piscarSave('PLANO ATIVO'); m.style.color='var(--good)'; m.textContent='Plano '+(r.plano||'').toUpperCase()+' ativado! Aproveite, senhor.'; renderPlanos(); }
-    else { m.style.color='var(--warn)'; m.textContent=r.erro||'Chave invalida.'; }
-  }catch(e){ m.textContent='Erro de conexao.'; }
+  const m=document.getElementById('licMsg');
+  const ch=(document.getElementById('licChave').value||'').trim().toUpperCase().replace(/\s+/g,'');
+  if(!ch){ m.style.color=''; m.textContent='Cole a chave.'; return; }
+  m.style.color=''; m.textContent='Verificando...';
+  for(let i=0;i<3;i++){
+    try{ const r=await (await fetch('/licenca/ativar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chave:ch})})).json();
+      if(r.ok){ if(r.user) USER=Object.assign(USER||{},r.user); aplicaUser(); piscarSave('PLANO ATIVO'); m.style.color='var(--good)'; m.textContent='Plano '+(r.plano||'').toUpperCase()+' ativado! Aproveite, senhor.'; renderPlanos(); return; }
+      m.style.color='var(--warn)'; m.textContent=r.erro||'Chave invalida.'; return;
+    }catch(e){ if(i<2){ m.textContent='Conectando (o servidor pode estar acordando)...'; await new Promise(res=>setTimeout(res,2500)); } else m.textContent='Sem conexao agora. Tente de novo em alguns segundos, senhor.'; }
+  }
 }
 async function assinar(id){
   if(id==='free'){ alert('Voce ja pode usar o plano Free agora mesmo.'); return; }
@@ -1685,12 +1785,16 @@ async function checkRetornoPagamento(){
   else {
     const prov=q.get('prov')||'mp';
     const pid=(prov==='paypal')?(q.get('token')):(q.get('payment_id')||q.get('collection_id'));
-    try{ const r=await (await fetch('/pagamento/confirmar',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({payment_id:pid,plano:pago,provedor:prov})})).json();
-      if(r.ok){ if(r.user) USER=Object.assign(USER||{},r.user); aplicaUser(); piscarSave('PLANO ATIVO');
-        alert('Tudo certo! Seu plano '+(r.plano||'').toUpperCase()+' esta ativo.'); }
-      else alert(r.erro||'Nao consegui confirmar o pagamento ainda.');
-    }catch(e){}
+    let ok=false;
+    for(let i=0;i<3 && !ok;i++){
+      try{ const r=await (await fetch('/pagamento/confirmar',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({payment_id:pid,plano:pago,provedor:prov})})).json();
+        if(r.ok){ ok=true; if(r.user) USER=Object.assign(USER||{},r.user); aplicaUser(); piscarSave('PLANO ATIVO');
+          alert('Tudo certo! Seu plano '+(r.plano||'').toUpperCase()+' esta ativo, senhor.'); }
+      }catch(e){}
+      if(!ok) await new Promise(res=>setTimeout(res,2500));
+    }
+    if(!ok) alert('Recebi o retorno do pagamento. Se foi aprovado, seu plano libera em instantes (a confirmacao tambem chega por webhook). Recarregue em um minuto, senhor.');
   }
   // limpa a URL
   history.replaceState({},'',location.pathname);
@@ -1705,10 +1809,16 @@ document.addEventListener('paste', (e)=>{
 
 // ===================== PWA =====================
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }catch(e){} }
-// modo nuvem: esconde recursos que so existem no desktop (microfone/voz local)
-if(window.ORION_CLOUD){ try{ var _mb=document.getElementById('micBtn'); if(_mb)_mb.style.display='none'; }catch(e){} }
+// modo nuvem: usa a VOZ DO NAVEGADOR (funciona no celular) - ditado no mic e leitura nas respostas
+if(window.ORION_CLOUD){
+  try{ var _mb=document.getElementById('micBtn'); if(_mb){ _mb.onclick=toggleEscuta; _mb.title='Falar (ditar mensagem)'; } }catch(e){}
+  try{ var _vb=document.getElementById('vozBtn'); if(_vb){ _vb.style.display=''; _vb.classList.toggle('on', VOZ_ON); } }catch(e){}
+}
 
 // ===================== INIT =====================
+function hideSplash(){ var s=document.getElementById('splash'); if(!s) return; s.classList.add('hide');
+  setTimeout(function(){ if(s&&s.parentNode) s.parentNode.removeChild(s); },600); }
+setTimeout(hideSplash, 1700);
 renderNav(); initStars(); stars();
 authCheck(); poll(); checkRetornoPagamento();
 (function(){ const lg=new URLSearchParams(location.search).get('login'); if(!lg) return;
