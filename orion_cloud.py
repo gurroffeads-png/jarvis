@@ -840,11 +840,11 @@ class H(BaseHTTPRequestHandler):
         elif path == "/estado":
             self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
         elif path == "/usuarios":
-            with _db() as c:
-                lst = [{"id":x["id"],"nome":x["nome"],"email":x["email"] or "","foto":x["foto"] or "",
-                        "tem_senha":bool(x["senha_hash"]),"plano":("business" if (x["criador"] or x["socio"]) else x["plano"]),
-                        "origem":x["origem"],"criador":bool(x["criador"])} for x in c.execute("SELECT * FROM users ORDER BY id").fetchall()]
-            self._send({"ativo":(_pub(u) if u else None),"lista":lst})
+            # PRIVACIDADE: nuvem NUNCA devolve a lista de outros usuarios.
+            # A lista de "perfis lembrados neste aparelho" e responsabilidade do localStorage do cliente.
+            self._send({"ativo":(_pub(u) if u else None),"lista":[]})
+        elif path == "/usuario/eu":
+            self._send({"ativo": _pub(u) if u else None})
         elif path == "/config":
             self._send({"cloud":True,"cerebro":"nuvem","modelos_ollama":[],"modelos_anthropic":[],
                         "vozes":["pt-BR-AntonioNeural"],"voz":"pt-BR-AntonioNeural","volume":90,"rate":0})
