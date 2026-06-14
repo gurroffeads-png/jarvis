@@ -109,7 +109,10 @@ button{font-family:inherit;cursor:pointer}
 
 /* ===================== HOME / CHAT ===================== */
 #viewHome{position:relative}
-.chat-wrap{position:absolute;inset:0;display:flex;flex-direction:column}
+.chat-wrap{position:absolute;inset:0;display:flex;flex-direction:column;
+  background:radial-gradient(820px 520px at 72% 8%, rgba(91,140,255,.12), transparent 62%),
+             radial-gradient(680px 520px at 18% 92%, rgba(155,140,255,.10), transparent 60%),
+             radial-gradient(420px 320px at 50% 50%, rgba(40,54,170,.10), transparent 70%), var(--bg)}
 #stars{position:absolute;inset:0;z-index:0}
 .chat-scroll{position:relative;z-index:1;flex:1;overflow:auto;padding:28px 18px 8px;display:flex;flex-direction:column;gap:16px}
 .chat-inner{max-width:780px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px}
@@ -673,6 +676,23 @@ function setVozFala(on){ VOZ_ON=!!on; localStorage.setItem('orion_voz', VOZ_ON?'
 function briefing(){ go('home'); const i=document.getElementById('inp'); if(!i) return;
   i.value='Me da um briefing rapido do dia, senhor: um cumprimento curto, depois as principais noticias de hoje (mercado e Brasil) em 4 ou 5 linhas curtas, e termina perguntando como pode ajudar.';
   growInp(i); enviar(); }
+function urlB64ToUint8(b){ const pad='='.repeat((4-b.length%4)%4); const s=(b+pad).replace(/-/g,'+').replace(/_/g,'/'); const raw=atob(s); const arr=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i); return arr; }
+async function ativarNotificacoes(){
+  const m=document.getElementById('notifMsg');
+  const msg=(t,c)=>{ if(m){ m.textContent=t; m.style.color=c||''; } else alert(t); };
+  try{
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)){ msg('Seu navegador nao suporta notificacoes, senhor.','var(--warn)'); return; }
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){ msg('Notificacoes nao foram permitidas. Libere nas configuracoes do navegador.','var(--warn)'); return; }
+    const reg=await navigator.serviceWorker.ready;
+    const k=await (await fetch('/push/key')).json();
+    if(!k.key || !k.on){ msg('O push ainda nao foi ligado no servidor, senhor.','var(--warn)'); return; }
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:urlB64ToUint8(k.key)});
+    await fetch('/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sub:sub.toJSON?sub.toJSON():sub})});
+    msg('Pronto! O Orion vai te chamar quando precisar.','var(--good)');
+  }catch(e){ msg('Nao consegui ativar agora. Tente de novo, senhor.','var(--warn)'); }
+}
 async function enviar(){
   const i=document.getElementById('inp'); const txt=i.value.trim(); if(!txt) return;
   i.value=''; growInp(i);
@@ -705,7 +725,7 @@ function toggleEscuta(){
   _rec.onstart=()=>{ _recOn=true; if(mb)mb.classList.add('on'); };
   _rec.onend=()=>{ _recOn=false; if(mb)mb.classList.remove('on'); };
   _rec.onerror=()=>{ _recOn=false; if(mb)mb.classList.remove('on'); };
-  _rec.onresult=(e)=>{ const t=e.results[0][0].transcript; const inp=document.getElementById('inp'); inp.value=t; growInp(inp); enviar(); };
+  _rec.onresult=(e)=>{ const t=e.results[0][0].transcript; const inp=document.getElementById('inp'); inp.value=(inp.value?inp.value+' ':'')+t; growInp(inp); inp.focus(); };  // transcreve e deixa o usuario revisar/confirmar (nao envia direto)
   try{ _rec.start(); }catch(e){}
 }
 function addMsg(role,text,tag){
@@ -886,6 +906,11 @@ async function renderConfig(){
     <div class="hint" style="margin-bottom:10px">Pra a analise de print (gráfico) e fotos ficarem boas <b>de graca</b>, cole uma chave do <b>Groq</b> (console.groq.com &gt; API Keys). Sem ela, uso o modelo local (mais fraco). A leitura de grafico melhora muito com isso.</div>
     <div class="field"><input type="password" id="cfgGroq" placeholder="${integ.groq?'******** (ja configurada)':'gsk_...'}"></div>
   </div>
+  ${window.ORION_CLOUD?`<div class="card"><h3>Notificacoes</h3>
+    <div class="hint" style="margin-bottom:10px">Deixe o Orion te chamar: quando voce some por uns dias, ou quando uma tarefa que voce delegou fica pronta.</div>
+    <div class="row"><button class="btn primary" onclick="ativarNotificacoes()">Ativar notificacoes</button></div>
+    <div id="notifMsg" class="hint" style="margin-top:8px"></div>
+  </div>`:''}
   <div class="card"><h3>Voz</h3>
     ${window.ORION_CLOUD?`<div class="field"><label style="cursor:pointer"><input type="checkbox" id="cfgVozFala" ${VOZ_ON?'checked':''} onchange="setVozFala(this.checked)" style="width:auto;vertical-align:middle"> Ler as respostas em voz alta (neste aparelho)</label><div class="hint">Desligado por padrao. Tambem da pra ligar/desligar no botao de alto-falante, ao lado do campo de mensagem.</div></div>`:''}
     <div class="field"><label>Voz</label><select id="cfgVoz">${vozes.map(v=>`<option value="${v}">${vozLabel(v)}</option>`).join('')}</select></div>
@@ -1560,7 +1585,7 @@ async function sairConta(){ if(CONTA_CAM){CONTA_CAM.getTracks().forEach(t=>t.sto
 const PLANOS=[
  {id:'free',nome:'Free',preco:'R$ 0',sub:'pra sempre',desc:'Pra experimentar o Orion no dia a dia.',
   feats:[['Chat de texto: 15 mensagens por dia',1],['Conversa por voz: 10 min por dia',1],['3 documentos por mes',1],['Tarefas e lembretes basicos',1],['1 integracao Google',1],['Memoria de longo prazo',0],['Rotina & Progresso',0],['Integracoes de trabalho',0]],cta:'Comecar de graca'},
- {id:'pro',nome:'Pro',preco:'R$ 59,99',sub:'/mes',desc:'Pra quem usa o Orion todo dia, de verdade.',feat:true,
+ {id:'pro',nome:'Pro',preco:'R$ 29,99',sub:'/mes nos 3 primeiros meses',desc:'Metade do preco nos 3 primeiros meses. Depois, R$ 59,99/mes. Cancele quando quiser.',feat:true,selo:'50% OFF . 3 meses',
   feats:[['Chat e voz ilimitados',1],['Documentos ilimitados (todos os modelos)',1],['Agenda e tarefas sem limite',1],['Todas as integracoes Google',1],['Memoria de longo prazo',1],['Rotina & Progresso completo',1],['Pesquisa web e noticias do seu mercado',1],['Integracoes de trabalho',0]],cta:'Assinar Pro'},
  {id:'business',nome:'Business',preco:'R$ 109,99',sub:'/mes',desc:'Pra profissionais, agencias e equipes.',
   feats:[['Tudo do Pro',1],['ClickUp, Apollo e Meta Ads',1],['Automacoes (fluxos estilo Make)',1],['Multi-perfis e equipe',1],['Documentos avancados (planilhas, slides)',1],['Comandos do PC (abrir apps, controle local)',1],['Suporte prioritario',1],['Atualizacoes antecipadas',1]],cta:'Assinar Business'},
@@ -1573,6 +1598,7 @@ function renderPlanos(){
      <div class="pn">${p.nome}</div>
      <div class="pd">${p.desc}</div>
      <div class="pp">${p.preco} <small>${p.sub}</small></div>
+     ${p.selo?`<div style="display:inline-block;margin:2px 0 6px;font-size:11px;font-weight:800;color:#0b1230;background:linear-gradient(135deg,var(--accent),var(--accent2));padding:3px 10px;border-radius:999px">${p.selo}</div>`:''}
      <ul>${p.feats.map(f=>`<li class="${f[1]?'':'no'}">${f[1]?ICON.check:ICON.x}<span>${f[0]}</span></li>`).join('')}</ul>
      <div class="pbtn">${plano===p.id?'<button class="btn" style="width:100%" disabled>Seu plano atual</button>':`<button class="btn ${p.feat?'primary':''}" style="width:100%" onclick="assinar('${p.id}')">${p.cta}</button>`}</div>
    </div>`).join('');

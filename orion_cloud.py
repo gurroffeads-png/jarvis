@@ -114,6 +114,9 @@ def init_db():
             origem TEXT DEFAULT 'local', criado TEXT)""")
         c.execute(f"""CREATE TABLE IF NOT EXISTS kv(
             user_id {uid_t}, k TEXT, v TEXT, PRIMARY KEY(user_id,k))""")
+        c.execute(f"""CREATE TABLE IF NOT EXISTS licencas(
+            chave TEXT PRIMARY KEY, plano TEXT, usada INTEGER DEFAULT 0,
+            user_id {uid_t}, criada TEXT, usada_em TEXT)""")
         c.commit()
 init_db()
 
@@ -282,6 +285,57 @@ def loop_noticias():
         except Exception: pass
         time.sleep(600)
 
+# ======================= PUSH ("Orion te chama") =======================
+VAPID_PUBLIC = os.environ.get("VAPID_PUBLIC", "BDbH8ACxeYEOyAaF8IqWqBSWu_dKg_LwBCRWxG8rtwE6oVwfMNhgG5BtutYhTDObRTFpeZ8mMkzPqwPJ2hmBV0Y")
+VAPID_PRIVATE = os.environ.get("VAPID_PRIVATE", "").replace("\\n", "\n")
+VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:gurroffeads@gmail.com")
+_PUSH = False; _vapid = None
+if VAPID_PRIVATE:
+    try:
+        from pywebpush import webpush, WebPushException
+        from py_vapid import Vapid01
+        _vapid = Vapid01.from_pem(VAPID_PRIVATE.encode())
+        _PUSH = True
+    except Exception as e:
+        print("[push] desativado:", e)
+
+def push_subs_get(uid): return get_blob(uid, "push_subs", [])
+def push_subs_add(uid, sub):
+    if not (sub and sub.get("endpoint")): return
+    subs = push_subs_get(uid)
+    if sub["endpoint"] not in {s.get("endpoint") for s in subs}:
+        subs.append(sub); set_blob(uid, "push_subs", subs)
+def notificar(uid, titulo, corpo, url="/"):
+    if not _PUSH: return
+    subs = push_subs_get(uid); vivos = []
+    for s in subs:
+        try:
+            webpush(subscription_info=s, data=json.dumps({"title":titulo,"body":corpo,"url":url}),
+                    vapid_private_key=_vapid, vapid_claims={"sub":VAPID_EMAIL}); vivos.append(s)
+        except WebPushException as e:
+            code = getattr(getattr(e,"response",None),"status_code",0)
+            if code not in (404,410): vivos.append(s); print("[push]", code)
+        except Exception as e:
+            vivos.append(s); print("[push]", e)
+    if len(vivos) != len(subs): set_blob(uid, "push_subs", vivos)
+def marcar_ativo(uid):
+    try: set_blob(uid, "ativo_em", time.time())
+    except Exception: pass
+def loop_reengajar():
+    while True:
+        time.sleep(3600)
+        if not _PUSH: continue
+        try:
+            with _db() as c:
+                ids = [r["id"] for r in c.execute("SELECT id FROM users").fetchall()]
+            agora = time.time()
+            for uid in ids:
+                at = get_blob(uid, "ativo_em", 0); rg = get_blob(uid, "reeng_em", 0)
+                if at and (agora-at > 2*86400) and (agora-rg > 3*86400):
+                    set_blob(uid, "reeng_em", agora)
+                    notificar(uid, "Senti sua falta, senhor", "Voltei pra te ajudar. Tem algo que eu possa adiantar pra voce?", "/")
+        except Exception as e: print("[reeng]", e)
+
 # ======================= PLANOS / LIMITES =======================
 PLANOS_PRECO = {"free":0.0, "pro":59.99, "business":109.99}
 PLANOS_NOME = {"free":"Orion Free", "pro":"Orion Pro", "business":"Orion Business"}
@@ -428,12 +482,33 @@ def lic_check(chave):
     return None
 class LIC:  # alias pra nao mexer no resto do codigo
     lic_check=staticmethod(lic_check); lic_master=staticmethod(lic_master); lic_make=staticmethod(lic_make)
+def _is_master(chave):
+    return chave in (lic_master("pro"), lic_master("business"))
+def lic_registrar(plano):
+    """Gera UMA chave de venda e registra no banco como disponivel (uso unico)."""
+    chave = lic_make(plano)
+    try:
+        with _db() as c:
+            c.execute("INSERT INTO licencas(chave,plano,usada,criada) VALUES(?,?,0,?)",
+                (chave, plano, datetime.datetime.now().strftime("%d/%m/%Y %H:%M"))); c.commit()
+    except Exception as e:
+        print("[lic_registrar]", e)
+    return chave
 def lic_ativar(u, chave):
-    pl = LIC.lic_check(chave)
-    if pl:
-        with _db() as c: c.execute("UPDATE users SET plano=? WHERE id=?", (pl, u["id"])); c.commit()
-        return {"ok":True,"plano":pl,"user":_pub(get_user(u["id"]))}
-    return {"ok":False,"erro":"Chave invalida, senhor."}
+    chave = (chave or "").strip().upper().replace(" ", "")
+    pl = lic_check(chave)
+    if not pl: return {"ok":False,"erro":"Chave invalida, senhor. Confira se copiou ela inteira."}
+    if _is_master(chave):                      # chave master do dono: ilimitada
+        if _set_plano(u["id"], pl): return {"ok":True,"plano":pl,"user":_pub(get_user(u["id"]))}
+        return {"ok":False,"erro":"Nao consegui ativar agora."}
+    with _db() as c:                            # chave de venda: uso unico
+        row = c.execute("SELECT * FROM licencas WHERE chave=?", (chave,)).fetchone()
+        if not row: return {"ok":False,"erro":"Chave nao reconhecida. Gere pelo painel, senhor."}
+        if row["usada"]: return {"ok":False,"erro":"Essa chave ja foi usada, senhor."}
+        c.execute("UPDATE licencas SET usada=1, user_id=?, usada_em=? WHERE chave=?",
+            (u["id"], datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), chave)); c.commit()
+    if _set_plano(u["id"], pl): return {"ok":True,"plano":pl,"user":_pub(get_user(u["id"]))}
+    return {"ok":False,"erro":"Nao consegui ativar agora."}
 
 # ======================= PAGAMENTO (server-side) =======================
 def base_url(handler):
@@ -452,7 +527,7 @@ def checkout(u, plano, provedor, burl):
             body = {"items":[{"title":PLANOS_NOME[plano],"quantity":1,"unit_price":PLANOS_PRECO[plano],"currency_id":"BRL"}],
                     "external_reference":f"{plano}:{u['id']}",
                     "back_urls":{"success":f"{burl}/?pago={plano}","failure":f"{burl}/?pago=falhou"}}
-            if burl.startswith("https"): body["auto_return"] = "approved"   # MP so aceita auto_return com https
+            if burl.startswith("https"): body["auto_return"]="approved"; body["notification_url"]=f"{burl}/pagamento/webhook"  # MP: auto_return + webhook so com https
             req = urllib.request.Request("https://api.mercadopago.com/checkout/preferences", data=json.dumps(body).encode(),
                 headers={"Authorization":f"Bearer {mp_token()}","Content-Type":"application/json"})
             r = json.loads(urllib.request.urlopen(req,timeout=15).read().decode())
@@ -474,6 +549,66 @@ def checkout(u, plano, provedor, burl):
             if link: return {"ok":True,"url":link}
         except Exception as e: return {"ok":False,"msg":f"Erro PayPal: {e}"}
     return {"ok":False,"msg":"Pagamento nao configurado no servidor. Ou use uma chave de ativacao em Planos."}
+
+def _set_plano(uid, plano):
+    if plano not in ("pro","business"): return False
+    try:
+        with _db() as c: c.execute("UPDATE users SET plano=? WHERE id=?", (plano, int(uid))); c.commit()
+        return True
+    except Exception as e:
+        print("[set_plano]", e); return False
+
+def _pp_token(cid, sec, mode):
+    base = "https://api-m.paypal.com" if mode=="live" else "https://api-m.sandbox.paypal.com"
+    auth = base64.b64encode(f"{cid}:{sec}".encode()).decode()
+    tok = json.loads(urllib.request.urlopen(urllib.request.Request(base+"/v1/oauth2/token",
+        data=b"grant_type=client_credentials",
+        headers={"Authorization":f"Basic {auth}","Content-Type":"application/x-www-form-urlencoded","User-Agent":"Mozilla/5.0"}),timeout=20).read())["access_token"]
+    return base, tok
+
+def confirmar_pagamento(pid, provedor):
+    """Verifica o pagamento de VERDADE e sobe o plano do COMPRADOR (o uid vem do proprio pagamento, nao do cliente)."""
+    if not pid: return {"ok":False,"erro":"Sem identificador de pagamento."}
+    try:
+        if provedor == "paypal":
+            cid,sec,mode = pp_creds()
+            if not cid: return {"ok":False,"erro":"PayPal nao configurado."}
+            base,tok = _pp_token(cid,sec,mode)
+            r = json.loads(urllib.request.urlopen(urllib.request.Request(base+f"/v2/checkout/orders/{pid}/capture",
+                data=b"{}", headers={"Authorization":f"Bearer {tok}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"}),timeout=25).read())
+            cust = ""
+            try:
+                pu = (r.get("purchase_units") or [{}])[0]
+                cust = pu.get("custom_id") or pu.get("payments",{}).get("captures",[{}])[0].get("custom_id","")
+            except Exception: cust = ""
+            if r.get("status") == "COMPLETED" and ":" in cust:
+                plano,uid = cust.split(":",1)
+                if _set_plano(uid, plano): return {"ok":True,"plano":plano,"user":_pub(get_user(int(uid)))}
+            return {"ok":False,"erro":f"Pagamento PayPal nao confirmado ({r.get('status')})."}
+        else:  # mercado pago
+            if not mp_token(): return {"ok":False,"erro":"Mercado Pago nao configurado."}
+            r = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.mercadopago.com/v1/payments/"+str(pid),
+                headers={"Authorization":f"Bearer {mp_token()}","User-Agent":"Mozilla/5.0"}),timeout=20).read())
+            ext = r.get("external_reference") or ""
+            if r.get("status") == "approved" and ":" in ext:
+                plano,uid = ext.split(":",1)
+                if _set_plano(uid, plano): return {"ok":True,"plano":plano,"user":_pub(get_user(int(uid)))}
+            return {"ok":False,"erro":f"Pagamento ainda nao aprovado ({r.get('status')})."}
+    except urllib.error.HTTPError as e:
+        print("[confirmar]", e.code); return {"ok":False,"erro":f"Erro ao confirmar ({e.code})."}
+    except Exception as e:
+        print("[confirmar]", e); return {"ok":False,"erro":f"Erro ao confirmar: {e}"}
+
+def mp_webhook(pid):
+    """Backup: o MP notifica e a gente sobe o plano (idempotente)."""
+    try:
+        if pid and mp_token():
+            r = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.mercadopago.com/v1/payments/"+str(pid),
+                headers={"Authorization":f"Bearer {mp_token()}","User-Agent":"Mozilla/5.0"}),timeout=15).read())
+            ext = r.get("external_reference") or ""
+            if r.get("status") == "approved" and ":" in ext:
+                plano,uid = ext.split(":",1); _set_plano(uid, plano)
+    except Exception as e: print("[mp-webhook]", e)
 
 # ======================= VISAO (Groq, le grafico/foto) =======================
 def cloud_vision(b64, instr, max_tokens=600):
@@ -685,12 +820,23 @@ class H(BaseHTTPRequestHandler):
                 "background_color":"#0a0c11","theme_color":"#0a0c11","lang":"pt-BR",
                 "icons":[{"src":"/icon","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}),200,"application/manifest+json")
         elif path == "/sw.js":
-            self._send("self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>self.clients.claim());",200,"application/javascript")
+            self._send(
+                "self.addEventListener('install',e=>self.skipWaiting());"
+                "self.addEventListener('activate',e=>self.clients.claim());"
+                "self.addEventListener('push',function(e){var d={};try{d=e.data.json()}catch(_){d={title:'Orion',body:(e.data&&e.data.text())||''}}"
+                "e.waitUntil(self.registration.showNotification(d.title||'Orion',{body:d.body||'',icon:'/icon',badge:'/icon',data:{url:d.url||'/'}}));});"
+                "self.addEventListener('notificationclick',function(e){e.notification.close();"
+                "e.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(function(cl){for(var i=0;i<cl.length;i++){if('focus' in cl[i])return cl[i].focus();}if(clients.openWindow)return clients.openWindow((e.notification.data&&e.notification.data.url)||'/');}));});",
+                200,"application/javascript")
         elif path == "/.well-known/assetlinks.json":
             # necessario pro APK (TWA) verificar que o site e seu. Cole o JSON do PWABuilder na env ASSETLINKS_JSON.
             self._send(os.environ.get("ASSETLINKS_JSON", "[]"), 200, "application/json")
         elif path == "/auth/google": self._google_start()
         elif path == "/auth/google/callback": self._google_callback()
+        elif path == "/pagamento/webhook":
+            qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
+            mp_webhook((qs.get("data.id") or qs.get("id") or [None])[0]); self._send({"ok":True})
+        elif path == "/push/key": self._send({"key":VAPID_PUBLIC, "on":_PUSH})
         elif path == "/estado":
             self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
         elif path == "/usuarios":
@@ -797,11 +943,15 @@ class H(BaseHTTPRequestHandler):
             if not frase: self._send({"ok":False}); return
             pode = uso_pode(u, "msg")
             if not pode["ok"]: self._send({"ok":True,"reply":pode["motivo"]+" Abra os Planos pra liberar tudo."}); return
-            uso_reg(u, "msg")
+            uso_reg(u, "msg"); marcar_ativo(u["id"])
             trat = (u["tratamento"] or "").strip()
             hoje = datetime.date.today().strftime("%d/%m/%Y")
-            sysp = (PERSONA + f" Hoje e {hoje}." + (f" Trate o usuario como '{trat}'." if trat else "")
-                    + " Voce tem a ferramenta buscar_web: use-a para qualquer pergunta sobre fatos atuais, noticias, precos ou coisas que nao saiba, e cite a fonte.")
+            fl = frase.lower(); extra = ""
+            if _NOTICIAS and any(w in fl for w in ("noticia","notícia","mercado","acontec","manchete","jornal","economia","hoje")):
+                extra = (" MANCHETES REAIS DE HOJE (resuma a partir DESTAS, NAO diga que nao achou): "
+                         + " || ".join(f"[{c}] {t}" for c,t in _NOTICIAS[:10]) + ".")
+            sysp = (PERSONA + f" Hoje e {hoje}." + (f" Trate o usuario como '{trat}'." if trat else "") + extra
+                    + " Seja capaz, util e direto. Para fatos atuais, precos, eventos ou o que nao souber, USE a ferramenta buscar_web e cite a fonte. Nunca invente numeros. Se houver manchetes acima, resuma a partir delas.")
             hist = get_blob(u["id"], "hist", [])[-8:]
             reply = cloud_chat_web(sysp, hist + [{"role":"user","content":frase}])
             hist = (hist + [{"role":"user","content":frase},{"role":"assistant","content":reply}])[-12:]
@@ -843,12 +993,22 @@ class H(BaseHTTPRequestHandler):
             self._send(lic_ativar(u, d.get("chave")) if u else {"ok":False,"erro":"faca login"})
         elif path == "/licenca/gerar":
             if u and u["criador"] and (d.get("plano") in ("pro","business")):
-                self._send({"ok":True,"plano":d["plano"],"chave":LIC.lic_make(d["plano"])})
+                self._send({"ok":True,"plano":d["plano"],"chave":lic_registrar(d["plano"])})
             else: self._send({"ok":False,"erro":"so o dono gera chaves"})
         elif path == "/pagamento/checkout":
             self._send(checkout(u, d.get("plano","pro"), d.get("provedor"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
         elif path == "/pagamento/confirmar":
-            self._send({"ok":False,"erro":"Confirmacao automatica via webhook (configure depois)."})
+            self._send(confirmar_pagamento(d.get("payment_id"), d.get("provedor")) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/pagamento/webhook":
+            qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
+            pid = (d.get("data") or {}).get("id") or (qs.get("data.id") or qs.get("id") or [None])[0]
+            mp_webhook(pid); self._send({"ok":True})
+        elif path == "/push/subscribe":
+            if u: push_subs_add(u["id"], d.get("sub") or {}); self._send({"ok":True})
+            else: self._send({"ok":False,"erro":"faca login"})
+        elif path == "/push/teste":
+            if u: notificar(u["id"], "Orion", "Funcionou, senhor. Vou te chamar quando precisar."); self._send({"ok":True,"on":_PUSH})
+            else: self._send({"ok":False})
         elif path == "/pagamento/testar":
             self._send({"mercadopago":{"ok":bool(mp_token())},"paypal":{"ok":bool(pp_creds()[0]),"modo":pp_creds()[2]}} if (u and u["criador"]) else {"erro":"sem permissao"})
         elif path == "/admin/plano":
@@ -867,6 +1027,7 @@ class H(BaseHTTPRequestHandler):
 def main():
     print(f"[orion-cloud] porta {PORT} | cerebro: {'configurado ('+LLM_MODEL+')' if LLM_KEY else 'NAO configurado (defina LLM_API_KEY)'} | db: {DB_PATH}")
     threading.Thread(target=loop_noticias, daemon=True).start()
+    threading.Thread(target=loop_reengajar, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
 
 if __name__ == "__main__":
