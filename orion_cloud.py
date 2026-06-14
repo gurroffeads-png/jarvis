@@ -117,6 +117,13 @@ def init_db():
         c.execute(f"""CREATE TABLE IF NOT EXISTS licencas(
             chave TEXT PRIMARY KEY, plano TEXT, usada INTEGER DEFAULT 0,
             user_id {uid_t}, criada TEXT, usada_em TEXT)""")
+        c.execute(f"""CREATE TABLE IF NOT EXISTS assinaturas(
+            id {pk}, user_id {uid_t}, plano TEXT, provedor TEXT, ext_id TEXT,
+            fase TEXT, valor_atual REAL, criada_em REAL, promo_ate_em REAL,
+            bumped INTEGER DEFAULT 0, ativa INTEGER DEFAULT 1)""")
+        c.execute(f"""CREATE TABLE IF NOT EXISTS tarefas(
+            id {pk}, user_id {uid_t}, pedido TEXT, status TEXT,
+            resultado TEXT, criada_em REAL, terminada_em REAL)""")
         c.commit()
 init_db()
 
@@ -599,16 +606,138 @@ def confirmar_pagamento(pid, provedor):
     except Exception as e:
         print("[confirmar]", e); return {"ok":False,"erro":f"Erro ao confirmar: {e}"}
 
-def mp_webhook(pid):
-    """Backup: o MP notifica e a gente sobe o plano (idempotente)."""
+# ======================= ASSINATURA RECORRENTE (Mercado Pago) =======================
+# Pro tem promo: 29,99/mes nos 3 primeiros meses, depois 59,99. Implementado com PATCH
+# em preapproval do MP apos 90 dias (loop_assinaturas).
+PROMO_DIAS = 90
+PROMO_PRO = 29.99
+def _mp_req(method, path, body=None, timeout=20):
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request("https://api.mercadopago.com"+path, data=data, method=method,
+        headers={"Authorization":f"Bearer {mp_token()}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
+    return json.loads(urllib.request.urlopen(req,timeout=timeout).read().decode() or "{}")
+def criar_assinatura(u, plano, burl):
+    if not mp_token(): return {"ok":False,"msg":"Mercado Pago nao configurado."}
+    plano = (plano or "pro").lower()
+    if plano not in ("pro","business"): return {"ok":False,"msg":"Plano invalido."}
+    valor = PROMO_PRO if plano=="pro" else PLANOS_PRECO[plano]
+    body = {"reason": PLANOS_NOME[plano] + (" (promo R$29,99 nos 3 primeiros meses)" if plano=="pro" else ""),
+            "external_reference": f"sub:{plano}:{u['id']}",
+            "payer_email": (u["email"] or ""),
+            "back_url": burl + f"/?pago={plano}&sub=1",
+            "auto_recurring": {"frequency":1, "frequency_type":"months",
+                                "transaction_amount": float(valor), "currency_id":"BRL"},
+            "status":"pending",
+            "notification_url": f"{burl}/pagamento/webhook"}
+    if not body["payer_email"]: body.pop("payer_email")
     try:
-        if pid and mp_token():
-            r = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.mercadopago.com/v1/payments/"+str(pid),
-                headers={"Authorization":f"Bearer {mp_token()}","User-Agent":"Mozilla/5.0"}),timeout=15).read())
+        r = _mp_req("POST", "/preapproval", body)
+        url = r.get("init_point") or r.get("sandbox_init_point")
+        ext = r.get("id")
+        if not (url and ext): return {"ok":False,"msg":f"MP nao retornou link ({r.get('message') or r})"}
+        agora = time.time()
+        with _db() as c:
+            c.execute("INSERT INTO assinaturas(user_id,plano,provedor,ext_id,fase,valor_atual,criada_em,promo_ate_em,bumped,ativa) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (u["id"], plano, "mp", ext,
+                 "promo" if plano=="pro" else "regular",
+                 float(valor), agora,
+                 (agora + PROMO_DIAS*86400) if plano=="pro" else 0, 0, 1)); c.commit()
+        return {"ok":True, "url": url, "sub_id": ext}
+    except urllib.error.HTTPError as e:
+        return {"ok":False,"msg":f"Erro MP ({e.code}): {e.read()[:200].decode('utf-8','ignore')}"}
+    except Exception as e:
+        return {"ok":False,"msg":f"Erro MP: {e}"}
+
+def cancelar_assinatura(u):
+    if not mp_token(): return {"ok":False,"erro":"MP nao configurado"}
+    with _db() as c:
+        rows = c.execute("SELECT * FROM assinaturas WHERE user_id=? AND ativa=1", (u["id"],)).fetchall()
+    cancelei = 0
+    for r in rows:
+        try: _mp_req("PUT", f"/preapproval/{r['ext_id']}", {"status":"cancelled"}); cancelei += 1
+        except Exception as e: print("[cancel sub]", e)
+        with _db() as c:
+            c.execute("UPDATE assinaturas SET ativa=0 WHERE id=?", (r["id"],)); c.commit()
+    return {"ok":True, "canceladas": cancelei}
+
+def loop_assinaturas():
+    while True:
+        time.sleep(3600)  # 1x por hora
+        if not mp_token(): continue
+        try:
+            with _db() as c:
+                rows = c.execute("SELECT * FROM assinaturas WHERE provedor='mp' AND ativa=1 AND fase='promo' AND bumped=0").fetchall()
+            agora = time.time()
+            for r in rows:
+                if (r["promo_ate_em"] or 0) > 0 and agora >= r["promo_ate_em"]:
+                    try:
+                        _mp_req("PUT", f"/preapproval/{r['ext_id']}",
+                            {"auto_recurring": {"transaction_amount": PLANOS_PRECO["pro"], "currency_id":"BRL"}})
+                        with _db() as c:
+                            c.execute("UPDATE assinaturas SET bumped=1, fase='regular', valor_atual=? WHERE id=?",
+                                (PLANOS_PRECO["pro"], r["id"])); c.commit()
+                        notificar(r["user_id"], "Promo Pro encerrada",
+                                  f"Acabaram os 3 meses promocionais, senhor. A partir de agora a mensalidade volta pra R$ {PLANOS_PRECO['pro']:.2f}.", "/")
+                    except Exception as e: print("[bump sub]", e)
+        except Exception as e: print("[loop sub]", e)
+
+# ======================= TAREFAS EM SEGUNDO PLANO =======================
+def _tarefa_executar(tid, uid, pedido):
+    try:
+        nome = (get_user(uid)["tratamento"] if get_user(uid) else "") or ""
+        sysp = (PERSONA + (f" Trate o usuario como '{nome}'." if nome else "")
+                + " Voce esta executando uma tarefa que o usuario delegou. Entregue o RESULTADO COMPLETO, pronto pra usar.")
+        out = cloud_chat_web(sysp, [{"role":"user","content":pedido}], 1100)
+        with _db() as c:
+            c.execute("UPDATE tarefas SET status='pronto', resultado=?, terminada_em=? WHERE id=?",
+                (out or "(sem resposta)", time.time(), tid)); c.commit()
+        notificar(uid, "Tarefa pronta", (pedido[:60] + ("..." if len(pedido)>60 else "")), "/?ir=tarefas")
+    except Exception as e:
+        print("[tarefa]", e)
+        with _db() as c:
+            c.execute("UPDATE tarefas SET status='erro', resultado=? WHERE id=?", (str(e), tid)); c.commit()
+
+def tarefa_criar(u, pedido):
+    pedido = (pedido or "").strip()
+    if len(pedido) < 5: return {"ok":False,"erro":"Descreva o que precisa, senhor."}
+    with _db() as c:
+        cur = c.execute("INSERT INTO tarefas(user_id,pedido,status,criada_em) VALUES(?,?,?,?)",
+            (u["id"], pedido, "rodando", time.time())); c.commit(); tid = cur.lastrowid
+    threading.Thread(target=_tarefa_executar, args=(tid, u["id"], pedido), daemon=True).start()
+    return {"ok":True, "id": tid}
+
+def tarefa_listar(u):
+    with _db() as c:
+        rows = c.execute("SELECT id,pedido,status,resultado,criada_em,terminada_em FROM tarefas WHERE user_id=? ORDER BY id DESC LIMIT 30",
+            (u["id"],)).fetchall()
+    return {"ok":True, "tarefas":[dict(r) for r in rows]}
+
+def mp_webhook(pid, topic=""):
+    """Backup: o MP notifica e a gente sobe o plano (idempotente).
+    topic pode ser 'payment', 'preapproval', 'subscription_preapproval', 'subscription_authorized_payment'."""
+    if not (pid and mp_token()): return
+    topic = (topic or "").lower()
+    paths = []
+    if "preapproval" in topic and "authorized" not in topic: paths = [f"/preapproval/{pid}"]
+    elif "authorized" in topic: paths = [f"/authorized_payments/{pid}", f"/preapproval/{pid}"]
+    elif topic == "payment" or not topic: paths = [f"/v1/payments/{pid}", f"/preapproval/{pid}"]
+    else: paths = [f"/v1/payments/{pid}", f"/preapproval/{pid}"]
+    for p in paths:
+        try:
+            r = _mp_req("GET", p, timeout=15)
             ext = r.get("external_reference") or ""
-            if r.get("status") == "approved" and ":" in ext:
-                plano,uid = ext.split(":",1); _set_plano(uid, plano)
-    except Exception as e: print("[mp-webhook]", e)
+            status = (r.get("status") or "").lower()
+            ok = status in ("approved","authorized","active")
+            if not (ok and ":" in ext): continue
+            parts = ext.split(":")
+            if parts[0] == "sub" and len(parts) >= 3:
+                plano, uid = parts[1], parts[2]
+                if _set_plano(uid, plano):
+                    notificar(int(uid), "Pagamento confirmado", f"Plano {PLANOS_NOME.get(plano,plano).upper()} ativo, senhor.")
+            elif len(parts) >= 2:
+                plano, uid = parts[0], parts[1]; _set_plano(uid, plano)
+            return
+        except Exception as e: print("[mp-webhook]", p, e)
 
 # ======================= VISAO (Groq, le grafico/foto) =======================
 def cloud_vision(b64, instr, max_tokens=600):
@@ -835,8 +964,10 @@ class H(BaseHTTPRequestHandler):
         elif path == "/auth/google/callback": self._google_callback()
         elif path == "/pagamento/webhook":
             qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
-            mp_webhook((qs.get("data.id") or qs.get("id") or [None])[0]); self._send({"ok":True})
+            mp_webhook((qs.get("data.id") or qs.get("id") or [None])[0],
+                       (qs.get("topic") or qs.get("type") or [""])[0]); self._send({"ok":True})
         elif path == "/push/key": self._send({"key":VAPID_PUBLIC, "on":_PUSH})
+        elif path == "/tarefas": self._send(tarefa_listar(u) if u else {"ok":False,"erro":"faca login"})
         elif path == "/estado":
             self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
         elif path == "/usuarios":
@@ -997,12 +1128,19 @@ class H(BaseHTTPRequestHandler):
             else: self._send({"ok":False,"erro":"so o dono gera chaves"})
         elif path == "/pagamento/checkout":
             self._send(checkout(u, d.get("plano","pro"), d.get("provedor"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
+        elif path == "/pagamento/assinar":
+            self._send(criar_assinatura(u, d.get("plano","pro"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
+        elif path == "/pagamento/cancelar":
+            self._send(cancelar_assinatura(u) if u else {"ok":False,"erro":"faca login"})
         elif path == "/pagamento/confirmar":
             self._send(confirmar_pagamento(d.get("payment_id"), d.get("provedor")) if u else {"ok":False,"erro":"faca login"})
         elif path == "/pagamento/webhook":
             qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
             pid = (d.get("data") or {}).get("id") or (qs.get("data.id") or qs.get("id") or [None])[0]
-            mp_webhook(pid); self._send({"ok":True})
+            topic = d.get("type") or d.get("topic") or (qs.get("topic") or qs.get("type") or [""])[0]
+            mp_webhook(pid, topic); self._send({"ok":True})
+        elif path == "/tarefa/criar":
+            self._send(tarefa_criar(u, d.get("pedido","")) if u else {"ok":False,"erro":"faca login"})
         elif path == "/push/subscribe":
             if u: push_subs_add(u["id"], d.get("sub") or {}); self._send({"ok":True})
             else: self._send({"ok":False,"erro":"faca login"})
@@ -1028,6 +1166,7 @@ def main():
     print(f"[orion-cloud] porta {PORT} | cerebro: {'configurado ('+LLM_MODEL+')' if LLM_KEY else 'NAO configurado (defina LLM_API_KEY)'} | db: {DB_PATH}")
     threading.Thread(target=loop_noticias, daemon=True).start()
     threading.Thread(target=loop_reengajar, daemon=True).start()
+    threading.Thread(target=loop_assinaturas, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
 
 if __name__ == "__main__":

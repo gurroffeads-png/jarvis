@@ -472,7 +472,7 @@ button{font-family:inherit;cursor:pointer}
 
   <!-- TAREFAS -->
   <section class="view" id="viewTarefas"><div class="page">
-    <h1>Tarefas & Agenda</h1><div class="sub">Suas tarefas, lembretes e compromissos em um lugar so.</div>
+    <h1>Tarefas</h1><div class="sub">Delegue, feche o app e receba quando ficar pronto. O Orion roda em segundo plano e te avisa.</div>
     <div id="tarefasArea"></div>
   </div></section>
 
@@ -1618,10 +1618,12 @@ async function ativarChave(){
 async function assinar(id){
   if(id==='free'){ alert('Voce ja pode usar o plano Free agora mesmo.'); return; }
   try{
-    const j=await (await fetch('/pagamento/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plano:id})})).json();
-    if(j.url){ window.open(j.url,'_blank'); }
-    else alert(j.msg||'Checkout em configuracao. Em breve via Mercado Pago.');
-  }catch(e){ alert('Checkout em configuracao. Em breve via Mercado Pago.'); }
+    const j=await (await fetch('/pagamento/assinar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plano:id})})).json();
+    if(j.ok && j.url){ window.open(j.url,'_blank'); return; }
+    // fallback: pagamento avulso
+    const j2=await (await fetch('/pagamento/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plano:id})})).json();
+    if(j2.url) window.open(j2.url,'_blank'); else alert(j.msg||j2.msg||'Checkout indisponivel agora.');
+  }catch(e){ alert('Sem conexao. Tente de novo em alguns segundos.'); }
 }
 
 // ===================== DOCS / ROTINA / TAREFAS (scaffold) =====================
@@ -1704,13 +1706,60 @@ async function rotManual(){ const nome=prompt('Nome da rotina:'); if(!nome) retu
   const itens=prompt('Itens separados por virgula:');
   await fetch('/rotina',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'criar',nome,itens:(itens||'').split(',')})}); piscarSave('ROTINA'); renderRotina(); }
 
-function renderTarefas(){ document.getElementById('tarefasArea').innerHTML=soon('Suas tarefas, lembretes e compromissos. Por enquanto, peca no chat: "lembra de me alongar as 18h".'); }
+let _tfPoll=null;
+async function renderTarefas(){
+  document.getElementById('tarefasArea').innerHTML=`
+    <div class="card"><h3>Delegar uma tarefa</h3>
+      <div class="hint" style="margin-bottom:10px">Descreva o que precisa. O Orion executa em segundo plano e te chama quando ficar pronto (ative as notificacoes em Configuracoes).</div>
+      <div class="field"><textarea id="tfPedido" rows="3" placeholder="ex: pesquise os 5 maiores ganhos do Ibovespa hoje e me traga um resumo com link das fontes"></textarea></div>
+      <div class="row"><button class="btn primary" onclick="tfCriar()">Delegar pro Orion</button></div>
+      <div id="tfMsg" class="hint" style="margin-top:8px"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Minhas tarefas</h3><div id="tfLista"></div></div>`;
+  await tfRender();
+  if(_tfPoll) clearInterval(_tfPoll);
+  _tfPoll=setInterval(()=>{ if(VIEW==='tarefas') tfRender(); else { clearInterval(_tfPoll); _tfPoll=null; } }, 5000);
+}
+async function tfCriar(){
+  const ta=document.getElementById('tfPedido'); const m=document.getElementById('tfMsg');
+  const p=(ta.value||'').trim();
+  if(p.length<5){ m.style.color='var(--warn)'; m.textContent='Descreva o que precisa, senhor.'; return; }
+  m.style.color=''; m.textContent='Enviando...';
+  try{ const r=await (await fetch('/tarefa/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pedido:p})})).json();
+    if(r.ok){ ta.value=''; m.style.color='var(--good)'; m.textContent='Tarefa #'+r.id+' rodando. Pode fechar o app que eu te chamo, senhor.'; tfRender(); }
+    else { m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui criar.'; }
+  }catch(e){ m.style.color='var(--warn)'; m.textContent='Sem conexao.'; }
+}
+async function tfRender(){
+  const box=document.getElementById('tfLista'); if(!box) return;
+  let r={tarefas:[]}; try{ r=await (await fetch('/tarefas')).json(); }catch(e){}
+  const lst=r.tarefas||[];
+  if(!lst.length){ box.innerHTML='<div class="hint">Nenhuma tarefa ainda. Delegue uma acima.</div>'; return; }
+  box.innerHTML=lst.map(t=>{
+    const cor=t.status==='pronto'?'var(--good)':(t.status==='erro'?'var(--bad)':'var(--accent)');
+    const txt=t.status==='pronto'?'PRONTA':(t.status==='erro'?'ERRO':'RODANDO');
+    return `<div style="border:1px solid var(--line2);border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:800;color:${cor}">${txt}</span>
+        <span class="hint" style="font-size:11px">#${t.id}</span>
+      </div>
+      <div style="font-size:13.5px;margin-bottom:8px">${esc(t.pedido)}</div>
+      ${t.resultado?`<div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13.5px;line-height:1.5;white-space:pre-wrap">${esc(t.resultado)}</div>`:'<div class="hint">Aguarde, o Orion esta trabalhando...</div>'}
+    </div>`;
+  }).join('');
+}
 
 // ===================== AUTH =====================
+function _perfLocais(){ try{ return JSON.parse(localStorage.getItem('orion_perfis_aparelho')||'[]'); }catch(e){ return []; } }
+function _salvaPerfLocal(u){ if(!u || !u.id || u.convidado) return;
+  const perfis=_perfLocais().filter(p=>p.id!==u.id);
+  perfis.unshift({id:u.id,nome:u.nome,email:u.email||'',foto:u.foto||'',origem:u.origem||'local',plano:u.plano||'free',tem_senha:true});
+  localStorage.setItem('orion_perfis_aparelho', JSON.stringify(perfis.slice(0,5))); }
+function _removePerfLocal(id){ localStorage.setItem('orion_perfis_aparelho', JSON.stringify(_perfLocais().filter(p=>p.id!==id))); }
 async function authCheck(){
   try{ const j=await (await fetch('/usuarios')).json();
-    if(j.ativo){ USER=j.ativo; aplicaUser(); document.getElementById('authModal').classList.remove('show'); return; }
-    authMostrarLogin(j.lista||[]);
+    if(j.ativo){ USER=j.ativo; _salvaPerfLocal(USER); aplicaUser(); document.getElementById('authModal').classList.remove('show'); return; }
+    authMostrarLogin(_perfLocais());   // SO os perfis deste aparelho, NUNCA do banco
   }catch(e){}
 }
 let AUTH_SEL=null, PERFIS=[];
@@ -1743,9 +1792,9 @@ function renderAccRows(){
     box.appendChild(row); });
 }
 async function removerConta(p){
-  if(!confirm('Remover a conta "'+p.nome+'" deste aparelho? Isso apaga o perfil local.')) return;
-  await fetch('/usuario/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id})});
-  const j=await (await fetch('/usuarios')).json(); authMostrarLogin(j.lista||[]);
+  if(!confirm('Tirar a conta "'+p.nome+'" deste aparelho? A conta NAO sera apagada, voce so deixa de ve-la aqui ate entrar de novo.')) return;
+  _removePerfLocal(p.id);
+  authMostrarLogin(_perfLocais());
 }
 function abrirAuth(aba){ document.getElementById('authModal').classList.add('show');
   document.getElementById('authChooser').style.display='none'; document.getElementById('authForm').style.display='block';
@@ -1794,7 +1843,7 @@ async function authCriar(){ const nome=document.getElementById('authNome').value
 }
 async function authConvidado(){ const r=await (await fetch('/usuario/convidado',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:'Convidado'})})).json();
   if(r.ok) entrou(r.user); }
-function entrou(u){ USER=u; aplicaUser(); document.getElementById('authModal').classList.remove('show'); piscarSave('BEM VINDO'); go('home'); }
+function entrou(u){ USER=u; _salvaPerfLocal(u); aplicaUser(); document.getElementById('authModal').classList.remove('show'); piscarSave('BEM VINDO'); go('home'); }
 
 // ===================== SAVE TOAST =====================
 let _sv=null;
