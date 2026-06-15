@@ -924,6 +924,35 @@ def cl_trading_analise_img(img):
             if u.startswith(ch) and ":" in ln: campos[ch]=ln.split(":",1)[1].strip()
     return {"ok":True,"texto":txt,"campos":campos}
 
+# ======================= ASSETLINKS (TWA, APK em tela cheia) =======================
+# Mantemos a lista de fingerprints aceitos AQUI (cada vez que voce gera um APK novo no
+# PWABuilder, um novo fingerprint nasce). Adicionar abaixo OU via env `ASSETLINKS_JSON`
+# (que pode ser um array de fingerprints separados por virgula, OU o JSON completo).
+TWA_PACKAGE = "com.onrender.orion_l89a.twa"
+TWA_FINGERPRINTS = [
+    "1F:A9:20:B5:F4:62:5C:F6:08:D6:42:27:46:91:83:E9:FB:60:F9:9E:E0:36:F3:FC:5C:BC:DF:21:FD:E2:60:74",  # APK regerado (PWABuilder, set/2026)
+    "67:74:A3:2B:1F:3B:5B:AC:81:CD:66:CE:EF:4C:E0:D4:67:DD:86:AD:7E:E7:F4:1B:60:1B:E7:83:F5:F5:EB:88",  # APK original (PWABuilder, primeira gera)
+]
+def _assetlinks_atual():
+    fps = set(f.strip().upper() for f in TWA_FINGERPRINTS if f.strip())
+    raw = (os.environ.get("ASSETLINKS_JSON") or "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                for stmt in parsed:
+                    tgt = (stmt or {}).get("target") or {}
+                    for fp in (tgt.get("sha256_cert_fingerprints") or []):
+                        if isinstance(fp, str) and fp.strip(): fps.add(fp.strip().upper())
+        except Exception:
+            # tambem aceita lista de fingerprints separados por virgula
+            for fp in raw.replace(";", ",").split(","):
+                if fp.strip(): fps.add(fp.strip().upper())
+    out = [{"relation":["delegate_permission/common.handle_all_urls"],
+            "target":{"namespace":"android_app","package_name":TWA_PACKAGE,
+                      "sha256_cert_fingerprints":sorted(fps)}}]
+    return json.dumps(out)
+
 # ======================= HTTP =======================
 ASSET_TYPES = {".png":"image/png",".ico":"image/x-icon",".svg":"image/svg+xml",".jpg":"image/jpeg"}
 def _asset(*names):
@@ -1026,8 +1055,7 @@ class H(BaseHTTPRequestHandler):
                 "e.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(function(cl){for(var i=0;i<cl.length;i++){if('focus' in cl[i])return cl[i].focus();}if(clients.openWindow)return clients.openWindow((e.notification.data&&e.notification.data.url)||'/');}));});",
                 200,"application/javascript")
         elif path == "/.well-known/assetlinks.json":
-            # necessario pro APK (TWA) verificar que o site e seu. Cole o JSON do PWABuilder na env ASSETLINKS_JSON.
-            self._send(os.environ.get("ASSETLINKS_JSON", "[]"), 200, "application/json")
+            self._send(_assetlinks_atual(), 200, "application/json")
         elif path == "/auth/google": self._google_start()
         elif path == "/auth/google/callback": self._google_callback()
         elif path == "/pagamento/webhook":
