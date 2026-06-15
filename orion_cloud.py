@@ -346,38 +346,79 @@ def loop_reengajar():
 # ======================= PLANOS / LIMITES =======================
 PLANOS_PRECO = {"free":0.0, "pro":59.99, "business":109.99}
 PLANOS_NOME = {"free":"Orion Free", "pro":"Orion Pro", "business":"Orion Business"}
-LIMITES = {"free":{"msgs_dia":20,"docs_mes":3}, "pro":{"msgs_dia":0,"docs_mes":0}, "business":{"msgs_dia":0,"docs_mes":0}}
+# Cotas por plano (TOKENS):
+#  semana_msgs = pool semanal (zera toda segunda)
+#  fatia_horas = janela que renova porcao "diaria" (Free: 6h; Pro/Business: 24h)
+#  fatia_msgs  = quantas mensagens cabem por fatia
+LIMITES = {
+    "free":     {"semana_msgs": 84,   "fatia_horas": 6,  "fatia_msgs": 3,    "docs_mes": 5,  "imagens_dia": 3},
+    "pro":      {"semana_msgs": 1400, "fatia_horas": 24, "fatia_msgs": 200,  "docs_mes": 0,  "imagens_dia": 30},
+    "business": {"semana_msgs": 7000, "fatia_horas": 24, "fatia_msgs": 1000, "docs_mes": 0,  "imagens_dia": 200},
+}
 def plano_de(u): return "business" if (u["criador"] or u["socio"]) else (u["plano"] or "free")
+def _semana_iso(): t=datetime.date.today().isocalendar(); return f"{t[0]}-W{t[1]:02d}"
+def _uso_atual(u):
+    uso = get_blob(u["id"], "uso", {})
+    sem = _semana_iso()
+    if uso.get("semana_iso") != sem:
+        uso = {"semana_iso":sem, "semana_msgs":0, "fatia_inicio":0, "fatia_msgs":0,
+               "mes": uso.get("mes",{}), "imagens": uso.get("imagens",{})}
+        set_blob(u["id"], "uso", uso)
+    return uso
 def uso_pode(u, rec="msg"):
-    lim = LIMITES.get(plano_de(u), LIMITES["free"]); uso = get_blob(u["id"], "uso", {})
+    pl = plano_de(u); lim = LIMITES.get(pl, LIMITES["free"]); uso = _uso_atual(u); agora = time.time()
     if rec == "msg":
-        cap = lim["msgs_dia"]
-        if cap <= 0: return {"ok":True,"cap":0}
-        hoje = datetime.date.today().isoformat(); usados = uso.get("dia",{}).get(hoje,0)
-        if usados >= cap: return {"ok":False,"cap":cap,"usados":usados,
-            "motivo":f"O senhor ja usou as {cap} mensagens de hoje do plano gratuito. No Pro e ilimitado."}
-        return {"ok":True,"cap":cap,"usados":usados}
+        if uso.get("semana_msgs",0) >= lim["semana_msgs"]:
+            return {"ok":False,"motivo":f"O senhor ja usou as {lim['semana_msgs']} mensagens da semana do plano {PLANOS_NOME[pl]}. Reinicia na proxima segunda. No Pro voce tem {LIMITES['pro']['semana_msgs']}/semana."}
+        fim_fatia = (uso.get("fatia_inicio",0) or 0) + lim["fatia_horas"]*3600
+        if agora >= fim_fatia:
+            return {"ok":True,"semana_usado":uso["semana_msgs"],"semana_cap":lim["semana_msgs"],"fatia_usado":0,"fatia_cap":lim["fatia_msgs"]}
+        if uso.get("fatia_msgs",0) >= lim["fatia_msgs"]:
+            falta = max(60, int(fim_fatia-agora))
+            if lim["fatia_horas"]>=24: quando = "amanha"
+            else: quando = f"em {falta//3600}h{(falta%3600)//60:02d}m"
+            return {"ok":False,"motivo":f"O senhor ja usou suas {lim['fatia_msgs']} mensagens dessa janela. Renova {quando}. (Semana: {uso['semana_msgs']}/{lim['semana_msgs']}.)"}
+        return {"ok":True,"semana_usado":uso["semana_msgs"],"semana_cap":lim["semana_msgs"],"fatia_usado":uso.get("fatia_msgs",0),"fatia_cap":lim["fatia_msgs"]}
+    if rec == "imagem":
+        hoje = datetime.date.today().isoformat()
+        usado = (uso.get("imagens",{}) or {}).get(hoje, 0)
+        cap = lim.get("imagens_dia",0)
+        if usado >= cap: return {"ok":False,"motivo":f"O senhor ja gerou {cap} imagens hoje no plano {PLANOS_NOME[pl]}. Volta amanha."}
+        return {"ok":True,"usado":usado,"cap":cap}
     if rec == "doc":
-        cap = lim["docs_mes"]
+        cap = lim.get("docs_mes",0)
         if cap <= 0: return {"ok":True,"cap":0}
-        mes = datetime.date.today().strftime("%Y-%m"); usados = uso.get("mes",{}).get(mes,{}).get("docs",0)
-        if usados >= cap: return {"ok":False,"cap":cap,"motivo":f"O plano gratuito gera {cap} documentos por mes, e o senhor ja usou."}
-        return {"ok":True,"cap":cap,"usados":usados}
+        mes = datetime.date.today().strftime("%Y-%m"); used = (uso.get("mes",{}).get(mes,{}) or {}).get("docs",0)
+        if used >= cap: return {"ok":False,"motivo":f"O senhor ja gerou {cap} documentos esse mes. Pro: ilimitado."}
+        return {"ok":True,"cap":cap,"usados":used}
     return {"ok":True}
 def uso_reg(u, rec="msg"):
-    uso = get_blob(u["id"], "uso", {}); hoje = datetime.date.today().isoformat(); mes = datetime.date.today().strftime("%Y-%m")
+    pl = plano_de(u); lim = LIMITES.get(pl, LIMITES["free"]); uso = _uso_atual(u); agora = time.time()
     if rec == "msg":
-        d = uso.setdefault("dia",{}); d[hoje] = d.get(hoje,0)+1
-        for kk in sorted(d.keys())[:-7]: d.pop(kk,None)
+        fim_fatia = (uso.get("fatia_inicio",0) or 0) + lim["fatia_horas"]*3600
+        if agora >= fim_fatia: uso["fatia_inicio"] = agora; uso["fatia_msgs"] = 0
+        uso["semana_msgs"] = uso.get("semana_msgs",0) + 1
+        uso["fatia_msgs"]  = uso.get("fatia_msgs",0)  + 1
+    elif rec == "imagem":
+        hoje = datetime.date.today().isoformat(); ims = uso.setdefault("imagens",{})
+        ims[hoje] = ims.get(hoje,0) + 1
+        for kk in sorted(ims.keys())[:-14]: ims.pop(kk,None)
     elif rec == "doc":
+        mes = datetime.date.today().strftime("%Y-%m")
         m = uso.setdefault("mes",{}).setdefault(mes,{}); m["docs"] = m.get("docs",0)+1
     set_blob(u["id"], "uso", uso)
 def uso_resumo(u):
-    lim = LIMITES.get(plano_de(u), LIMITES["free"]); uso = get_blob(u["id"], "uso", {})
-    hoje = datetime.date.today().isoformat(); mes = datetime.date.today().strftime("%Y-%m")
-    return {"plano":plano_de(u),"msgs_hoje":uso.get("dia",{}).get(hoje,0),"msgs_cap":lim["msgs_dia"],
-            "ilimitado":lim["msgs_dia"]<=0,"docs_mes":uso.get("mes",{}).get(mes,{}).get("docs",0),
-            "docs_cap":lim["docs_mes"],"docs_ilimitado":lim["docs_mes"]<=0}
+    pl = plano_de(u); lim = LIMITES.get(pl, LIMITES["free"]); uso = _uso_atual(u); agora = time.time()
+    fim_fatia = (uso.get("fatia_inicio",0) or 0) + lim["fatia_horas"]*3600
+    renova_em = max(0, int(fim_fatia-agora)) if uso.get("fatia_msgs",0)>0 else 0
+    hoje = datetime.date.today().isoformat()
+    mes = datetime.date.today().strftime("%Y-%m")
+    return {"plano":pl,"semana_msgs":uso.get("semana_msgs",0),"semana_cap":lim["semana_msgs"],
+            "fatia_msgs":uso.get("fatia_msgs",0),"fatia_cap":lim["fatia_msgs"],"fatia_horas":lim["fatia_horas"],
+            "renova_em_seg":renova_em,
+            "imagens_hoje":(uso.get("imagens",{}) or {}).get(hoje,0),"imagens_cap":lim.get("imagens_dia",0),
+            "docs_mes":(uso.get("mes",{}).get(mes,{}) or {}).get("docs",0),
+            "docs_cap":lim.get("docs_mes",0),"docs_ilimitado":lim.get("docs_mes",0)<=0}
 
 # ======================= MEMORIA (grafo por usuario) =======================
 _RAMOS = (("voce","Voce","Tudo sobre voce"),("diretrizes","Diretrizes","Como prefere que eu aja"),("mundo","Mundo","O que aprendi"))
@@ -739,6 +780,31 @@ def mp_webhook(pid, topic=""):
             return
         except Exception as e: print("[mp-webhook]", p, e)
 
+# ======================= GERACAO DE IMAGEM =======================
+# Usa pollinations.ai (livre, sem chave, qualidade Flux). Sob a hood: chama com seed + nologo.
+def _melhorar_prompt_imagem(p):
+    """Pede pro LLM melhorar o prompt em ingles, pra qualidade fotorrealista. Cai limpo se nao tiver chave."""
+    if not LLM_KEY: return p
+    sys = ("You convert user requests into rich English image prompts for an image AI. "
+           "Add lighting, composition, lens, art-style, mood. Photorealistic by default unless user asks otherwise. "
+           "Reply ONLY with the prompt (no quotes, no explanation). Keep under 60 words.")
+    try: return cloud_chat(sys, [{"role":"user","content":p}], 180) or p
+    except Exception: return p
+def imagem_url(prompt, w=1024, h=1024, seed=None):
+    p = (prompt or "").strip()
+    if not p: return None
+    melhor = _melhorar_prompt_imagem(p)
+    seed = seed or secrets.randbelow(10**9)
+    qs = urllib.parse.urlencode({"width":w,"height":h,"seed":seed,"model":"flux","nologo":"true","enhance":"true"})
+    return "https://image.pollinations.ai/prompt/" + urllib.parse.quote(melhor)[:1800] + "?" + qs
+def gerar_imagem(u, prompt, w=1024, h=1024):
+    pode = uso_pode(u, "imagem")
+    if not pode["ok"]: return {"ok":False,"erro":pode["motivo"]}
+    url = imagem_url(prompt, w, h)
+    if not url: return {"ok":False,"erro":"Diga o que voce quer ver, senhor."}
+    uso_reg(u, "imagem")
+    return {"ok":True,"url":url,"prompt":prompt}
+
 # ======================= VISAO (Groq, le grafico/foto) =======================
 def cloud_vision(b64, instr, max_tokens=600):
     if not LLM_KEY: return ""
@@ -945,8 +1011,10 @@ class H(BaseHTTPRequestHandler):
         elif path == "/icon": p=_asset("orion_icon.png"); self._file(p,"image/png") if p else self._send(b"",404)
         elif path == "/favicon.ico": p=_asset("orion.ico"); self._file(p,"image/x-icon") if p else self._send(b"",404)
         elif path == "/manifest.webmanifest":
-            self._send(json.dumps({"name":"Orion","short_name":"Orion","start_url":"/","display":"standalone",
-                "background_color":"#0a0c11","theme_color":"#0a0c11","lang":"pt-BR",
+            self._send(json.dumps({"name":"Orion","short_name":"Orion","start_url":"/","scope":"/",
+                "display":"standalone","display_override":["fullscreen","standalone","minimal-ui"],
+                "orientation":"portrait","background_color":"#0a0c11","theme_color":"#0a0c11","lang":"pt-BR",
+                "prefer_related_applications":False,
                 "icons":[{"src":"/icon","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}),200,"application/manifest+json")
         elif path == "/sw.js":
             self._send(
@@ -1072,8 +1140,19 @@ class H(BaseHTTPRequestHandler):
             if not u: self._send({"ok":True,"reply":"Crie uma conta ou entre pra eu te responder, senhor."}); return
             frase = (d.get("frase") or "").strip()
             if not frase: self._send({"ok":False}); return
+            # Atalho: pedido de IMAGEM detectado -> usa cota de imagem (nao de msg)
+            fl0 = frase.lower()
+            if any(g in fl0 for g in ("gera uma imagem","gera imagem","cria uma imagem","cria imagem","desenha pra mim","desenha um","desenha uma","faz uma imagem","fazer uma imagem","gerar imagem","cria uma arte","desenhe ")):
+                ped = frase
+                for g in ("gera uma imagem de","gera uma imagem","gera imagem de","gera imagem","cria uma imagem de","cria uma imagem","cria imagem de","cria imagem","desenha pra mim","desenha um","desenha uma","faz uma imagem de","faz uma imagem","fazer uma imagem","gerar imagem","cria uma arte","desenhe um","desenhe uma","desenhe"):
+                    if ped.lower().startswith(g): ped = ped[len(g):].lstrip(": ").strip(); break
+                r = gerar_imagem(u, ped or frase)
+                if r.get("ok"):
+                    marcar_ativo(u["id"])
+                    self._send({"ok":True,"reply":f"Aqui esta, senhor:\n\n![imagem]({r['url']})\n\n_{r.get('prompt','')}_"}); return
+                self._send({"ok":True,"reply":r.get("erro","Nao consegui gerar a imagem.")}); return
             pode = uso_pode(u, "msg")
-            if not pode["ok"]: self._send({"ok":True,"reply":pode["motivo"]+" Abra os Planos pra liberar tudo."}); return
+            if not pode["ok"]: self._send({"ok":True,"reply":pode["motivo"]+" Abra Planos pra liberar mais."}); return
             uso_reg(u, "msg"); marcar_ativo(u["id"])
             trat = (u["tratamento"] or "").strip()
             hoje = datetime.date.today().strftime("%d/%m/%Y")
@@ -1141,6 +1220,8 @@ class H(BaseHTTPRequestHandler):
             mp_webhook(pid, topic); self._send({"ok":True})
         elif path == "/tarefa/criar":
             self._send(tarefa_criar(u, d.get("pedido","")) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/imagem":
+            self._send(gerar_imagem(u, d.get("prompt",""), int(d.get("w",1024)), int(d.get("h",1024))) if u else {"ok":False,"erro":"faca login"})
         elif path == "/push/subscribe":
             if u: push_subs_add(u["id"], d.get("sub") or {}); self._send({"ok":True})
             else: self._send({"ok":False,"erro":"faca login"})

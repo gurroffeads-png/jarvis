@@ -426,6 +426,7 @@ button{font-family:inherit;cursor:pointer}
             <p>Seu assistente pessoal. Posso conversar por voz ou texto, escrever documentos, organizar sua rotina, pesquisar e cuidar do seu dia a dia. Por onde comecamos?</p>
             <div class="suggestions">
               <button class="sug" onclick="briefing()">Resumo do dia</button>
+              <button class="sug" onclick="sugere('Gera uma imagem de um astronauta brasileiro pisando em Marte ao por do sol, fotorrealista')">Gerar uma imagem</button>
               <button class="sug" onclick="sugere('Escreve um e-mail profissional pra mim')">Escrever um e-mail</button>
               <button class="sug" onclick="sugere('Monta uma rotina de academia sustentavel pra iniciante')">Rotina de academia</button>
               <button class="sug" onclick="sugere('Resume as noticias do mercado hoje')">Noticias do mercado</button>
@@ -728,12 +729,31 @@ function toggleEscuta(){
   _rec.onresult=(e)=>{ const t=e.results[0][0].transcript; const inp=document.getElementById('inp'); inp.value=(inp.value?inp.value+' ':'')+t; growInp(inp); inp.focus(); };  // transcreve e deixa o usuario revisar/confirmar (nao envia direto)
   try{ _rec.start(); }catch(e){}
 }
+function _renderBolha(b, text){
+  // Reconhece ![alt](url) (imagens). Sem URLs comuns viram texto cru (sem inventar HTML).
+  const reImg=/!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g;
+  const partes=[]; let last=0,m;
+  while((m=reImg.exec(text))!==null){
+    if(m.index>last) partes.push({t:'txt',v:text.slice(last,m.index)});
+    partes.push({t:'img',v:m[1]});
+    last=m.index+m[0].length;
+  }
+  if(last<text.length) partes.push({t:'txt',v:text.slice(last)});
+  b.textContent='';
+  partes.forEach(p=>{
+    if(p.t==='img'){ const a=document.createElement('a'); a.href=p.v; a.target='_blank'; a.rel='noopener';
+      const im=document.createElement('img'); im.src=p.v; im.alt='imagem'; im.loading='lazy';
+      im.style.cssText='max-width:100%;border-radius:12px;display:block;margin:6px 0;background:#0008';
+      a.appendChild(im); b.appendChild(a);
+    } else { const span=document.createElement('span'); span.style.whiteSpace='pre-wrap'; span.textContent=p.v; b.appendChild(span); }
+  });
+}
 function addMsg(role,text,tag){
   const wel=document.getElementById('welcome'); if(wel) wel.remove();
   const inner=document.getElementById('chatInner');
   const m=document.createElement('div'); m.className='msg '+role; if(tag) m.dataset.tag=tag;
   m.innerHTML='<div class="who">'+(role==='user'?(USER?(USER.nome||'?')[0].toUpperCase():'V'):'O')+'</div><div class="bubble"></div>';
-  m.querySelector('.bubble').textContent=text;
+  _renderBolha(m.querySelector('.bubble'), text);
   inner.appendChild(m);
   const sc=document.getElementById('chatScroll'); sc.scrollTop=sc.scrollHeight;
 }
