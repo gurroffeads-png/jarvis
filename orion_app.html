@@ -112,20 +112,9 @@ button{font-family:inherit;cursor:pointer}
 #viewHome{position:relative}
 .chat-wrap{position:absolute;inset:0;display:flex;flex-direction:column;
   background:
-    radial-gradient(900px 600px at 75% 4%, rgba(122,162,255,.22), transparent 60%),
-    radial-gradient(720px 540px at 12% 92%, rgba(155,140,255,.18), transparent 55%),
-    radial-gradient(560px 420px at 50% 55%, rgba(70,86,200,.13), transparent 70%),
-    linear-gradient(180deg, #0c1024 0%, #0a0c11 55%, #060710 100%)}
-.chat-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
-  background-image:
-    radial-gradient(1px 1px at 14% 22%, rgba(255,255,255,.55), transparent 60%),
-    radial-gradient(1px 1px at 78% 16%, rgba(255,255,255,.45), transparent 60%),
-    radial-gradient(1.5px 1.5px at 22% 68%, rgba(255,255,255,.55), transparent 60%),
-    radial-gradient(1px 1px at 64% 80%, rgba(255,255,255,.4),  transparent 60%),
-    radial-gradient(1.5px 1.5px at 88% 56%, rgba(255,255,255,.55),transparent 60%),
-    radial-gradient(1px 1px at 36% 38%, rgba(255,255,255,.5), transparent 60%);
-  opacity:.7;animation:twinkle 6s ease-in-out infinite alternate}
-@keyframes twinkle{from{opacity:.45}to{opacity:.85}}
+    radial-gradient(1100px 680px at 50% -12%, rgba(91,140,255,.16), transparent 62%),
+    radial-gradient(900px 600px at 92% 108%, rgba(155,140,255,.10), transparent 60%),
+    linear-gradient(180deg, #0b1022 0%, #090b15 52%, #06070e 100%)}
 #stars{position:absolute;inset:0;z-index:0}
 .chat-scroll{position:relative;z-index:1;flex:1;overflow:auto;padding:28px 18px 8px;display:flex;flex-direction:column;gap:16px}
 .chat-inner{max-width:780px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px}
@@ -516,6 +505,12 @@ button{font-family:inherit;cursor:pointer}
     <div id="rotinaArea"></div>
   </div></section>
 
+  <!-- AGENTES DE IA (Business+/ADM) -->
+  <section class="view" id="viewAgentes"><div class="page">
+    <h1>Agentes de IA</h1>
+    <div class="sub">Crie agentes com personalidade e funcao proprias. Teste aqui antes de soltar pro mundo (ex: atendente, vendedor, professor).</div>
+    <div id="agentesArea"></div>
+  </div></section>
   <!-- ORION CODE (Business+) -->
   <section class="view" id="viewCode"><div class="page">
     <h1>Orion Code</h1>
@@ -617,6 +612,13 @@ button{font-family:inherit;cursor:pointer}
           <div style="text-align:right;margin-top:6px"><button class="lk" style="color:var(--accent);background:none;border:none;font-size:12px" onclick="esqueciSenha()">Esqueci a senha</button></div></div>
         <div class="auth-err" id="authErr"></div>
         <button class="btn primary" id="authEntrarBtn" onclick="authEntrar()" style="width:100%;display:none">Entrar</button>
+        <div id="authManual" style="margin-top:6px">
+          <div class="field"><label>Entrar com e-mail e senha</label>
+            <input type="text" id="authLoginId" placeholder="seu e-mail (ou nome)" autocomplete="username">
+            <input type="password" id="authLoginPw" placeholder="sua senha" autocomplete="current-password" style="margin-top:8px" onkeydown="if(event.key==='Enter')authEntrarManual()"></div>
+          <div class="auth-err" id="authErrM"></div>
+          <button class="btn primary" onclick="authEntrarManual()" style="width:100%">Entrar</button>
+        </div>
       </div>
       <div id="authCriar" style="display:none">
         <div class="field"><label>Seu nome</label><input type="text" id="authNome" placeholder="como devo te chamar?"></div>
@@ -662,6 +664,7 @@ const NAV=[
  {sec:'Principal'},
  {id:'home',nome:'Inicio',icon:'home'},
  {id:'code',nome:'Orion Code',icon:'soon',planos:['business','adm']},
+ {id:'agentes',nome:'Agentes de IA',icon:'memoria',planos:['business','adm']},
  {id:'documentos',nome:'Documentos',icon:'doc'},
  {id:'rotina',nome:'Rotina & Progresso',icon:'rotina'},
  {id:'aprender',nome:'Aprender',icon:'aprender'},
@@ -731,7 +734,7 @@ function go(id){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const map={home:'viewHome',documentos:'viewDocumentos',rotina:'viewRotina',tarefas:'viewTarefas',
     memoria:'viewMemoria',aprender:'viewAprender',trading:'viewTrading',integracoes:'viewIntegracoes',config:'viewConfig',conta:'viewConta',planos:'viewPlanos',
-    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode'};
+    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode',agentes:'viewAgentes'};
   document.getElementById(map[id]).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.id===id));
   if(id==='config') renderConfig();
@@ -742,6 +745,7 @@ function go(id){
   if(id==='rotina') renderRotina();
   if(id==='tarefas') renderTarefas();
   if(id==='code') renderCode();
+  if(id==='agentes') renderAgentes();
   if(id==='memoria') renderMemoria();
   if(id==='aprender') renderAprender();
   if(id==='trading') renderTrading();
@@ -1644,9 +1648,11 @@ function renderConta(){
     <div id="usoBox" style="margin-top:14px"></div>
     <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn primary" onclick="go('planos')">${plano==='free'?'Fazer upgrade':'Mudar de plano'}</button>${(plano==='pro'||plano==='business')?'<button class="btn ghost" onclick="cancelarAssinatura()">Cancelar assinatura</button>':''}</div>
   </div>
-  ${(u.criador)?'<div class="card" id="adminCard"><h3>Admin - contas e planos</h3><div class="hint" style="margin-bottom:10px">So o dono ve isto. Marque voce e seu socio como Business vitalicio, ou defina o plano de qualquer conta.</div><div id="adminLista">carregando...</div></div>':''}`;
-  carregarUso();
-  if(u.criador) carregarAdmin();
+  ${conv?'':'<div class="card"><h3>WhatsApp</h3><div class="hint" style="margin-bottom:10px">Ligue seu numero pra conversar com o Orion direto no WhatsApp (respostas autonomas).</div><div id="waBox">carregando...</div></div>'}
+  ${(u.criador)?'<div class="card" id="adminCard"><h3>Admin - contas e planos</h3><div class="hint" style="margin-bottom:10px">So o dono ve isto. Marque voce e seu socio como Business vitalicio, ou defina o plano de qualquer conta.</div><div id="adminLista">carregando...</div></div>':''}
+  ${(u.criador)?'<div class="card"><h3>Conhecimento global do Orion</h3><div class="hint" style="margin-bottom:10px">Fatos GERAIS que o Orion aprendeu (sem dado pessoal, filtrado). So o dono ve/limpa.</div><div id="conhecBox">carregando...</div></div>':''}`;
+  carregarUso(); carregarWa();
+  if(u.criador){ carregarAdmin(); carregarConhec(); }
 }
 async function carregarAdmin(){
   const box=document.getElementById('adminLista'); if(!box) return;
@@ -1680,6 +1686,40 @@ async function gerarChave(plano){
 }
 async function adminPlano(id,plano){ await fetch('/admin/plano',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,plano})}); piscarSave('PLANO'); carregarAdmin(); }
 async function adminSocio(id,socio){ await fetch('/admin/socio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,socio})}); piscarSave('SOCIO'); carregarAdmin(); }
+async function carregarWa(){
+  const box=document.getElementById('waBox'); if(!box) return;
+  let s={}; try{ s=await (await fetch('/wa/status')).json(); }catch(e){}
+  if(!s.on){ box.innerHTML='<div class="hint">O WhatsApp ainda nao foi ligado no servidor (faltam as chaves da Meta). Em breve, senhor.</div>'; return; }
+  if(s.confirmado){
+    box.innerHTML='<div class="row" style="justify-content:space-between;align-items:center"><div><b style="color:var(--good)">Ligado</b><div class="hint">'+esc(s.telefone)+'</div></div><button class="btn ghost" onclick="waDesvincular()">Desligar</button></div>';
+  } else if(s.telefone){
+    box.innerHTML='<div class="hint">Enviei um codigo pro WhatsApp '+esc(s.telefone)+'. Responda com o codigo la no WhatsApp pra confirmar.</div><button class="btn" style="margin-top:10px" onclick="carregarWa()">Ja confirmei</button>';
+  } else {
+    box.innerHTML='<div class="field"><input id="waTel" placeholder="DDD + numero (ex: 11999998888)"></div><button class="btn primary" onclick="waVincular()">Vincular meu WhatsApp</button><div id="waMsg" class="hint" style="margin-top:6px"></div>';
+  }
+}
+async function waVincular(){
+  const tel=(document.getElementById('waTel').value||'').trim(); const m=document.getElementById('waMsg');
+  if(!tel){ m.textContent='Digite o numero.'; return; }
+  m.textContent='Enviando codigo...';
+  try{ const r=await (await fetch('/wa/vincular',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({telefone:tel})})).json();
+    if(r.ok){ carregarWa(); } else { m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui.'; }
+  }catch(e){ m.textContent='Sem conexao.'; }
+}
+async function waDesvincular(){
+  if(!confirm('Desligar o WhatsApp desta conta?')) return;
+  await fetch('/wa/desvincular',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); carregarWa();
+}
+async function carregarConhec(){
+  const box=document.getElementById('conhecBox'); if(!box) return;
+  let r={itens:[]}; try{ r=await (await fetch('/admin/conhecimento')).json(); }catch(e){}
+  const itens=r.itens||[];
+  box.innerHTML='<div class="hint" style="margin-bottom:8px">'+itens.length+' fato(s) aprendido(s).</div>'+
+    (itens.slice(0,30).map(i=>'<div style="font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)">'+esc(i.fato)+'</div>').join('')||'<div class="hint">Nada ainda.</div>')+
+    (itens.length?'<button class="btn ghost" style="margin-top:10px" onclick="limparConhec()">Limpar tudo</button>':'');
+}
+async function limparConhec(){ if(!confirm('Apagar TODO o conhecimento global aprendido?')) return;
+  await fetch('/admin/conhecimento/limpar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); carregarConhec(); }
 async function cancelarAssinatura(){
   if(!confirm('Cancelar sua assinatura, senhor? O plano segue ate o fim do periodo ja pago e depois volta pra Free. Da pra reassinar quando quiser.')) return;
   try{ const r=await (await fetch('/pagamento/cancelar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();
@@ -1865,6 +1905,69 @@ async function rotManual(){ const nome=prompt('Nome da rotina:'); if(!nome) retu
   await fetch('/rotina',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'criar',nome,itens:(itens||'').split(',')})}); piscarSave('ROTINA'); renderRotina(); }
 
 let _tfPoll=null;
+let _AGS=[], _AG_SEL=null;
+async function renderAgentes(){
+  const plano=(USER&&USER.plano)||'free';
+  const area=document.getElementById('agentesArea');
+  if(plano!=='business' && plano!=='adm'){
+    area.innerHTML='<div class="card"><h3>Disponivel no Business e ADM</h3><div class="hint">O gerador de agentes esta no Business e no seu ADM, senhor.</div><button class="btn primary" style="margin-top:10px" onclick="go(\'planos\')">Ver planos</button></div>';
+    return;
+  }
+  let r={agentes:[]}; try{ r=await (await fetch('/agentes')).json(); }catch(e){}
+  _AGS=r.agentes||[];
+  area.innerHTML=`
+    <div class="card"><h3>Criar um agente</h3>
+      <div class="field"><label>Nome</label><input id="agNome" placeholder="ex: Atendente da loja"></div>
+      <div class="field"><label>O que ele faz (1 linha)</label><input id="agDesc" placeholder="ex: tira duvidas e fecha vendas"></div>
+      <div class="field"><label>Instrucoes (personalidade, regras, objetivo)</label><textarea id="agInstr" rows="4" placeholder="ex: Voce e o atendente da Loja X. Seja simpatico, responda curto, sempre ofereca o produto Y e peca o contato no fim."></textarea></div>
+      <div class="row"><button class="btn primary" onclick="agCriar()">Criar agente</button></div>
+      <div id="agMsg" class="hint" style="margin-top:6px"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Meus agentes</h3><div id="agLista"></div></div>
+    <div class="card" id="agTesteCard" style="margin-top:14px;display:none"><h3 id="agTesteTit">Testar</h3>
+      <div id="agChat" style="max-height:300px;overflow:auto;margin-bottom:10px"></div>
+      <div class="composer" style="border-radius:12px"><textarea id="agInp" rows="1" placeholder="Fale com o agente..." style="flex:1"></textarea><button class="send" onclick="agEnviar()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
+    </div>`;
+  agRenderLista();
+}
+function agRenderLista(){
+  const box=document.getElementById('agLista'); if(!box) return;
+  box.innerHTML=_AGS.map(a=>`<div style="border:1px solid var(--line2);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+    <div><b>${esc(a.nome)}</b><div class="hint">${esc(a.descricao||'')}</div></div>
+    <div style="display:flex;gap:6px"><button class="btn" onclick="agTestar(${a.id})">Testar</button><button class="btn ghost" onclick="agApagar(${a.id})">&#10005;</button></div>
+  </div>`).join('')||'<div class="hint">Nenhum agente ainda. Crie um acima.</div>';
+}
+async function agCriar(){
+  const m=document.getElementById('agMsg');
+  const nome=document.getElementById('agNome').value.trim(), desc=document.getElementById('agDesc').value.trim(), instr=document.getElementById('agInstr').value.trim();
+  if(!nome||instr.length<10){ m.style.color='var(--warn)'; m.textContent='De um nome e instrucoes (min. 10 letras).'; return; }
+  m.style.color=''; m.textContent='Criando...';
+  try{ const r=await (await fetch('/agente/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,descricao:desc,instrucoes:instr})})).json();
+    if(r.ok){ m.style.color='var(--good)'; m.textContent='Agente criado!'; document.getElementById('agNome').value='';document.getElementById('agDesc').value='';document.getElementById('agInstr').value=''; renderAgentes(); }
+    else { m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui.'; }
+  }catch(e){ m.style.color='var(--warn)'; m.textContent='Sem conexao.'; }
+}
+async function agApagar(id){ if(!confirm('Apagar este agente?')) return;
+  await fetch('/agente/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); renderAgentes(); }
+function agTestar(id){
+  _AG_SEL=id; const a=_AGS.find(x=>x.id===id); if(!a) return;
+  document.getElementById('agTesteCard').style.display='block';
+  document.getElementById('agTesteTit').textContent='Testar: '+a.nome;
+  document.getElementById('agChat').innerHTML='<div class="hint">Mande uma mensagem pra testar o agente.</div>';
+  document.getElementById('agTesteCard').scrollIntoView({behavior:'smooth'});
+}
+function agAddMsg(role,txt){
+  const c=document.getElementById('agChat'); const d=document.createElement('div');
+  d.style.cssText='margin:6px 0;padding:8px 11px;border-radius:10px;font-size:13.5px;white-space:pre-wrap;'+(role==='user'?'background:var(--panel2);margin-left:30px':'background:var(--bg);border:1px solid var(--line)');
+  d.textContent=txt; c.appendChild(d); c.scrollTop=c.scrollHeight;
+}
+async function agEnviar(){
+  const inp=document.getElementById('agInp'); const t=(inp.value||'').trim(); if(!t||!_AG_SEL) return;
+  inp.value=''; agAddMsg('user',t); agAddMsg('assistant','...');
+  try{ const r=await (await fetch('/agente/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_AG_SEL,mensagem:t})})).json();
+    document.getElementById('agChat').lastChild.textContent = r.ok? r.resposta : (r.erro||'Erro.');
+  }catch(e){ document.getElementById('agChat').lastChild.textContent='Sem conexao.'; }
+}
 async function renderCode(){
   const plano=(USER&&USER.plano)||'free';
   if(plano!=='business' && plano!=='adm'){
@@ -2011,6 +2114,14 @@ async function authEntrar(){ if(!AUTH_SEL) return;
   const senha=document.getElementById('authSenha').value; const err=document.getElementById('authErr'); err.textContent='';
   const r=await (await fetch('/usuario/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:AUTH_SEL.nome,senha})})).json();
   if(r.ok){ entrou(r.user); } else if(r.precisa_senha){ document.getElementById('authSenhaWrap').style.display='block'; err.textContent='Esse perfil precisa de senha.'; } else err.textContent=r.erro||'erro';
+}
+async function authEntrarManual(){
+  const id=(document.getElementById('authLoginId').value||'').trim();
+  const senha=document.getElementById('authLoginPw').value; const err=document.getElementById('authErrM'); err.textContent='';
+  if(!id||!senha){ err.textContent='Preencha e-mail/nome e senha.'; return; }
+  try{ const r=await (await fetch('/usuario/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login:id,senha})})).json();
+    if(r.ok){ entrou(r.user); } else err.textContent=r.erro||(r.precisa_senha?'Senha obrigatoria.':'Nao consegui entrar.');
+  }catch(e){ err.textContent='Sem conexao.'; }
 }
 function authAba(q){ document.getElementById('authChooser').style.display='none'; document.getElementById('authForm').style.display='block';
   document.querySelectorAll('.auth-tab').forEach(t=>t.classList.toggle('on',t.dataset.at===q));
