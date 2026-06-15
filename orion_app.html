@@ -52,6 +52,7 @@ button{font-family:inherit;cursor:pointer}
 .plan-free{background:rgba(139,148,167,.16);color:var(--dim)}
 .plan-pro{background:rgba(122,162,255,.18);color:var(--accent)}
 .plan-business{background:rgba(155,140,255,.2);color:var(--accent2)}
+.plan-adm{background:linear-gradient(135deg,#f6cf61,#e58c2b);color:#1a1300;border:1px solid rgba(0,0,0,.15)}
 
 /* ===================== SIDEBAR (recolhivel estilo Claude) ===================== */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:65;opacity:0;pointer-events:none;transition:.2s}
@@ -110,9 +111,21 @@ button{font-family:inherit;cursor:pointer}
 /* ===================== HOME / CHAT ===================== */
 #viewHome{position:relative}
 .chat-wrap{position:absolute;inset:0;display:flex;flex-direction:column;
-  background:radial-gradient(820px 520px at 72% 8%, rgba(91,140,255,.12), transparent 62%),
-             radial-gradient(680px 520px at 18% 92%, rgba(155,140,255,.10), transparent 60%),
-             radial-gradient(420px 320px at 50% 50%, rgba(40,54,170,.10), transparent 70%), var(--bg)}
+  background:
+    radial-gradient(900px 600px at 75% 4%, rgba(122,162,255,.22), transparent 60%),
+    radial-gradient(720px 540px at 12% 92%, rgba(155,140,255,.18), transparent 55%),
+    radial-gradient(560px 420px at 50% 55%, rgba(70,86,200,.13), transparent 70%),
+    linear-gradient(180deg, #0c1024 0%, #0a0c11 55%, #060710 100%)}
+.chat-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    radial-gradient(1px 1px at 14% 22%, rgba(255,255,255,.55), transparent 60%),
+    radial-gradient(1px 1px at 78% 16%, rgba(255,255,255,.45), transparent 60%),
+    radial-gradient(1.5px 1.5px at 22% 68%, rgba(255,255,255,.55), transparent 60%),
+    radial-gradient(1px 1px at 64% 80%, rgba(255,255,255,.4),  transparent 60%),
+    radial-gradient(1.5px 1.5px at 88% 56%, rgba(255,255,255,.55),transparent 60%),
+    radial-gradient(1px 1px at 36% 38%, rgba(255,255,255,.5), transparent 60%);
+  opacity:.7;animation:twinkle 6s ease-in-out infinite alternate}
+@keyframes twinkle{from{opacity:.45}to{opacity:.85}}
 #stars{position:absolute;inset:0;z-index:0}
 .chat-scroll{position:relative;z-index:1;flex:1;overflow:auto;padding:28px 18px 8px;display:flex;flex-direction:column;gap:16px}
 .chat-inner{max-width:780px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px}
@@ -316,6 +329,28 @@ button{font-family:inherit;cursor:pointer}
   .composer{gap:6px;padding:6px 6px 6px 12px}
   .composer .mic,.composer .send{width:38px;height:38px}
   .composer .mic svg{width:17px;height:17px}}
+/* TOUR de boas-vindas (3 passos, mostrado 1x por aparelho) */
+.tour{position:fixed;inset:0;z-index:300;background:rgba(6,8,15,.78);backdrop-filter:blur(8px);
+  display:none;align-items:center;justify-content:center;padding:18px;animation:fadeIn .3s ease}
+.tour.show{display:flex}
+.tour-box{width:100%;max-width:440px;background:var(--panel);border:1px solid var(--line2);
+  border-radius:22px;padding:30px 26px 22px;text-align:center;box-shadow:0 14px 40px rgba(0,0,0,.5);
+  animation:slideUp .4s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+.tour-illo{margin:0 auto 14px;display:block}
+.tour-h{font-size:22px;font-weight:700;margin-bottom:8px;color:var(--text)}
+.tour-p{font-size:14px;line-height:1.55;color:var(--dim);margin-bottom:20px}
+.tour-feat{display:flex;flex-direction:column;gap:9px;text-align:left;margin:14px 0 22px}
+.tour-feat li{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--dim);list-style:none;padding:0}
+.tour-feat li b{color:var(--text);font-weight:600}
+.tour-feat .bullet{color:var(--accent);flex:none;font-weight:700;margin-top:1px}
+.tour-dots{display:flex;justify-content:center;gap:7px;margin:10px 0 16px}
+.tour-dots span{width:7px;height:7px;border-radius:50%;background:var(--line2);transition:.2s}
+.tour-dots span.on{background:var(--accent);width:22px;border-radius:4px}
+.tour-actions{display:flex;gap:10px;justify-content:space-between;align-items:center}
+.tour-actions .lk{background:none;border:none;color:var(--faint);font-size:13px;cursor:pointer}
+.tour-actions .btn{padding:10px 22px}
 /* ABERTURA (splash) + MASCOTE animado */
 #splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;
   background:radial-gradient(circle at 50% 38%, #131a31 0%, #0a0c11 72%);transition:opacity .5s ease}
@@ -342,6 +377,16 @@ button{font-family:inherit;cursor:pointer}
 </style>
 </head>
 <body>
+
+<!-- TOUR (3 passos, 1a vez) -->
+<div id="tour" class="tour"><div class="tour-box">
+  <div id="tourSlot"></div>
+  <div class="tour-dots"><span id="td0" class="on"></span><span id="td1"></span><span id="td2"></span></div>
+  <div class="tour-actions">
+    <button class="lk" onclick="tourFim()">Pular</button>
+    <button class="btn primary" id="tourNext" onclick="tourProx()">Continuar</button>
+  </div>
+</div></div>
 
 <!-- ABERTURA / MASCOTE -->
 <div id="splash" onclick="hideSplash()">
@@ -471,6 +516,12 @@ button{font-family:inherit;cursor:pointer}
     <div id="rotinaArea"></div>
   </div></section>
 
+  <!-- ORION CODE (Business+) -->
+  <section class="view" id="viewCode"><div class="page">
+    <h1>Orion Code</h1>
+    <div class="sub">O Orion mostra o raciocinio passo a passo, como um Claude Code. Pra ensinar voce a fazer.</div>
+    <div id="codeArea"></div>
+  </div></section>
   <!-- TAREFAS -->
   <section class="view" id="viewTarefas"><div class="page">
     <h1>Tarefas</h1><div class="sub">Delegue, feche o app e receba quando ficar pronto. O Orion roda em segundo plano e te avisa.</div>
@@ -610,10 +661,11 @@ const ICON={
 const NAV=[
  {sec:'Principal'},
  {id:'home',nome:'Inicio',icon:'home'},
+ {id:'code',nome:'Orion Code',icon:'soon',planos:['business','adm']},
  {id:'documentos',nome:'Documentos',icon:'doc'},
  {id:'rotina',nome:'Rotina & Progresso',icon:'rotina'},
  {id:'aprender',nome:'Aprender',icon:'aprender'},
- {id:'tarefas',nome:'Tarefas & Agenda',icon:'tarefas'},
+ {id:'tarefas',nome:'Tarefas',icon:'tarefas'},
  {id:'memoria',nome:'Memoria',icon:'memoria'},
  {id:'trading',nome:'Trading IA',icon:'trading'},
  {id:'integracoes',nome:'Integracoes',icon:'integra'},
@@ -628,13 +680,46 @@ function esc(t){return (t==null?'':String(t)).replace(/&/g,'&amp;').replace(/</g
 // ===================== SIDEBAR + ROUTER =====================
 function renderNav(){
   const n=document.getElementById('sbNav'); n.innerHTML='';
+  const plano=(USER&&USER.plano)||'free';
   NAV.forEach(it=>{
     if(it.sec){const s=document.createElement('div');s.className='sb-sec';s.textContent=it.sec;n.appendChild(s);return;}
+    if(it.planos && it.planos.indexOf(plano)<0) return;  // esconde se o plano nao bate
     const b=document.createElement('button');b.className='nav-item'+(it.id===VIEW?' active':'');b.dataset.id=it.id;
     b.innerHTML=ICON[it.icon]+'<span>'+it.nome+'</span>';
     b.onclick=()=>{go(it.id);toggleSidebar(false);};
     n.appendChild(b);
   });
+  // historico de conversas (cloud, logado, nao convidado)
+  if(window.ORION_CLOUD && USER && !USER.convidado){
+    const s=document.createElement('div');s.className='sb-sec';s.textContent='Conversas';n.appendChild(s);
+    const newB=document.createElement('button');newB.className='nav-item';
+    newB.innerHTML=ICON.check+'<span>Nova conversa</span>';
+    newB.onclick=()=>convNova();
+    n.appendChild(newB);
+    const wrap=document.createElement('div');wrap.id='sbConvs';n.appendChild(wrap);
+    convAtualizarLista();
+  }
+}
+let CONV_ID=null;
+async function convAtualizarLista(){
+  const wrap=document.getElementById('sbConvs'); if(!wrap) return;
+  try{ const r=await (await fetch('/conversas')).json();
+    wrap.innerHTML=(r.lista||[]).slice(0,15).map(c=>
+      `<button class="nav-item ${c.id===CONV_ID?'active':''}" onclick="convAbrir(${c.id})" style="font-size:12.5px;padding-left:30px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.titulo)}</span></button>`).join('');
+  }catch(e){}
+}
+async function convNova(){
+  try{ const r=await (await fetch('/conversa/nova',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();
+    if(r.ok){ CONV_ID=r.id; document.getElementById('chatInner').innerHTML=''; go('home'); toggleSidebar(false); convAtualizarLista(); }
+  }catch(e){}
+}
+async function convAbrir(cid){
+  try{ const r=await (await fetch('/conversa/'+cid)).json();
+    if(r.ok){ CONV_ID=r.conversa.id; const inner=document.getElementById('chatInner'); inner.innerHTML='';
+      (r.conversa.msgs||[]).forEach(m=>addMsg(m.role==='user'?'user':'assistant', m.content||''));
+      go('home'); toggleSidebar(false); convAtualizarLista();
+    }
+  }catch(e){}
 }
 function toggleSidebar(force){
   const sb=document.getElementById('sidebar'), sc=document.getElementById('scrim');
@@ -646,7 +731,7 @@ function go(id){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const map={home:'viewHome',documentos:'viewDocumentos',rotina:'viewRotina',tarefas:'viewTarefas',
     memoria:'viewMemoria',aprender:'viewAprender',trading:'viewTrading',integracoes:'viewIntegracoes',config:'viewConfig',conta:'viewConta',planos:'viewPlanos',
-    termos:'viewTermos',privacidade:'viewPrivacidade'};
+    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode'};
   document.getElementById(map[id]).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.id===id));
   if(id==='config') renderConfig();
@@ -656,6 +741,7 @@ function go(id){
   if(id==='documentos') renderDocs();
   if(id==='rotina') renderRotina();
   if(id==='tarefas') renderTarefas();
+  if(id==='code') renderCode();
   if(id==='memoria') renderMemoria();
   if(id==='aprender') renderAprender();
   if(id==='trading') renderTrading();
@@ -699,8 +785,9 @@ async function enviar(){
   i.value=''; growInp(i);
   // mostra imediatamente a fala do usuario (o poll confirma depois)
   addMsg('user',txt,'local');
-  try{ const j=await (await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frase:txt})})).json();
-    if(j && j.reply){ addMsg('assistant', j.reply); speakOrion(j.reply); } }   // nuvem: resposta direta (desktop usa o poll)
+  try{ const j=await (await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frase:txt, conv_id:CONV_ID})})).json();
+    if(j && j.reply){ addMsg('assistant', j.reply); speakOrion(j.reply); }
+    if(j && j.conv_id){ CONV_ID=j.conv_id; convAtualizarLista(); } }
   catch(e){ addMsg('assistant','Nao consegui falar com o servidor, senhor.'); }
 }
 // ===== VOZ NO NAVEGADOR (celular/web): Orion fala as respostas + ditado por voz =====
@@ -820,11 +907,12 @@ function aplicaUser(){
   const plano=(USER&&USER.plano)||'free';
   setPlanoBadge(plano);
   // re-renderiza a pagina atual que depende do usuario (corrige painel de dono nao aparecer no 1o load)
-  if(VIEW==='conta') renderConta(); else if(VIEW==='config') renderConfig(); else if(VIEW==='planos') renderPlanos();
+  if(VIEW==='conta') renderConta(); else if(VIEW==='config') renderConfig(); else if(VIEW==='planos') renderPlanos(); else if(VIEW==='code') renderCode();
+  renderNav();
 }
 function setPlanoBadge(plano){
   const b=document.getElementById('chipPlan');
-  const labels={free:'Free',pro:'Pro',business:'Business'};
+  const labels={free:'Free',pro:'Pro',business:'Business',adm:'ADM'};
   b.textContent=labels[plano]||'Free';
   b.className='plan-badge plan-'+(plano||'free');
   document.getElementById('sbPlan').textContent='Plano '+(labels[plano]||'Free');
@@ -897,19 +985,31 @@ function vozLabel(v){ return VOZ_LABEL[v]||v; }
 async function renderConfig(){
   try{ CFG=await (await fetch('/config')).json(); }catch(e){ CFG={}; }
   let integ={}; try{ integ=await (await fetch('/integra/status')).json(); }catch(e){}
+  let brain={providers:[],atual:{}}; try{ brain=await (await fetch('/brain/opcoes')).json(); }catch(e){}
   const mods=CFG.modelos_ollama||['qwen2.5'];
   const modsA=CFG.modelos_anthropic||[];
   const vozes=CFG.vozes||['pt-PT-DuarteNeural'];
   const vol=(CFG.volume!=null?CFG.volume:90), rate=(CFG.rate!=null?CFG.rate:0);
   const a=document.getElementById('cfgArea');
   a.innerHTML=`
-  <div class="card"><h3>Cerebro (a inteligencia do Orion)</h3>
+  ${window.ORION_CLOUD?`<div class="card"><h3>Cerebro do Orion (nuvem) - plugavel</h3>
+    <div class="hint" style="margin-bottom:10px">Por padrao usa o Groq (gratis). Voce pode plugar sua propria chave de OpenAI, Mistral, Together, DeepInfra. So vale pra <b>sua</b> conta. Deixe os campos vazios pra usar o padrao.</div>
+    <div class="field"><label>Provedor</label>
+      <select id="brainProv">${(brain.providers||[]).map(p=>`<option value="${p.id}" data-base="${p.base}" data-modelo="${p.modelo}" data-como="${esc(p.como)}">${esc(p.nome)}</option>`).join('')}</select>
+      <div class="hint" id="brainComo"></div>
+    </div>
+    <div class="field"><label>Modelo</label><input id="brainModel" placeholder="ex: llama-3.3-70b-versatile" value="${esc(((brain||{}).atual||{}).model||'')}"></div>
+    <div class="field"><label>Sua chave (privada, fica so na sua conta)</label><input id="brainKey" type="password" placeholder="cole sua chave aqui (gsk_..., sk-...)" value=""></div>
+    <div class="row"><button class="btn primary" onclick="brainSalvar()">Salvar cerebro</button><button class="btn ghost" onclick="brainLimpar()">Voltar ao padrao</button></div>
+    <div id="brainMsg" class="hint" style="margin-top:6px"></div>
+  </div>`:''}
+  <div class="card"><h3>Cerebro do Orion (desktop)</h3>
     <div class="field"><label>Motor</label>
       <select id="cfgCerebro">
         <option value="ollama">Ollama local (gratis, padrao)</option>
         <option value="anthropic">Claude / Anthropic (sua chave)</option>
       </select>
-      <div class="hint">O Ollama roda no seu computador, de graca. Se voce tiver uma chave da Anthropic, pode pluga-la pra usar o Claude. O seu plano nao muda por causa disso, muda so a inteligencia.</div>
+      <div class="hint">So vale no Orion desktop. O Ollama roda no seu computador, de graca.</div>
     </div>
     <div class="field" id="cfgOllamaWrap"><label>Modelo Ollama</label>
       <select id="cfgModelo">${mods.map(m=>`<option value="${m}">${m}</option>`).join('')}</select>
@@ -987,6 +1087,14 @@ async function renderConfig(){
     document.getElementById('cfgKeyWrap').style.display=isOll?'none':'block';};
   ['cfgVol','cfgRate','cfgGanho','cfgSens'].forEach(i=>document.getElementById(i).oninput=upd);
   document.getElementById('cfgCerebro').onchange=upd; upd();
+  const bp=document.getElementById('brainProv');
+  if(bp){
+    const refresh=()=>{ const op=bp.selectedOptions[0]; if(!op) return;
+      document.getElementById('brainComo').textContent='Onde pegar a chave: '+op.dataset.como;
+      if(!document.getElementById('brainModel').value.trim()) document.getElementById('brainModel').value=op.dataset.modelo||'';
+    };
+    bp.onchange=refresh; refresh();
+  }
 }
 async function salvarMP(){
   const t=(document.getElementById('cfgMP')||{}).value; if(!t||t==='********'){ alert('Cole o token, senhor.'); return; }
@@ -1024,6 +1132,22 @@ async function apagarConta(){ if(!USER||USER.convidado){ alert('Voce esta como c
   if(!confirm('Apagar sua conta e todo o perfil deste aparelho? Nao da pra desfazer.')) return;
   await fetch('/usuario/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:USER.id})});
   USER=null; location.reload(); }
+async function brainSalvar(){
+  const sel=document.getElementById('brainProv'); const op=sel.selectedOptions[0];
+  const base=op?op.dataset.base:''; const model=document.getElementById('brainModel').value.trim();
+  const key=document.getElementById('brainKey').value.trim();
+  const msg=document.getElementById('brainMsg');
+  try{ const r=await (await fetch('/brain/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({base,model,key})})).json();
+    if(r.ok){ msg.style.color='var(--good)'; msg.textContent='Cerebro atualizado. Suas proximas mensagens ja usam esse modelo.'; }
+    else { msg.style.color='var(--warn)'; msg.textContent=r.erro||'Nao consegui salvar.'; }
+  }catch(e){ msg.style.color='var(--warn)'; msg.textContent='Sem conexao.'; }
+}
+async function brainLimpar(){
+  try{ await fetch('/brain/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({base:'',model:'',key:''})});
+    document.getElementById('brainKey').value=''; document.getElementById('brainModel').value='';
+    document.getElementById('brainMsg').style.color='var(--good)'; document.getElementById('brainMsg').textContent='Voltou para o padrao do Orion.';
+  }catch(e){}
+}
 async function salvarConfig(){
   const body={cerebro:document.getElementById('cfgCerebro').value,
     model_ollama:document.getElementById('cfgModelo')?document.getElementById('cfgModelo').value:undefined,
@@ -1482,7 +1606,7 @@ function renderPriv(){
 let CONTA_FOTO=null, CONTA_CAM=null;   // foto nova (base64) e stream da webcam
 function renderConta(){
   const u=USER||{}; const nm=u.nome||'Visitante';
-  const plano=u.plano||'free'; const labels={free:'Free',pro:'Pro',business:'Business'};
+  const plano=u.plano||'free'; const labels={free:'Free',pro:'Pro',business:'Business',adm:'ADM'};
   const conv=u.convidado; CONTA_FOTO=null;
   const fotoCur=u.foto?`<img src="${u.foto}">`:`${(nm||'?')[0].toUpperCase()}`;
   document.getElementById('contaArea').innerHTML=`
@@ -1518,7 +1642,7 @@ function renderConta(){
       <span class="plan-badge plan-${plano}">${labels[plano]}</span>
     </div>
     <div id="usoBox" style="margin-top:14px"></div>
-    <div class="row" style="margin-top:10px"><button class="btn primary" onclick="go('planos')">${plano==='free'?'Fazer upgrade':'Mudar de plano'}</button></div>
+    <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn primary" onclick="go('planos')">${plano==='free'?'Fazer upgrade':'Mudar de plano'}</button>${(plano==='pro'||plano==='business')?'<button class="btn ghost" onclick="cancelarAssinatura()">Cancelar assinatura</button>':''}</div>
   </div>
   ${(u.criador)?'<div class="card" id="adminCard"><h3>Admin - contas e planos</h3><div class="hint" style="margin-bottom:10px">So o dono ve isto. Marque voce e seu socio como Business vitalicio, ou defina o plano de qualquer conta.</div><div id="adminLista">carregando...</div></div>':''}`;
   carregarUso();
@@ -1531,9 +1655,9 @@ async function carregarAdmin(){
   const chavesHtml = keys.ok?`<div style="border:1px solid var(--line2);border-radius:12px;padding:14px;margin-bottom:14px">
     <b style="font-size:13px">Gerar chaves de ativacao (pra vender)</b>
     <div class="hint" style="margin:6px 0 10px">Cada clique gera uma chave UNICA e valida. Venda pelo seu link do Mercado Pago/PayPal e entregue a chave pro cliente. Ele cola em Planos &gt; "Ja tem uma chave".</div>
-    <div class="row" style="margin-bottom:10px"><button class="btn primary" onclick="gerarChave('pro')">Gerar chave Pro</button><button class="btn primary" onclick="gerarChave('business')">Gerar chave Business</button></div>
+    <div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="btn primary" onclick="gerarChave('pro')">Gerar chave Pro</button><button class="btn primary" onclick="gerarChave('business')">Gerar chave Business</button><button class="btn" style="background:linear-gradient(135deg,#f6cf61,#e58c2b);color:#1a1300;border:none" onclick="gerarChave('adm')">Gerar chave ADM</button></div>
     <div id="chaveNova"></div>
-    <div class="hint" style="margin-top:10px">Chaves mestras (sempre validas, pra teste): <code style="color:var(--accent);cursor:pointer" onclick="navigator.clipboard.writeText('${keys.pro}');piscarSave('COPIADO')">${keys.pro}</code> &middot; <code style="color:var(--accent2);cursor:pointer" onclick="navigator.clipboard.writeText('${keys.business}');piscarSave('COPIADO')">${keys.business}</code></div>
+    <div class="hint" style="margin-top:10px">Chaves mestras (sempre validas, sua e ilimitadas): <code style="color:var(--accent);cursor:pointer" onclick="navigator.clipboard.writeText('${keys.pro}');piscarSave('COPIADO')">${keys.pro}</code> &middot; <code style="color:var(--accent2);cursor:pointer" onclick="navigator.clipboard.writeText('${keys.business}');piscarSave('COPIADO')">${keys.business}</code> &middot; <code style="color:#f6cf61;cursor:pointer" onclick="navigator.clipboard.writeText('${keys.adm||''}');piscarSave('COPIADO')">${keys.adm||'ADM-...'}</code></div>
   </div>`:'';
   box.innerHTML=chavesHtml+(r.usuarios||[]).map(u=>`<div class="tk">
     <span>${u.foto?'<img src="'+u.foto+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px">':''}<b>${esc(u.nome)}</b>${u.criador?' <span class="mbadge">dono</span>':''}<br><span style="color:var(--faint);font-size:12px">${esc(u.email||'local')}</span></span>
@@ -1556,13 +1680,27 @@ async function gerarChave(plano){
 }
 async function adminPlano(id,plano){ await fetch('/admin/plano',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,plano})}); piscarSave('PLANO'); carregarAdmin(); }
 async function adminSocio(id,socio){ await fetch('/admin/socio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,socio})}); piscarSave('SOCIO'); carregarAdmin(); }
+async function cancelarAssinatura(){
+  if(!confirm('Cancelar sua assinatura, senhor? O plano segue ate o fim do periodo ja pago e depois volta pra Free. Da pra reassinar quando quiser.')) return;
+  try{ const r=await (await fetch('/pagamento/cancelar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();
+    if(r.ok){ piscarSave('CANCELADA'); alert((r.canceladas||0)+' assinatura(s) cancelada(s). O plano segue ate o vencimento.'); }
+    else alert(r.erro||'Nao consegui cancelar agora.');
+  }catch(e){ alert('Sem conexao.'); }
+}
 async function carregarUso(){
   const box=document.getElementById('usoBox'); if(!box) return;
   try{ const u=await (await fetch('/uso')).json();
-    if(u.ilimitado){ box.innerHTML='<div class="hint">Uso ilimitado neste plano. Aproveite, senhor.</div>'; return; }
-    const pct=Math.min(100, Math.round(u.msgs_hoje/Math.max(1,u.msgs_cap)*100));
-    box.innerHTML=`<div class="hint" style="margin-bottom:6px">Mensagens de hoje: <b style="color:var(--text)">${u.msgs_hoje} de ${u.msgs_cap}</b></div>
-      <div style="height:8px;background:var(--bg);border-radius:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></div></div>`;
+    if((u.plano||'')==='adm'){ box.innerHTML='<div class="hint">Plano ADM: tokens ilimitados, senhor.</div>'; return; }
+    const pctS=Math.min(100, Math.round((u.semana_msgs||0)/Math.max(1,u.semana_cap)*100));
+    const pctF=Math.min(100, Math.round((u.fatia_msgs||0)/Math.max(1,u.fatia_cap)*100));
+    const renova = u.renova_em_seg>0 ? ' &middot; renova em '+Math.max(1,Math.floor(u.renova_em_seg/3600))+'h'+String(Math.floor((u.renova_em_seg%3600)/60)).padStart(2,'0')+'m' : '';
+    const fatiaLabel = (u.fatia_horas||24)>=24 ? 'hoje' : 'agora ('+u.fatia_horas+'h)';
+    box.innerHTML=`
+      <div class="hint" style="margin-bottom:6px">Mensagens da semana: <b style="color:var(--text)">${u.semana_msgs||0} de ${u.semana_cap}</b></div>
+      <div style="height:8px;background:var(--bg);border-radius:6px;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:${pctS}%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></div></div>
+      <div class="hint" style="margin-bottom:6px">Janela ${fatiaLabel}: <b style="color:var(--text)">${u.fatia_msgs||0} de ${u.fatia_cap}</b>${renova}</div>
+      <div style="height:8px;background:var(--bg);border-radius:6px;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:${pctF}%;background:linear-gradient(90deg,var(--good),var(--accent))"></div></div>
+      <div class="hint">Imagens hoje: <b style="color:var(--text)">${u.imagens_hoje||0} de ${u.imagens_cap}</b></div>`;
   }catch(e){}
 }
 function contaUploadFoto(){ document.getElementById('contaFotoInp').click(); }
@@ -1727,6 +1865,31 @@ async function rotManual(){ const nome=prompt('Nome da rotina:'); if(!nome) retu
   await fetch('/rotina',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'criar',nome,itens:(itens||'').split(',')})}); piscarSave('ROTINA'); renderRotina(); }
 
 let _tfPoll=null;
+async function renderCode(){
+  const plano=(USER&&USER.plano)||'free';
+  if(plano!=='business' && plano!=='adm'){
+    document.getElementById('codeArea').innerHTML=`<div class="card"><h3>Disponivel no Business</h3>
+      <div class="hint">O Orion Code esta disponivel a partir do plano Business. Veja os planos.</div>
+      <button class="btn primary" style="margin-top:10px" onclick="go('planos')">Ver planos</button></div>`;
+    return;
+  }
+  document.getElementById('codeArea').innerHTML=`
+    <div class="card"><h3>Pergunte qualquer coisa, o Orion explica passo a passo</h3>
+      <div class="hint" style="margin-bottom:10px">Ex.: "como faco um bot de WhatsApp em Python?" / "explica meu erro: Cannot read undefined"</div>
+      <div class="field"><textarea id="codePedido" rows="4" placeholder="Descreva o que voce quer fazer, ou cole um erro/codigo pra eu te explicar..."></textarea></div>
+      <div class="row"><button class="btn primary" onclick="codeExec()">Pedir ao Orion Code</button></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Resposta</h3><div id="codeRes" style="font-size:14px;line-height:1.55;white-space:pre-wrap">Aqui aparece a resposta com cada passo do raciocinio.</div></div>`;
+}
+async function codeExec(){
+  const ta=document.getElementById('codePedido'); const out=document.getElementById('codeRes');
+  const p=(ta.value||'').trim();
+  if(!p){ out.textContent='Descreva o que precisa, senhor.'; return; }
+  out.textContent='Pensando passo a passo...';
+  try{ const r=await (await fetch('/code/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pedido:p})})).json();
+    out.textContent = r.ok ? (r.resposta||'Sem resposta.') : (r.erro||'Erro.');
+  }catch(e){ out.textContent='Sem conexao.'; }
+}
 async function renderTarefas(){
   document.getElementById('tarefasArea').innerHTML=`
     <div class="card"><h3>Delegar uma tarefa</h3>
@@ -1863,7 +2026,9 @@ async function authCriar(){ const nome=document.getElementById('authNome').value
 }
 async function authConvidado(){ const r=await (await fetch('/usuario/convidado',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:'Convidado'})})).json();
   if(r.ok) entrou(r.user); }
-function entrou(u){ USER=u; _salvaPerfLocal(u); aplicaUser(); document.getElementById('authModal').classList.remove('show'); piscarSave('BEM VINDO'); go('home'); }
+function entrou(u){ USER=u; _salvaPerfLocal(u); aplicaUser(); document.getElementById('authModal').classList.remove('show'); piscarSave('BEM VINDO'); go('home');
+  setTimeout(tourComeca, 600);  // tour de boas-vindas (so 1a vez por aparelho)
+}
 
 // ===================== SAVE TOAST =====================
 let _sv=null;
@@ -1911,6 +2076,54 @@ if(window.ORION_CLOUD){
 }
 
 // ===================== INIT =====================
+// ===================== TOUR DE BOAS-VINDAS =====================
+const _mascoteSVG = '<svg class="tour-illo" width="120" height="120" viewBox="0 0 200 200"><defs><radialGradient id="tg" cx="50%" cy="34%" r="72%"><stop offset="0%" stop-color="#cfdcff"/><stop offset="46%" stop-color="#5b8cff"/><stop offset="100%" stop-color="#2a36c8"/></radialGradient></defs><circle cx="100" cy="100" r="76" fill="#6f97ff" opacity=".18"/><circle cx="100" cy="100" r="58" fill="url(#tg)"/><ellipse cx="100" cy="80" rx="24" ry="11" fill="#fff" fill-opacity=".18"/><circle cx="88" cy="99" r="6" fill="#0a0c11"/><circle cx="112" cy="99" r="6" fill="#0a0c11"/><circle cx="90.2" cy="96.5" r="1.9" fill="#fff"/><circle cx="114.2" cy="96.5" r="1.9" fill="#fff"/><path d="M88 113 q12 9 24 0" fill="none" stroke="#0a0c11" stroke-width="3" stroke-linecap="round"/></svg>';
+const TOUR_STEPS = [
+  {h:'Bem vindo ao Orion', illo:_mascoteSVG,
+   p:'Sou o seu assistente pessoal de IA. Falo portugues, posso conversar por voz, escrever, organizar suas tarefas e ate gerar imagens.',
+   feats:[]},
+  {h:'O que eu faco por voce',
+   p:'Tudo num app so. Veja alguns exemplos:',
+   feats:[
+    {b:'Escrevo',t:'e-mails, posts, redacoes e documentos em segundos.'},
+    {b:'Organizo',t:'sua rotina, metas e tarefas em segundo plano.'},
+    {b:'Pesquiso',t:'noticias, mercado e qualquer fato atual.'},
+    {b:'Gero imagens',t:'so dizer "gera uma imagem de...".'}
+   ]},
+  {h:'Como comecar',
+   p:'Tres dicas rapidas pra aproveitar agora:',
+   feats:[
+    {b:'Toque no microfone',t:'pra falar. Eu transcrevo e voce confirma.'},
+    {b:'Sidebar (menu)',t:'tem suas conversas salvas e todas as abas.'},
+    {b:'Configuracoes',t:'liga as notificacoes pra eu te chamar quando precisar.'}
+   ]}
+];
+let _tourI = 0;
+function tourComeca(){
+  if(localStorage.getItem('orion_tour_done')==='1') return;
+  if(!USER || USER.convidado) return;
+  _tourI = 0; tourMostra();
+  document.getElementById('tour').classList.add('show');
+}
+function tourMostra(){
+  const s = TOUR_STEPS[_tourI]; if(!s) return;
+  const slot = document.getElementById('tourSlot');
+  slot.innerHTML = (s.illo||'') +
+    '<div class="tour-h">'+s.h+'</div>'+
+    '<div class="tour-p">'+s.p+'</div>'+
+    (s.feats && s.feats.length ? '<ul class="tour-feat">'+s.feats.map(f=>'<li><span class="bullet">&#x25CF;</span><span><b>'+f.b+'</b> '+f.t+'</span></li>').join('')+'</ul>' : '');
+  for(let i=0;i<3;i++) document.getElementById('td'+i).classList.toggle('on', i===_tourI);
+  document.getElementById('tourNext').textContent = _tourI === TOUR_STEPS.length-1 ? 'Comecar agora' : 'Continuar';
+}
+function tourProx(){
+  _tourI++;
+  if(_tourI >= TOUR_STEPS.length){ tourFim(); return; }
+  tourMostra();
+}
+function tourFim(){
+  localStorage.setItem('orion_tour_done','1');
+  document.getElementById('tour').classList.remove('show');
+}
 function hideSplash(){ var s=document.getElementById('splash'); if(!s) return; s.classList.add('hide');
   setTimeout(function(){ if(s&&s.parentNode) s.parentNode.removeChild(s); },600); }
 setTimeout(hideSplash, 1700);
