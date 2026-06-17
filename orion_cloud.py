@@ -358,8 +358,8 @@ def loop_reengajar():
         except Exception as e: print("[reeng]", e)
 
 # ======================= PLANOS / LIMITES =======================
-PLANOS_PRECO = {"free":0.0, "pro":59.99, "business":109.99, "adm":0.0}
-PLANOS_NOME = {"free":"Orion Free", "pro":"Orion Pro", "business":"Orion Business", "adm":"Orion ADM"}
+PLANOS_PRECO = {"free":0.0, "pro":59.99, "trading":49.99, "trafego":89.99, "business":109.99, "adm":0.0}
+PLANOS_NOME = {"free":"Orion Free", "pro":"Orion Pro", "trading":"Orion Trading", "trafego":"Orion Trafego", "business":"Orion Business", "adm":"Orion ADM"}
 # Cotas por plano (TOKENS):
 #  semana_msgs = pool semanal (zera toda segunda)
 #  fatia_horas = janela que renova porcao "diaria" (Free: 6h; Pro/Business: 24h)
@@ -367,6 +367,8 @@ PLANOS_NOME = {"free":"Orion Free", "pro":"Orion Pro", "business":"Orion Busines
 LIMITES = {
     "free":     {"semana_msgs": 84,   "fatia_horas": 6,  "fatia_msgs": 3,    "docs_mes": 5,  "imagens_dia": 3},
     "pro":      {"semana_msgs": 1400, "fatia_horas": 24, "fatia_msgs": 200,  "docs_mes": 0,  "imagens_dia": 30},
+    "trading":  {"semana_msgs": 1400, "fatia_horas": 24, "fatia_msgs": 200,  "docs_mes": 0,  "imagens_dia": 20},
+    "trafego":  {"semana_msgs": 2500, "fatia_horas": 24, "fatia_msgs": 350,  "docs_mes": 0,  "imagens_dia": 60},
     "business": {"semana_msgs": 7000, "fatia_horas": 24, "fatia_msgs": 1000, "docs_mes": 0,  "imagens_dia": 200},
     "adm":      {"semana_msgs": 10**9,"fatia_horas": 24, "fatia_msgs": 10**9,"docs_mes": 0,  "imagens_dia": 10**9},
 }
@@ -624,7 +626,7 @@ def binance_salvar(uid, key, secret):
     set_blob(uid, "binance", {"key":key,"secret":secret} if (key and secret) else {})
     return {"ok":True}
 def binance_conta(u):
-    if plano_de(u) not in ("adm","business"): return {"ok":False,"erro":"Operacoes reais no Business e ADM, senhor.","plano_baixo":True}
+    if plano_de(u) not in ("adm","business","trading"): return {"ok":False,"erro":"Operacoes reais no plano Trading, Business e ADM, senhor.","plano_baixo":True}
     key,sec = binance_creds_user(u["id"])
     if not (key and sec): return {"ok":False,"erro":"Conecte sua Binance (chave + secret) abaixo."}
     r=_binance_signed(u["id"], "/api/v3/account")
@@ -633,7 +635,7 @@ def binance_conta(u):
     saldos.sort(key=lambda x:-x["livre"])
     return {"ok":True,"saldos":saldos[:25],"podeOperar":r.get("canTrade",False),"teto":REAL_TETO_USD}
 def binance_ordem(u, symbol, side, valor_usd, confirmar=False):
-    if plano_de(u) not in ("adm","business"): return {"ok":False,"erro":"Operacao real disponivel no Business e ADM."}
+    if plano_de(u) not in ("adm","business","trading"): return {"ok":False,"erro":"Operacao real disponivel no plano Trading, Business e ADM."}
     key,sec = binance_creds_user(u["id"])
     if not (key and sec): return {"ok":False,"erro":"Conecte sua Binance primeiro, senhor."}
     symbol=(symbol or "").upper().strip(); side=(side or "").upper().strip()
@@ -683,6 +685,7 @@ def briefing_salvar(uid, d):
     bs = [x for x in bs if x.get("id")!=bid]; bs.insert(0,b); set_blob(uid,"briefings",bs[:200]); return {"ok":True,"briefing":b}
 def briefing_apagar(uid, bid):
     set_blob(uid, "briefings", [x for x in briefings_get(uid) if x.get("id")!=bid]); return {"ok":True}
+def meta_app_creds(): return (os.environ.get("META_APP_ID",""), os.environ.get("META_APP_SECRET",""))
 def meta_creds(uid):
     c = get_blob(uid, "meta", {}) or {}; return (c.get("token",""), c.get("act",""))
 def meta_salvar(uid, token, act):
@@ -755,6 +758,39 @@ def painel_analisar_lead(u, lead):
     out = cloud_chat_web(sys, [{"role":"user","content":msg}], 1000)
     return {"ok":True, "resultado":out}
 
+def chat_area(u, area, frase):
+    """Chat ESPECIALISTA por aba (trading / trafego), com o contexto daquela area."""
+    frase = (frase or "").strip()
+    if not frase: return {"ok":False}
+    area = (area or "trading").lower()
+    if area == "trafego" and plano_de(u) not in ("business","adm","trafego"):
+        return {"ok":True,"reply":"O especialista de Trafego esta no plano Trafego, Business e ADM, senhor."}
+    pode = uso_pode(u, "msg")
+    if not pode["ok"]: return {"ok":True,"reply":pode["motivo"]}
+    uso_reg(u, "msg"); marcar_ativo(u["id"])
+    hoje = datetime.date.today().strftime("%d/%m/%Y")
+    if area == "trafego":
+        ctx = ""
+        m = meta_resumo(u["id"])
+        if m.get("ok"):
+            i = m.get("insights",{}) or {}
+            ctx = f" Numeros reais (Meta 7d): investido R${i.get('spend','?')}, cliques {i.get('clicks','?')}, CTR {i.get('ctr','?')}%, alcance {i.get('reach','?')}."
+        cr = crm_resumo(u["id"]); ctx += f" CRM: {cr['total']} leads, {cr['clientes']} clientes, pipeline R${cr['pipeline']:.0f}."
+        sysp = (PERSONA + f" Hoje e {hoje}. Voce e ESPECIALISTA em trafego pago e marketing digital (Meta/Google Ads, funil, copy, CRM, leads)." + ctx
+                + " Responda focado em marketing e vendas, pratico e direto. Use buscar_web pra dados atuais.")
+        key = "hist_trafego"
+    else:
+        est = cl_trading_estado(u["id"])
+        watch = ", ".join(f"{w.get('ticker')} R${w.get('price','?')}" for w in (est.get("watch") or [])[:6]) or "vazia"
+        sysp = (PERSONA + f" Hoje e {hoje}. Voce e ESPECIALISTA em trading e mercado financeiro (analise tecnica, cripto, B3, gestao de risco)."
+                + f" Watchlist do usuario: {watch}." + " Deixe claro que e analise, NAO recomendacao garantida. Use buscar_web pra cotacao/noticia atual.")
+        key = "hist_trading"
+    hist = get_blob(u["id"], key, [])[-6:]
+    reply = cloud_chat_web(sysp, hist + [{"role":"user","content":frase}], 700)
+    hist = (hist + [{"role":"user","content":frase},{"role":"assistant","content":reply}])[-10:]
+    set_blob(u["id"], key, hist)
+    return {"ok":True, "reply":reply}
+
 # ======================= DOCUMENTOS =======================
 DOC_TPL = {"email":"E-mail profissional","redacao":"Redacao escolar","curriculo":"Curriculo","contrato":"Contrato simples",
            "post":"Post de rede social","resumo":"Resumo","carta":"Carta formal","plano":"Plano de acao"}
@@ -812,7 +848,7 @@ def rotina_acao(u, d):
 # ======================= LICENCA (mesmo modulo do desktop e do gerador) =======================
 # licenca EMBUTIDA (mesmo algoritmo e segredo do desktop/keygen). Auto-suficiente: nao depende de import externo.
 _LIC_SECRET = "Orion-LIC-2026-Gurroffe-Ads-Kx7p9Q2w"
-_LIC_PB = {"pro": 1, "business": 2, "adm": 3}; _LIC_BP = {1: "pro", 2: "business", 3: "adm"}
+_LIC_PB = {"pro": 1, "business": 2, "adm": 3, "trading": 4, "trafego": 5}; _LIC_BP = {1: "pro", 2: "business", 3: "adm", 4: "trading", 5: "trafego"}
 def _lic_mac(msg): return hmac.new(_LIC_SECRET.encode(), msg, hashlib.sha256).digest()[:5]
 def _lic_make_det(plano, serial):
     plano=(plano or "").lower()
@@ -832,7 +868,7 @@ def lic_check(chave):
 class LIC:  # alias pra nao mexer no resto do codigo
     lic_check=staticmethod(lic_check); lic_master=staticmethod(lic_master); lic_make=staticmethod(lic_make)
 def _is_master(chave):
-    return chave in (lic_master("pro"), lic_master("business"), lic_master("adm"))
+    return chave in (lic_master("pro"), lic_master("business"), lic_master("adm"), lic_master("trading"), lic_master("trafego"))
 def lic_registrar(plano):
     """Gera UMA chave de venda e registra no banco como disponivel (uso unico)."""
     chave = lic_make(plano)
@@ -900,7 +936,7 @@ def checkout(u, plano, provedor, burl):
     return {"ok":False,"msg":"Pagamento nao configurado no servidor. Ou use uma chave de ativacao em Planos."}
 
 def _set_plano(uid, plano):
-    if plano not in ("free","pro","business","adm"): return False
+    if plano not in ("free","pro","trading","trafego","business","adm"): return False
     try:
         with _db() as c: c.execute("UPDATE users SET plano=? WHERE id=?", (plano, int(uid))); c.commit()
         return True
@@ -961,7 +997,7 @@ def _mp_req(method, path, body=None, timeout=20):
 def criar_assinatura(u, plano, burl):
     if not mp_token(): return {"ok":False,"msg":"Mercado Pago nao configurado."}
     plano = (plano or "pro").lower()
-    if plano not in ("pro","business"): return {"ok":False,"msg":"Plano invalido."}
+    if plano not in ("pro","trading","trafego","business"): return {"ok":False,"msg":"Plano invalido."}
     valor = PROMO_PRO if plano=="pro" else PLANOS_PRECO[plano]
     body = {"reason": PLANOS_NOME[plano] + (" (promo R$29,99 nos 3 primeiros meses)" if plano=="pro" else ""),
             "external_reference": f"sub:{plano}:{u['id']}",
@@ -1460,6 +1496,32 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             print("[google]", e); self._redir("/?login=google_err")
 
+    def _meta_start(self):
+        aid,_ = meta_app_creds()
+        if not aid: return self._redir("/?ir=painel&meta=off")
+        params = urllib.parse.urlencode({"client_id":aid, "redirect_uri":base_url(self)+"/auth/meta/callback",
+                                         "scope":"ads_read,ads_management,business_management", "response_type":"code"})
+        self._redir("https://www.facebook.com/v20.0/dialog/oauth?"+params)
+    def _meta_callback(self):
+        aid,sec = meta_app_creds(); u = self._user()
+        qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
+        code = (qs.get("code") or [""])[0]
+        if not (code and aid and sec and u): return self._redir("/?ir=painel&meta=err")
+        def _g(url): return json.loads(urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"}),timeout=20).read().decode())
+        try:
+            cb = base_url(self)+"/auth/meta/callback"
+            t1 = _g("https://graph.facebook.com/v20.0/oauth/access_token?"+urllib.parse.urlencode(
+                {"client_id":aid,"redirect_uri":cb,"client_secret":sec,"code":code})).get("access_token")
+            tL = _g("https://graph.facebook.com/v20.0/oauth/access_token?"+urllib.parse.urlencode(
+                {"grant_type":"fb_exchange_token","client_id":aid,"client_secret":sec,"fb_exchange_token":t1})).get("access_token", t1)
+            accts = _g("https://graph.facebook.com/v20.0/me/adaccounts?"+urllib.parse.urlencode(
+                {"access_token":tL,"fields":"account_id,name"})).get("data",[])
+            act = ("act_"+accts[0]["account_id"]) if accts else ""
+            meta_salvar(u["id"], tL, act)
+            self._redir("/?ir=painel&meta=ok")
+        except Exception as e:
+            print("[meta oauth]", e); self._redir("/?ir=painel&meta=err")
+
     def do_OPTIONS(self): self._send(b"",204)
 
     def do_GET(self):
@@ -1500,6 +1562,9 @@ class H(BaseHTTPRequestHandler):
             self._send(_assetlinks_atual(), 200, "application/json")
         elif path == "/auth/google": self._google_start()
         elif path == "/auth/google/callback": self._google_callback()
+        elif path == "/auth/meta": self._meta_start()
+        elif path == "/auth/meta/callback": self._meta_callback()
+        elif path == "/meta/oauth_on": self._send({"on":bool(meta_app_creds()[0])})
         elif path == "/pagamento/webhook":
             qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
             mp_webhook((qs.get("data.id") or qs.get("id") or [None])[0],
@@ -1517,7 +1582,7 @@ class H(BaseHTTPRequestHandler):
         elif path == "/binance/conta":
             self._send(binance_conta(u) if u else {"ok":False,"erro":"faca login"})
         elif path in ("/painel","/crm/leads","/briefings","/meta/resumo"):
-            if not (u and plano_de(u) in ("business","adm")): self._send({"ok":False,"erro":"Painel disponivel no Business e ADM, senhor.","plano_baixo":True}); return
+            if not (u and plano_de(u) in ("business","adm","trafego")): self._send({"ok":False,"erro":"Painel disponivel no plano Trafego, Business e ADM, senhor.","plano_baixo":True}); return
             if path == "/painel": self._send(painel_resumo(u))
             elif path == "/crm/leads": self._send({"ok":True,"leads":crm_leads(u["id"])})
             elif path == "/briefings": self._send({"ok":True,"briefings":briefings_get(u["id"])})
@@ -1706,7 +1771,7 @@ class H(BaseHTTPRequestHandler):
         elif path == "/licenca/ativar":
             self._send(lic_ativar(u, d.get("chave")) if u else {"ok":False,"erro":"faca login"})
         elif path == "/licenca/gerar":
-            if u and u["criador"] and (d.get("plano") in ("pro","business","adm")):
+            if u and u["criador"] and (d.get("plano") in ("pro","trading","trafego","business","adm")):
                 self._send({"ok":True,"plano":d["plano"],"chave":lic_registrar(d["plano"])})
             else: self._send({"ok":False,"erro":"so o dono gera chaves"})
         elif path == "/pagamento/checkout":
@@ -1730,6 +1795,8 @@ class H(BaseHTTPRequestHandler):
             self._send(wa_desvincular(u) if u else {"ok":False,"erro":"faca login"})
         elif path == "/tarefa/criar":
             self._send(tarefa_criar(u, d.get("pedido","")) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/chat/area":
+            self._send(chat_area(u, d.get("area","trading"), d.get("frase","")) if u else {"ok":False,"erro":"faca login"})
         elif path == "/agente/criar":
             if u and plano_de(u) in ("adm","business"):
                 self._send(agente_criar(u["id"], d.get("nome",""), d.get("descricao",""), d.get("instrucoes","")))
@@ -1744,7 +1811,7 @@ class H(BaseHTTPRequestHandler):
             self._send(binance_salvar(u["id"], d.get("key",""), d.get("secret","")) if u else {"ok":False,"erro":"faca login"})
         elif path in ("/crm/lead/salvar","/crm/lead/apagar","/briefing/salvar","/briefing/apagar","/meta/salvar",
                        "/painel/analise","/painel/copy","/painel/lead_analise"):
-            if not (u and plano_de(u) in ("business","adm")): self._send({"ok":False,"erro":"so Business/ADM"}); return
+            if not (u and plano_de(u) in ("business","adm","trafego")): self._send({"ok":False,"erro":"so Trafego/Business/ADM"}); return
             if path == "/crm/lead/salvar": self._send(crm_lead_salvar(u["id"], d))
             elif path == "/crm/lead/apagar": self._send(crm_lead_apagar(u["id"], d.get("id")))
             elif path == "/briefing/salvar": self._send(briefing_salvar(u["id"], d))
