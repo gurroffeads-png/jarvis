@@ -318,6 +318,22 @@ button{font-family:inherit;cursor:pointer}
   .composer{gap:6px;padding:6px 6px 6px 12px}
   .composer .mic,.composer .send{width:38px;height:38px}
   .composer .mic svg{width:17px;height:17px}}
+/* COMPANHEIRO (mascote sempre presente) */
+.companion{position:fixed;right:18px;bottom:84px;z-index:140;width:60px;height:60px;cursor:pointer;
+  display:none;filter:drop-shadow(0 6px 18px rgba(91,140,255,.45));transition:transform .2s}
+.companion.show{display:block}
+.companion:hover{transform:scale(1.07)}
+.companion svg{width:100%;height:100%;animation:compFloat 3.2s ease-in-out infinite}
+.companion.react svg{animation:compPop .5s ease}
+@keyframes compFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes compPop{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}
+.comp-bubble{position:fixed;right:20px;bottom:150px;z-index:141;max-width:240px;background:var(--panel);
+  border:1px solid var(--line2);border-radius:14px 14px 4px 14px;padding:11px 14px;font-size:13px;line-height:1.45;
+  color:var(--text);box-shadow:0 10px 30px rgba(0,0,0,.45);display:none;animation:bubbleIn .25s ease}
+.comp-bubble.show{display:block}
+.comp-bubble .x{position:absolute;top:4px;right:8px;color:var(--faint);cursor:pointer;font-size:14px}
+@keyframes bubbleIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(max-width:640px){.companion{width:52px;height:52px;bottom:78px;right:12px}.comp-bubble{bottom:138px;right:14px;max-width:200px}}
 /* TOUR de boas-vindas (3 passos, mostrado 1x por aparelho) */
 .tour{position:fixed;inset:0;z-index:300;background:rgba(6,8,15,.78);backdrop-filter:blur(8px);
   display:none;align-items:center;justify-content:center;padding:18px;animation:fadeIn .3s ease}
@@ -505,6 +521,12 @@ button{font-family:inherit;cursor:pointer}
     <div id="rotinaArea"></div>
   </div></section>
 
+  <!-- PAINEL BUSINESS -->
+  <section class="view" id="viewPainel"><div class="page" style="max-width:1100px">
+    <h1>Painel Business</h1>
+    <div class="sub">Seu centro de controle: anuncios (Meta Ads), leads, clientes, briefings e pagamentos.</div>
+    <div id="painelArea"></div>
+  </div></section>
   <!-- AGENTES DE IA (Business+/ADM) -->
   <section class="view" id="viewAgentes"><div class="page">
     <h1>Agentes de IA</h1>
@@ -642,6 +664,17 @@ button{font-family:inherit;cursor:pointer}
 
 <div id="saveDot"><span class="ring"></span><span class="lbl">SALVO</span></div>
 
+<!-- COMPANHEIRO (mascote) -->
+<div id="compBubble" class="comp-bubble"><span class="x" onclick="compFecha()">&#10005;</span><span id="compTxt"></span></div>
+<div id="companion" class="companion" onclick="compClick()" title="Falar com o Orion">
+  <svg viewBox="0 0 100 100"><defs><radialGradient id="cg" cx="50%" cy="34%" r="72%"><stop offset="0%" stop-color="#cfdcff"/><stop offset="46%" stop-color="#5b8cff"/><stop offset="100%" stop-color="#2a36c8"/></radialGradient></defs>
+    <circle cx="50" cy="50" r="38" fill="#6f97ff" opacity=".18"/><circle cx="50" cy="50" r="30" fill="url(#cg)"/>
+    <ellipse cx="50" cy="40" rx="12" ry="6" fill="#fff" fill-opacity=".18"/>
+    <circle cx="43" cy="50" r="3.4" fill="#0a0c11"/><circle cx="57" cy="50" r="3.4" fill="#0a0c11"/>
+    <circle cx="44.2" cy="48.6" r="1" fill="#fff"/><circle cx="58.2" cy="48.6" r="1" fill="#fff"/>
+    <path d="M43 57 q7 5 14 0" fill="none" stroke="#0a0c11" stroke-width="2.2" stroke-linecap="round"/></svg>
+</div>
+
 <script>
 // ===================== ESTADO =====================
 const ICON={
@@ -664,6 +697,7 @@ const NAV=[
  {sec:'Principal'},
  {id:'home',nome:'Inicio',icon:'home'},
  {id:'code',nome:'Orion Code',icon:'soon',planos:['business','adm']},
+ {id:'painel',nome:'Painel Business',icon:'trading',planos:['business','adm']},
  {id:'agentes',nome:'Agentes de IA',icon:'memoria',planos:['business','adm']},
  {id:'documentos',nome:'Documentos',icon:'doc'},
  {id:'rotina',nome:'Rotina & Progresso',icon:'rotina'},
@@ -734,7 +768,7 @@ function go(id){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const map={home:'viewHome',documentos:'viewDocumentos',rotina:'viewRotina',tarefas:'viewTarefas',
     memoria:'viewMemoria',aprender:'viewAprender',trading:'viewTrading',integracoes:'viewIntegracoes',config:'viewConfig',conta:'viewConta',planos:'viewPlanos',
-    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode',agentes:'viewAgentes'};
+    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode',agentes:'viewAgentes',painel:'viewPainel'};
   document.getElementById(map[id]).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.id===id));
   if(id==='config') renderConfig();
@@ -746,6 +780,7 @@ function go(id){
   if(id==='tarefas') renderTarefas();
   if(id==='code') renderCode();
   if(id==='agentes') renderAgentes();
+  if(id==='painel') renderPainel();
   if(id==='memoria') renderMemoria();
   if(id==='aprender') renderAprender();
   if(id==='trading') renderTrading();
@@ -790,7 +825,7 @@ async function enviar(){
   // mostra imediatamente a fala do usuario (o poll confirma depois)
   addMsg('user',txt,'local');
   try{ const j=await (await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frase:txt, conv_id:CONV_ID})})).json();
-    if(j && j.reply){ addMsg('assistant', j.reply); speakOrion(j.reply); }
+    if(j && j.reply){ addMsg('assistant', j.reply); speakOrion(j.reply); compReage(); }
     if(j && j.conv_id){ CONV_ID=j.conv_id; convAtualizarLista(); } }
   catch(e){ addMsg('assistant','Nao consegui falar com o servidor, senhor.'); }
 }
@@ -913,6 +948,7 @@ function aplicaUser(){
   // re-renderiza a pagina atual que depende do usuario (corrige painel de dono nao aparecer no 1o load)
   if(VIEW==='conta') renderConta(); else if(VIEW==='config') renderConfig(); else if(VIEW==='planos') renderPlanos(); else if(VIEW==='code') renderCode();
   renderNav();
+  compAtivar();
 }
 function setPlanoBadge(plano){
   const b=document.getElementById('chipPlan');
@@ -1446,9 +1482,12 @@ async function tgReset(){ if(!confirm('Zerar a carteira simulada (volta pra R$ 1
 // ----- operacoes REAIS (Binance) -----
 async function tgRenderReal(){
   const box=document.getElementById('tgRealBox'); if(!box) return;
-  if(window.ORION_CLOUD){ box.innerHTML='<div class="card"><h3>Operacoes reais</h3><div class="hint">As operacoes reais (Binance) ficam na versao desktop do Orion, por seguranca. Aqui na web voce tem analise, simulacao e o print.</div></div>'; return; }
   let c={}; try{ c=await (await fetch('/binance/conta')).json(); }catch(e){ c={ok:false,erro:'sem conexao'}; }
   const disc='<div class="hint" style="color:var(--warn);margin-top:10px">ATENCAO: aqui e DINHEIRO REAL. Toda ordem e validada, mostra os detalhes e so executa depois que voce confirma. Tem teto de seguranca por ordem (US$ 200). Comece com pouco, senhor.</div>';
+  if(c.plano_baixo){
+    box.innerHTML='<div class="card"><h3>Operacoes reais (Binance)</h3><div class="hint">As operacoes com dinheiro real ficam no plano <b>Business</b> (e no seu ADM), por seguranca. Aqui voce tem analise, simulacao e o print.</div><button class="btn primary" style="margin-top:10px" onclick="go(\'planos\')">Ver planos</button></div>';
+    return;
+  }
   if(!c.ok){
     box.innerHTML=`<div class="card" style="border-color:var(--warn)"><h3>Operacoes reais (Binance) <span class="mbadge" style="margin-left:8px">DINHEIRO REAL</span></h3>
       <div class="hint" style="margin-bottom:10px">Conecte sua conta Binance pra operar cripto de verdade. Crie uma API Key em Binance &gt; API Management com permissao de Spot Trading. Suas chaves ficam so no seu aparelho.</div>
@@ -1472,7 +1511,8 @@ async function tgRenderReal(){
 async function tgRealConnect(){
   const k=(document.getElementById('bnKey')||{}).value, s=(document.getElementById('bnSec')||{}).value;
   if(!k||!s){ alert('Cole a API Key e o Secret.'); return; }
-  await fetch('/integra/cred',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({binance_key:k,binance_secret:s})});
+  if(window.ORION_CLOUD){ await fetch('/binance/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,secret:s})}); }
+  else { await fetch('/integra/cred',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({binance_key:k,binance_secret:s})}); }
   piscarSave('BINANCE'); tgRenderReal();
 }
 let _bnPend=null;
@@ -1905,6 +1945,181 @@ async function rotManual(){ const nome=prompt('Nome da rotina:'); if(!nome) retu
   await fetch('/rotina',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'criar',nome,itens:(itens||'').split(',')})}); piscarSave('ROTINA'); renderRotina(); }
 
 let _tfPoll=null;
+async function renderPainel(){
+  const plano=(USER&&USER.plano)||'free'; const area=document.getElementById('painelArea');
+  if(plano!=='business'&&plano!=='adm'){
+    area.innerHTML='<div class="card"><h3>Disponivel no Business</h3><div class="hint">O Painel Business (Meta Ads, leads, clientes, briefings) esta no plano Business e no seu ADM.</div><button class="btn primary" style="margin-top:10px" onclick="go(\'planos\')">Ver planos</button></div>';
+    return;
+  }
+  let p={crm:{},briefings:0}; try{ p=await (await fetch('/painel')).json(); }catch(e){}
+  const c=p.crm||{}; const fmt=n=>'R$ '+(Number(n||0)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const card=(t,v,cor)=>`<div style="flex:1;min-width:120px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:14px"><div class="hint" style="font-size:11px">${t}</div><div style="font-size:22px;font-weight:800;color:${cor||'var(--text)'}">${v}</div></div>`;
+  area.innerHTML=`
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+      ${card('Leads', c.total||0)}
+      ${card('Clientes', c.clientes||0, 'var(--good)')}
+      ${card('Pipeline', fmt(c.pipeline), 'var(--accent)')}
+      ${card('Receita', fmt(c.receita), 'var(--good)')}
+    </div>
+    <div class="card"><h3>Meta Ads</h3><div id="metaBox">carregando...</div></div>
+    <div class="card" style="margin-top:14px"><h3>Análise de IA <span class="mbadge" style="margin-left:6px">estrategia</span></h3>
+      <div class="hint" style="margin-bottom:10px">O Orion analisa seus números (Meta Ads + CRM) e monta um plano de ação. Adicione contexto se quiser.</div>
+      <div class="field"><textarea id="anCtx" rows="2" placeholder="Opcional: meta de faturamento, produto, publico, o que te incomoda hoje..."></textarea></div>
+      <div class="row"><button class="btn primary" onclick="anAnalisar()">Analisar e me dar estrategia</button></div>
+      <div id="anRes" style="margin-top:10px;white-space:pre-wrap;font-size:14px;line-height:1.55"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Copy de criativo <span class="mbadge" style="margin-left:6px">com imagem</span></h3>
+      <div class="hint" style="margin-bottom:10px">Descreva o produto/oferta. Pode enviar a imagem do criativo que eu leio e adapto a copy.</div>
+      <div class="field"><textarea id="cpBrief" rows="2" placeholder="ex: curso de ingles online, publico 25-40 anos, promo de R$197"></textarea></div>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <button class="btn" onclick="document.getElementById('cpImg').click()">Enviar imagem</button>
+        <button class="btn primary" onclick="cpGerar()">Gerar copy</button>
+        <button class="btn" onclick="cpGerarImg()">Gerar imagem do criativo</button>
+        <input type="file" id="cpImg" accept="image/*" style="display:none" onchange="cpImgSel(event)">
+        <span id="cpImgNome" class="hint"></span>
+      </div>
+      <div id="cpRes" style="margin-top:10px;white-space:pre-wrap;font-size:14px;line-height:1.55"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Analisador de leads <span class="mbadge" style="margin-left:6px">cold mail</span></h3>
+      <div class="hint" style="margin-bottom:10px">Informe o lead/empresa. O Orion identifica a dor e já escreve um cold mail pronto.</div>
+      <div class="tg-order" style="flex-wrap:wrap;gap:8px">
+        <input id="laNome" placeholder="Nome do contato" style="flex:1;min-width:120px">
+        <input id="laEmpresa" placeholder="Empresa" style="flex:1;min-width:120px">
+      </div>
+      <div class="field" style="margin-top:8px"><textarea id="laPerfil" rows="2" placeholder="Perfil/observacoes: site, segmento, cargo, o que voce sabe dele..."></textarea></div>
+      <div class="row"><button class="btn primary" onclick="laAnalisar()">Analisar e gerar cold mail</button></div>
+      <div id="laRes" style="margin-top:10px;white-space:pre-wrap;font-size:14px;line-height:1.55"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Leads & Clientes</h3>
+      <div class="tg-order" style="flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <input id="ldNome" placeholder="Nome" style="flex:1;min-width:120px">
+        <input id="ldContato" placeholder="Contato (zap/email)" style="flex:1;min-width:120px">
+        <input id="ldValor" type="number" placeholder="Valor R$" style="width:110px">
+        <select id="ldStatus"><option value="novo">Novo</option><option value="contato">Em contato</option><option value="proposta">Proposta</option><option value="cliente">Cliente</option><option value="perdido">Perdido</option></select>
+        <button class="btn primary" onclick="ldSalvar()">Adicionar</button>
+      </div>
+      <div id="leadsLista"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Briefings</h3>
+      <div class="field"><input id="bfTitulo" placeholder="Titulo / cliente"></div>
+      <div class="field"><textarea id="bfConteudo" rows="3" placeholder="Briefing do projeto: objetivo, publico, prazo, observacoes..."></textarea></div>
+      <div class="row"><button class="btn primary" onclick="bfSalvar()">Salvar briefing</button></div>
+      <div id="briefLista" style="margin-top:12px"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Pagamentos</h3>
+      <div class="hint">Seu plano: <b style="color:var(--text)">${(plano||'').toUpperCase()}</b>. Gerencie assinatura na aba Conta.</div>
+      <button class="btn" style="margin-top:10px" onclick="go('conta')">Ir pra Conta</button>
+    </div>`;
+  metaRender(); ldRender(); bfRender();
+}
+async function metaRender(){
+  const box=document.getElementById('metaBox'); if(!box) return;
+  let m={}; try{ m=await (await fetch('/meta/resumo')).json(); }catch(e){ m={ok:false,erro:'sem conexao'}; }
+  if(!m.ok){
+    box.innerHTML=`<div class="hint" style="margin-bottom:10px">Conecte sua conta de anuncios pra ver gastos, alcance e campanhas, e usar a IA.</div>
+      <details style="margin-bottom:10px"><summary style="cursor:pointer;color:var(--accent);font-size:13px">Como pegar o token e o ID? (passo a passo)</summary>
+        <div class="hint" style="margin-top:8px;line-height:1.6">
+        1. <b>ID da conta</b>: em adsmanager.facebook.com, o numero ao lado do nome da conta. Cole como <code>act_</code> + numero.<br>
+        2. <b>Token</b>: em developers.facebook.com/tools/explorer, marque a permissao <b>ads_read</b> e clique em <b>Generate Access Token</b>. Copie.<br>
+        3. So leitura: o Orion nao gasta nem cria anuncio, so le os numeros.</div>
+      </details>
+      <div class="field"><input id="mtTok" type="password" placeholder="Access Token da Meta"></div>
+      <div class="field"><input id="mtAct" placeholder="ID da conta de anuncios (act_...)"></div>
+      <button class="btn primary" onclick="metaSalvar()">Conectar Meta Ads</button>
+      ${(m.erro&&!/conecte/i.test(m.erro))?'<div class="hint" style="color:var(--warn);margin-top:8px">'+esc(m.erro)+'</div>':''}`;
+    return;
+  }
+  const i=m.insights||{}; const fmt=n=>'R$ '+(Number(n||0)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const stat=(t,v)=>`<div style="flex:1;min-width:90px"><div class="hint" style="font-size:11px">${t}</div><div style="font-size:18px;font-weight:700">${v}</div></div>`;
+  box.innerHTML=`<div class="hint" style="margin-bottom:8px">Ultimos 7 dias</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      ${stat('Investido', fmt(i.spend))}${stat('Impressoes', Number(i.impressions||0).toLocaleString('pt-BR'))}
+      ${stat('Cliques', Number(i.clicks||0).toLocaleString('pt-BR'))}${stat('CTR', (Number(i.ctr||0)).toFixed(2)+'%')}${stat('Alcance', Number(i.reach||0).toLocaleString('pt-BR'))}
+    </div>
+    <div class="hint" style="margin-bottom:6px">Campanhas</div>
+    ${(m.campanhas||[]).map(c=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>${esc(c.name)}</span><span class="mbadge ${c.status==='ACTIVE'?'':''}" style="color:${c.status==='ACTIVE'?'var(--good)':'var(--faint)'}">${esc(c.status||'')}</span></div>`).join('')||'<div class="hint">Nenhuma campanha.</div>'}
+    <button class="btn ghost" style="margin-top:10px" onclick="metaRender()">Atualizar</button>`;
+}
+async function metaSalvar(){
+  const t=document.getElementById('mtTok').value.trim(), a=document.getElementById('mtAct').value.trim();
+  if(!t||!a){ alert('Cole o token e o ID da conta.'); return; }
+  await fetch('/meta/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:t,act:a})});
+  piscarSave('META ADS'); metaRender();
+}
+let _LEADS=[];
+async function ldRender(){
+  const box=document.getElementById('leadsLista'); if(!box) return;
+  let r={leads:[]}; try{ r=await (await fetch('/crm/leads')).json(); }catch(e){}
+  _LEADS=r.leads||[];
+  const cor={novo:'var(--dim)',contato:'var(--accent)',proposta:'var(--warn)',cliente:'var(--good)',perdido:'var(--bad)'};
+  box.innerHTML=_LEADS.map(l=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)">
+    <div><b>${esc(l.nome)}</b> <span style="font-size:11px;color:${cor[l.status]||'var(--dim)'}">&middot; ${esc(l.status)}</span><div class="hint">${esc(l.contato||'')}${l.valor?' &middot; R$ '+l.valor:''}</div></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <select onchange="ldStatus(${l.id},this.value)" style="font-size:12px">${['novo','contato','proposta','cliente','perdido'].map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${s}</option>`).join('')}</select>
+      <button class="btn ghost" onclick="ldApagar(${l.id})">&#10005;</button>
+    </div></div>`).join('')||'<div class="hint">Nenhum lead ainda. Adicione acima.</div>';
+}
+async function ldSalvar(){
+  const nome=document.getElementById('ldNome').value.trim();
+  if(!nome){ alert('Nome do lead.'); return; }
+  await fetch('/crm/lead/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,contato:document.getElementById('ldContato').value.trim(),valor:document.getElementById('ldValor').value,status:document.getElementById('ldStatus').value})});
+  document.getElementById('ldNome').value='';document.getElementById('ldContato').value='';document.getElementById('ldValor').value='';
+  piscarSave('LEAD'); ldRender(); renderPainelKPIs();
+}
+async function ldStatus(id,status){ const l=_LEADS.find(x=>x.id===id)||{}; await fetch('/crm/lead/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({},l,{status}))}); ldRender(); renderPainelKPIs(); }
+async function ldApagar(id){ await fetch('/crm/lead/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); ldRender(); renderPainelKPIs(); }
+async function renderPainelKPIs(){ try{ const p=await (await fetch('/painel')).json(); const c=p.crm||{};
+  const cards=document.querySelectorAll('#painelArea > div:first-child > div'); if(cards.length>=4){
+    cards[0].querySelector('div:last-child').textContent=c.total||0;
+    cards[1].querySelector('div:last-child').textContent=c.clientes||0;
+  } }catch(e){} }
+let _BRIEF=[];
+async function bfRender(){
+  const box=document.getElementById('briefLista'); if(!box) return;
+  let r={briefings:[]}; try{ r=await (await fetch('/briefings')).json(); }catch(e){}
+  _BRIEF=r.briefings||[];
+  box.innerHTML=_BRIEF.map(b=>`<div style="border:1px solid var(--line2);border-radius:10px;padding:10px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between"><b>${esc(b.titulo)}</b><button class="btn ghost" onclick="bfApagar(${b.id})">&#10005;</button></div>
+    <div class="hint" style="white-space:pre-wrap;margin-top:4px">${esc(b.conteudo||'')}</div></div>`).join('')||'<div class="hint">Nenhum briefing ainda.</div>';
+}
+async function bfSalvar(){
+  const t=document.getElementById('bfTitulo').value.trim(), c=document.getElementById('bfConteudo').value.trim();
+  if(!t&&!c){ alert('Escreva o briefing.'); return; }
+  await fetch('/briefing/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titulo:t,conteudo:c})});
+  document.getElementById('bfTitulo').value='';document.getElementById('bfConteudo').value='';
+  piscarSave('BRIEFING'); bfRender();
+}
+async function bfApagar(id){ await fetch('/briefing/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); bfRender(); }
+async function anAnalisar(){
+  const box=document.getElementById('anRes'); box.textContent='Analisando seus numeros...';
+  try{ const r=await (await fetch('/painel/analise',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contexto:document.getElementById('anCtx').value.trim()})})).json();
+    box.textContent = r.ok ? r.analise : (r.erro||'Nao consegui analisar.');
+  }catch(e){ box.textContent='Sem conexao.'; }
+}
+let _cpImgB64=null;
+function cpImgSel(ev){ const f=ev.target.files[0]; if(!f) return; const rd=new FileReader();
+  rd.onload=()=>{ _cpImgB64=rd.result; document.getElementById('cpImgNome').textContent='✓ '+f.name; }; rd.readAsDataURL(f); }
+async function cpGerar(){
+  const box=document.getElementById('cpRes'); box.textContent='Escrevendo a copy...';
+  try{ const r=await (await fetch('/painel/copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({briefing:document.getElementById('cpBrief').value.trim(),imagem:_cpImgB64})})).json();
+    box.textContent = r.ok ? r.copy : (r.erro||'Nao consegui gerar.');
+  }catch(e){ box.textContent='Sem conexao.'; }
+}
+async function cpGerarImg(){
+  const brief=document.getElementById('cpBrief').value.trim(); const box=document.getElementById('cpRes');
+  if(!brief){ box.textContent='Descreva o criativo no campo acima primeiro.'; return; }
+  box.textContent='Gerando a imagem do criativo...';
+  try{ const r=await (await fetch('/imagem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'anuncio publicitario, '+brief})})).json();
+    if(r.ok&&r.url){ box.innerHTML='<a href="'+r.url+'" target="_blank"><img src="'+r.url+'" style="max-width:100%;border-radius:12px"></a>'; }
+    else box.textContent=r.erro||'Nao consegui gerar a imagem.';
+  }catch(e){ box.textContent='Sem conexao.'; }
+}
+async function laAnalisar(){
+  const box=document.getElementById('laRes'); box.textContent='Analisando o lead e escrevendo o cold mail...';
+  try{ const r=await (await fetch('/painel/lead_analise',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:document.getElementById('laNome').value.trim(),empresa:document.getElementById('laEmpresa').value.trim(),perfil:document.getElementById('laPerfil').value.trim()})})).json();
+    box.textContent = r.ok ? r.resultado : (r.erro||'Nao consegui analisar.');
+  }catch(e){ box.textContent='Sem conexao.'; }
+}
 let _AGS=[], _AG_SEL=null;
 async function renderAgentes(){
   const plano=(USER&&USER.plano)||'free';
@@ -2187,6 +2402,42 @@ if(window.ORION_CLOUD){
 }
 
 // ===================== INIT =====================
+// ===================== COMPANHEIRO (mascote presente) =====================
+let _compTimer=null, _compIdle=null;
+function compNome(){ return (USER && (USER.tratamento || USER.nome)) || 'senhor'; }
+function compAtivar(){
+  if(!USER || USER.convidado) return;
+  const c=document.getElementById('companion'); if(c) c.classList.add('show');
+  clearTimeout(_compIdle);
+  _compIdle=setTimeout(()=>compFala('Tô aqui se precisar de algo, '+compNome()+'. 🙂', 6000), 9000);  // 1a saudacao
+  _resetIdle();
+}
+function _resetIdle(){
+  clearTimeout(_compTimer);
+  _compTimer=setTimeout(()=>{ if(VIEW==='home') compFala(_compDica(), 7000); }, 70000);  // dica se ficar parado
+}
+const _COMP_DICAS=[
+  'Sabia que dá pra falar comigo por voz? Toca no microfone.',
+  'Posso escrever seus e-mails e documentos num instante.',
+  'Quer ver as notícias do dia? É só pedir "resumo do dia".',
+  'Posso gerar imagens: diga "gera uma imagem de...".',
+  'Me conta o que você precisa fazer hoje que eu organizo.'
+];
+function _compDica(){ return _COMP_DICAS[Math.floor(Math.random()*_COMP_DICAS.length)]; }
+function compFala(txt, ms){
+  const b=document.getElementById('compBubble'), t=document.getElementById('compTxt');
+  if(!b||!t||!USER||USER.convidado) return;
+  t.textContent=txt; b.classList.add('show');
+  const c=document.getElementById('companion'); if(c){ c.classList.add('react'); setTimeout(()=>c.classList.remove('react'),500); }
+  clearTimeout(b._t); b._t=setTimeout(()=>b.classList.remove('show'), ms||5000);
+}
+function compFecha(){ const b=document.getElementById('compBubble'); if(b) b.classList.remove('show'); }
+function compClick(){ go('home'); const i=document.getElementById('inp'); if(i) i.focus();
+  compFala('Manda ver, '+compNome()+'. O que vamos fazer?', 5000); }
+function compReage(){ // chamado quando chega resposta do chat
+  const c=document.getElementById('companion'); if(c&&c.classList.contains('show')){ c.classList.add('react'); setTimeout(()=>c.classList.remove('react'),500); }
+  _resetIdle();
+}
 // ===================== TOUR DE BOAS-VINDAS =====================
 const _mascoteSVG = '<svg class="tour-illo" width="120" height="120" viewBox="0 0 200 200"><defs><radialGradient id="tg" cx="50%" cy="34%" r="72%"><stop offset="0%" stop-color="#cfdcff"/><stop offset="46%" stop-color="#5b8cff"/><stop offset="100%" stop-color="#2a36c8"/></radialGradient></defs><circle cx="100" cy="100" r="76" fill="#6f97ff" opacity=".18"/><circle cx="100" cy="100" r="58" fill="url(#tg)"/><ellipse cx="100" cy="80" rx="24" ry="11" fill="#fff" fill-opacity=".18"/><circle cx="88" cy="99" r="6" fill="#0a0c11"/><circle cx="112" cy="99" r="6" fill="#0a0c11"/><circle cx="90.2" cy="96.5" r="1.9" fill="#fff"/><circle cx="114.2" cy="96.5" r="1.9" fill="#fff"/><path d="M88 113 q12 9 24 0" fill="none" stroke="#0a0c11" stroke-width="3" stroke-linecap="round"/></svg>';
 const TOUR_STEPS = [

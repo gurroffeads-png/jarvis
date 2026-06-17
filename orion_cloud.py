@@ -473,7 +473,7 @@ def grafo_acao(uid, d):
     else: return {"ok":False,"erro":"acao invalida"}
     return {"ok":True,"tree":grafo_tree(uid)}
 
-def memoria_contexto(uid, limite=14):
+def memoria_contexto(uid, limite=8):
     """Fatos ja aprendidos sobre o usuario, pra injetar no prompt (ele 'lembra')."""
     try:
         g = grafo(uid); fatos = [x.get("data","") for x in g["nodes"].values()
@@ -510,7 +510,7 @@ def conhecimento_add(fato, origem="chat"):
         return True
     except INTEGRITY_ERRORS: return False     # ja existe (UNIQUE) -> dedup
     except Exception as e: print("[conhecimento_add]", e); return False
-def conhecimento_contexto(limite=6):
+def conhecimento_contexto(limite=4):
     try:
         with _db() as c:
             rows = c.execute("SELECT fato FROM conhecimento ORDER BY id DESC LIMIT ?", (limite,)).fetchall()
@@ -535,6 +535,32 @@ def conhecimento_listar(limite=200):
 def conhecimento_limpar():
     with _db() as c: c.execute("DELETE FROM conhecimento"); c.commit()
     return True
+
+# ---- otimizacao: so usa busca web (tool-calling, mais lento) quando faz sentido ----
+_WEB_GAT = ("hoje","ontem","agora","ultim","recent","noticia","notícia","preco","preço","quanto","cotacao","cotação",
+            "dolar","dólar","euro","bitcoin","acao","ação","bolsa","mercado","clima","tempo","previs","quem e ","quem é",
+            "onde","quando","2024","2025","2026","atual","lancou","lançou","lancamento","resultado","jogo","placar",
+            "pesquis","busca","procura","cotou","valor de","quanto custa","quem ganhou","quem venceu")
+def precisa_web(frase):
+    f = (frase or "").lower()
+    if len(f) < 8: return False
+    if "?" in frase and len(frase) > 14: return True
+    return any(g in f for g in _WEB_GAT)
+def aprender_bg(uid, frase):
+    """UMA chamada de fundo aprende fato pessoal + fato geral (antes eram 2 chamadas)."""
+    try:
+        if not LLM_KEY or len((frase or "").strip()) < 14: return
+        sys = ('Da mensagem do usuario, extraia em JSON: {"pessoal":"<fato duravel sobre o usuario, 3a pessoa, ou NADA>",'
+               '"geral":"<fato GERAL do mundo SEM dado pessoal, ou NADA>"}. Responda SO o JSON.')
+        out = cloud_chat(sys, [{"role":"user","content":frase}], 120) or ""
+        try: j = json.loads(out[out.find("{"):out.rfind("}")+1])
+        except Exception: return
+        p = (j.get("pessoal") or "").strip().strip('".'); g = (j.get("geral") or "").strip().strip('".')
+        if p and p.upper() != "NADA" and 5 < len(p) < 180:
+            gr = grafo(uid); ex = [(x.get("data") or "").lower() for x in gr["nodes"].values()]
+            if p.lower() not in ex: grafo_add(uid, p, "voce")
+        if g and g.upper() != "NADA": conhecimento_add(g, "chat")
+    except Exception as e: print("[aprender_bg]", e)
 
 # ======================= AGENTES DE IA (gerador, ADM por enquanto) =======================
 def agentes_get(uid): return get_blob(uid, "agentes", [])
@@ -564,6 +590,170 @@ def agente_run(u, aid, mensagem):
         if a.get("id")==aid: ags[i]=ag; break
     set_blob(u["id"], "agentes", ags)
     return {"ok":True, "resposta":resp}
+
+# ======================= BINANCE (operacoes REAIS, com trava) =======================
+# SEGURANCA: teto por ordem, valida antes (order/test), exige confirmar=True explicito do USUARIO.
+# O Orion NUNCA dispara ordem real sozinho - so o usuario, com confirmacao. Agentes/auto NAO chamam isto.
+REAL_TETO_USD = 200.0
+def binance_creds_user(uid):
+    c = get_blob(uid, "binance", {}) or {}
+    return (c.get("key",""), c.get("secret",""))
+def _binance_signed(uid, path, params=None, method="GET"):
+    key, sec = binance_creds_user(uid)
+    if not (key and sec): return {"erro":"Binance nao conectada"}
+    params = dict(params or {}); params["timestamp"]=int(time.time()*1000); params["recvWindow"]=5000
+    qs = urllib.parse.urlencode(params)
+    sig = hmac.new(sec.encode(), qs.encode(), hashlib.sha256).hexdigest()
+    url = f"https://api.binance.com{path}?{qs}&signature={sig}"
+    req = urllib.request.Request(url, headers={"X-MBX-APIKEY":key,"User-Agent":"Mozilla/5.0"}, method=method)
+    try: return json.loads(urllib.request.urlopen(req, timeout=12).read().decode())
+    except urllib.error.HTTPError as e:
+        det=""
+        try: det=json.loads(e.read().decode()).get("msg","")
+        except Exception: pass
+        return {"erro":det or f"HTTP {e.code}"}
+    except Exception as e: return {"erro":str(e)}
+def binance_preco(symbol):
+    try:
+        url=f"https://api.binance.com/api/v3/ticker/price?symbol={(symbol or '').upper()}"
+        r=json.loads(urllib.request.urlopen(urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0"}),timeout=8).read().decode())
+        return float(r["price"])
+    except Exception: return None
+def binance_salvar(uid, key, secret):
+    key=(key or "").strip(); secret=(secret or "").strip()
+    set_blob(uid, "binance", {"key":key,"secret":secret} if (key and secret) else {})
+    return {"ok":True}
+def binance_conta(u):
+    if plano_de(u) not in ("adm","business"): return {"ok":False,"erro":"Operacoes reais no Business e ADM, senhor.","plano_baixo":True}
+    key,sec = binance_creds_user(u["id"])
+    if not (key and sec): return {"ok":False,"erro":"Conecte sua Binance (chave + secret) abaixo."}
+    r=_binance_signed(u["id"], "/api/v3/account")
+    if r.get("erro"): return {"ok":False,"erro":r["erro"]}
+    saldos=[{"moeda":b["asset"],"livre":float(b["free"])} for b in r.get("balances",[]) if float(b.get("free",0))>0]
+    saldos.sort(key=lambda x:-x["livre"])
+    return {"ok":True,"saldos":saldos[:25],"podeOperar":r.get("canTrade",False),"teto":REAL_TETO_USD}
+def binance_ordem(u, symbol, side, valor_usd, confirmar=False):
+    if plano_de(u) not in ("adm","business"): return {"ok":False,"erro":"Operacao real disponivel no Business e ADM."}
+    key,sec = binance_creds_user(u["id"])
+    if not (key and sec): return {"ok":False,"erro":"Conecte sua Binance primeiro, senhor."}
+    symbol=(symbol or "").upper().strip(); side=(side or "").upper().strip()
+    if side not in ("BUY","SELL"): return {"ok":False,"erro":"Lado invalido (BUY/SELL)."}
+    try: valor_usd=float(valor_usd)
+    except Exception: return {"ok":False,"erro":"valor invalido"}
+    if valor_usd<=0: return {"ok":False,"erro":"valor invalido"}
+    if valor_usd>REAL_TETO_USD: return {"ok":False,"erro":f"Acima do teto de seguranca (US$ {REAL_TETO_USD:.0f} por ordem)."}
+    preco=binance_preco(symbol)
+    if not preco: return {"ok":False,"erro":"Sem preco pra "+symbol+" (confira o par, ex: BTCUSDT)."}
+    qty=float(f"{valor_usd/preco:.6f}")
+    params={"symbol":symbol,"side":side,"type":"MARKET","quantity":qty}
+    if not confirmar:
+        r=_binance_signed(u["id"], "/api/v3/order/test", params, "POST")   # valida, NAO executa
+        if r.get("erro"): return {"ok":False,"erro":r["erro"]}
+        return {"ok":True,"teste":True,"symbol":symbol,"side":side,"qty":qty,"preco":preco,"valor":valor_usd,
+                "msg":f"Ordem VALIDADA: {side} {qty} {symbol} (~US$ {valor_usd:.2f}). Confirme pra executar de verdade."}
+    r=_binance_signed(u["id"], "/api/v3/order", params, "POST")            # executa DE VERDADE (so com confirmar)
+    if r.get("erro"): return {"ok":False,"erro":r["erro"]}
+    return {"ok":True,"teste":False,"executada":{"symbol":symbol,"side":side,"qty":qty,"status":r.get("status",""),"id":r.get("orderId","")}}
+
+# ======================= PAINEL BUSINESS (CRM, briefings, Meta Ads) =======================
+def crm_leads(uid): return get_blob(uid, "leads", [])
+def crm_lead_salvar(uid, d):
+    leads = crm_leads(uid); lid = d.get("id") or int(time.time()*1000)
+    nome = (d.get("nome") or "").strip()[:80]
+    if not nome: return {"ok":False,"erro":"De um nome ao lead, senhor."}
+    lead = {"id":lid, "nome":nome, "contato":(d.get("contato") or "").strip()[:80],
+            "origem":(d.get("origem") or "").strip()[:40], "status":(d.get("status") or "novo"),
+            "valor":float(d.get("valor") or 0), "nota":(d.get("nota") or "").strip()[:500], "criado":time.time()}
+    leads = [l for l in leads if l.get("id")!=lid]; leads.insert(0, lead)
+    set_blob(uid, "leads", leads[:500]); return {"ok":True, "lead":lead}
+def crm_lead_apagar(uid, lid):
+    set_blob(uid, "leads", [l for l in crm_leads(uid) if l.get("id")!=lid]); return {"ok":True}
+def crm_resumo(uid):
+    leads = crm_leads(uid); por={}
+    for l in leads: por[l.get("status","novo")] = por.get(l.get("status","novo"),0)+1
+    cli = [l for l in leads if l.get("status")=="cliente"]
+    pipeline = sum(float(l.get("valor") or 0) for l in leads if l.get("status") not in ("cliente","perdido"))
+    receita = sum(float(l.get("valor") or 0) for l in cli)
+    return {"total":len(leads),"por_status":por,"clientes":len(cli),"pipeline":pipeline,"receita":receita}
+def briefings_get(uid): return get_blob(uid, "briefings", [])
+def briefing_salvar(uid, d):
+    bs = briefings_get(uid); bid = d.get("id") or int(time.time()*1000)
+    b = {"id":bid,"titulo":(d.get("titulo") or "Briefing").strip()[:100],"cliente":(d.get("cliente") or "").strip()[:80],
+         "conteudo":(d.get("conteudo") or "").strip()[:4000],"criado":time.time()}
+    bs = [x for x in bs if x.get("id")!=bid]; bs.insert(0,b); set_blob(uid,"briefings",bs[:200]); return {"ok":True,"briefing":b}
+def briefing_apagar(uid, bid):
+    set_blob(uid, "briefings", [x for x in briefings_get(uid) if x.get("id")!=bid]); return {"ok":True}
+def meta_creds(uid):
+    c = get_blob(uid, "meta", {}) or {}; return (c.get("token",""), c.get("act",""))
+def meta_salvar(uid, token, act):
+    act=(act or "").strip()
+    if act and not act.startswith("act_"): act = "act_"+act
+    set_blob(uid, "meta", {"token":(token or "").strip(), "act":act}); return {"ok":True}
+def meta_resumo(uid):
+    token, act = meta_creds(uid)
+    if not (token and act): return {"ok":False,"erro":"Conecte o Meta Ads (token + ID da conta de anuncios)."}
+    def _g(url):
+        return json.loads(urllib.request.urlopen(urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0"}),timeout=15).read().decode())
+    try:
+        p = urllib.parse.urlencode({"access_token":token,"date_preset":"last_7d","level":"account",
+                                    "fields":"spend,impressions,clicks,cpc,ctr,reach"})
+        ins = (_g(f"https://graph.facebook.com/v20.0/{act}/insights?{p}").get("data") or [{}])[0]
+        pc = urllib.parse.urlencode({"access_token":token,"fields":"name,status,objective","limit":12})
+        camp = _g(f"https://graph.facebook.com/v20.0/{act}/campaigns?{pc}").get("data",[])
+        return {"ok":True,"insights":ins,"campanhas":camp}
+    except urllib.error.HTTPError as e:
+        det=""
+        try: det=json.loads(e.read().decode()).get("error",{}).get("message","")
+        except Exception: pass
+        return {"ok":False,"erro":det or f"Erro Meta ({e.code})"}
+    except Exception as e: return {"ok":False,"erro":str(e)}
+def painel_resumo(u):
+    return {"ok":True, "crm":crm_resumo(u["id"]), "briefings":len(briefings_get(u["id"])),
+            "plano":plano_de(u), "meta_on":bool(meta_creds(u["id"])[0])}
+
+# ---- IA do Painel (analise de metricas, copy, leads/cold mail, criativo) ----
+def painel_analise_metricas(u, contexto=""):
+    pode = uso_pode(u, "msg")
+    if not pode["ok"]: return {"ok":False,"erro":pode["motivo"]}
+    uso_reg(u, "msg")
+    base = ""
+    m = meta_resumo(u["id"])
+    if m.get("ok"):
+        i = m.get("insights",{}) or {}
+        base = (f"Dados reais Meta Ads (ultimos 7 dias): investido R${i.get('spend','?')}, impressoes {i.get('impressions','?')}, "
+                f"cliques {i.get('clicks','?')}, CTR {i.get('ctr','?')}%, CPC {i.get('cpc','?')}, alcance {i.get('reach','?')}. "
+                f"Campanhas: " + ", ".join((c.get('name','') + ' ['+c.get('status','')+']') for c in (m.get('campanhas') or [])[:10]) + ". ")
+    crm = crm_resumo(u["id"])
+    base += f"CRM: {crm['total']} leads, {crm['clientes']} clientes, pipeline R${crm['pipeline']:.0f}. "
+    sys = (PERSONA + " Voce e um analista senior de trafego pago e marketing. Analise os numeros, diga o que esta BOM e o que esta RUIM, "
+           "e entregue um PLANO DE ACAO com 4-6 passos praticos (lance, criativo, publico, orcamento, funil). Direto, em topicos, em portugues do Brasil.")
+    out = cloud_chat(sys, [{"role":"user","content":(base + " " + (contexto or "")).strip() or "Analise minha conta e me diga como melhorar."}], 900)
+    return {"ok":True, "analise":out, "tinha_dados":m.get("ok",False)}
+def painel_copy_criativo(u, briefing, img_b64=None):
+    pode = uso_pode(u, "msg")
+    if not pode["ok"]: return {"ok":False,"erro":pode["motivo"]}
+    uso_reg(u, "msg")
+    extra = ""
+    if img_b64:
+        b64 = img_b64.split(",",1)[1] if img_b64.startswith("data:") else img_b64
+        vis = cloud_vision(b64, "Descreva esta imagem de anuncio/produto: o que aparece, estilo, cores, e o publico provavel.", 400)
+        if vis: extra = " | CONTEXTO DA IMAGEM ENVIADA: " + vis
+    sys = (PERSONA + " Voce e copywriter de performance (Meta Ads). Entregue copy PRONTA pra usar: "
+           "3 variacoes de TEXTO PRINCIPAL, 3 TITULOS curtos, 1 DESCRICAO e 1 CTA. Use gatilho de dor/desejo + prova + chamada. Sem travessao.")
+    out = cloud_chat(sys, [{"role":"user","content":((briefing or "Crie copy pro meu produto.")+extra)}], 900)
+    return {"ok":True, "copy":out}
+def painel_analisar_lead(u, lead):
+    pode = uso_pode(u, "msg")
+    if not pode["ok"]: return {"ok":False,"erro":pode["motivo"]}
+    uso_reg(u, "msg")
+    nome=(lead.get("nome") or "").strip(); empresa=(lead.get("empresa") or "").strip(); perfil=(lead.get("perfil") or "").strip()
+    if not (nome or empresa): return {"ok":False,"erro":"Informe ao menos o nome ou a empresa do lead."}
+    sys = (PERSONA + " Voce e SDR/closer B2B. Analise o lead e a empresa, identifique a provavel DOR e o gancho de valor, "
+           "e escreva um COLD MAIL curto e persuasivo (com ASSUNTO + corpo de 5 a 8 linhas), personalizado, com CTA de reuniao. "
+           "Se precisar, pesquise a empresa na web. Estruture a resposta em: ANALISE / DOR PROVAVEL / COLD MAIL.")
+    msg = f"Lead: {nome or '(sem nome)'}. Empresa: {empresa or '(nao informada)'}. Perfil/observacoes: {perfil or '(nada)'}."
+    out = cloud_chat_web(sys, [{"role":"user","content":msg}], 1000)
+    return {"ok":True, "resultado":out}
 
 # ======================= DOCUMENTOS =======================
 DOC_TPL = {"email":"E-mail profissional","redacao":"Redacao escolar","curriculo":"Curriculo","contrato":"Contrato simples",
@@ -1324,6 +1514,14 @@ class H(BaseHTTPRequestHandler):
         elif path == "/tarefas": self._send(tarefa_listar(u) if u else {"ok":False,"erro":"faca login"})
         elif path == "/agentes":
             self._send({"ok":True,"agentes":agentes_get(u["id"])} if u else {"ok":False,"erro":"faca login"})
+        elif path == "/binance/conta":
+            self._send(binance_conta(u) if u else {"ok":False,"erro":"faca login"})
+        elif path in ("/painel","/crm/leads","/briefings","/meta/resumo"):
+            if not (u and plano_de(u) in ("business","adm")): self._send({"ok":False,"erro":"Painel disponivel no Business e ADM, senhor.","plano_baixo":True}); return
+            if path == "/painel": self._send(painel_resumo(u))
+            elif path == "/crm/leads": self._send({"ok":True,"leads":crm_leads(u["id"])})
+            elif path == "/briefings": self._send({"ok":True,"briefings":briefings_get(u["id"])})
+            elif path == "/meta/resumo": self._send(meta_resumo(u["id"]))
         elif path == "/admin/conhecimento":
             self._send({"ok":True,"itens":conhecimento_listar()} if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/conversas": self._send(conv_listar(u["id"]) if u else {"ok":False,"erro":"faca login"})
@@ -1469,10 +1667,10 @@ class H(BaseHTTPRequestHandler):
                     + " Seja capaz, util e direto. Para fatos atuais, precos, eventos ou o que nao souber, USE a ferramenta buscar_web e cite a fonte. Nunca invente numeros. Se houver manchetes acima, resuma a partir delas.")
             conv_atual = next((c for c in _convs_get(u["id"]) if c["id"]==conv_id), None)
             hist = (conv_atual or {}).get("msgs",[])[-12:-1]   # historico sem a ultima msg (que ja vai abaixo)
-            reply = cloud_chat_web(sysp, hist + [{"role":"user","content":frase}])
+            motor = cloud_chat_web if precisa_web(frase) else cloud_chat   # rapido pra pergunta simples
+            reply = motor(sysp, hist + [{"role":"user","content":frase}])
             conv_anexar(u["id"], conv_id, {"role":"assistant","content":reply})
-            threading.Thread(target=memoria_aprender, args=(u["id"], frase), daemon=True).start()    # memoria pessoal
-            threading.Thread(target=conhecimento_aprender, args=(frase,), daemon=True).start()        # conhecimento global (so fato geral, sem PII)
+            threading.Thread(target=aprender_bg, args=(u["id"], frase), daemon=True).start()   # 1 chamada: memoria + conhecimento
             self._send({"ok":True,"reply":reply,"conv_id":conv_id})
         elif path in ("/falar","/poder","/mic","/visao","/acao","/automacao","/upload","/integra/cred","/integra/google_connect","/usuario/pedir_codigo","/usuario/verificar_codigo","/usuario/reconhecer"):
             self._send({"ok":True,"cloud":True})   # sem efeito na nuvem
@@ -1542,6 +1740,21 @@ class H(BaseHTTPRequestHandler):
             if u and plano_de(u) in ("adm","business"):
                 self._send(agente_run(u, d.get("id"), d.get("mensagem","")))
             else: self._send({"ok":False,"erro":"Disponivel no plano ADM e Business, senhor."})
+        elif path == "/binance/salvar":
+            self._send(binance_salvar(u["id"], d.get("key",""), d.get("secret","")) if u else {"ok":False,"erro":"faca login"})
+        elif path in ("/crm/lead/salvar","/crm/lead/apagar","/briefing/salvar","/briefing/apagar","/meta/salvar",
+                       "/painel/analise","/painel/copy","/painel/lead_analise"):
+            if not (u and plano_de(u) in ("business","adm")): self._send({"ok":False,"erro":"so Business/ADM"}); return
+            if path == "/crm/lead/salvar": self._send(crm_lead_salvar(u["id"], d))
+            elif path == "/crm/lead/apagar": self._send(crm_lead_apagar(u["id"], d.get("id")))
+            elif path == "/briefing/salvar": self._send(briefing_salvar(u["id"], d))
+            elif path == "/briefing/apagar": self._send(briefing_apagar(u["id"], d.get("id")))
+            elif path == "/meta/salvar": self._send(meta_salvar(u["id"], d.get("token",""), d.get("act","")))
+            elif path == "/painel/analise": self._send(painel_analise_metricas(u, d.get("contexto","")))
+            elif path == "/painel/copy": self._send(painel_copy_criativo(u, d.get("briefing",""), d.get("imagem")))
+            elif path == "/painel/lead_analise": self._send(painel_analisar_lead(u, d))
+        elif path == "/binance/ordem":
+            self._send(binance_ordem(u, d.get("symbol",""), d.get("side",""), d.get("valor",0), bool(d.get("confirmar"))) if u else {"ok":False,"erro":"faca login"})
         elif path == "/admin/conhecimento/limpar":
             self._send({"ok":conhecimento_limpar()} if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/imagem":
