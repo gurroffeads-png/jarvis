@@ -710,9 +710,51 @@ def meta_resumo(uid):
         except Exception: pass
         return {"ok":False,"erro":det or f"Erro Meta ({e.code})"}
     except Exception as e: return {"ok":False,"erro":str(e)}
+def enriquecer_cnpj(cnpj):
+    """Puxa dados publicos da empresa por CNPJ (BrasilAPI, gratis, sem chave). Fallback ReceitaWS."""
+    c = re.sub(r"\D", "", cnpj or "")
+    if len(c) != 14: return None
+    def _g(url): return json.loads(urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"}),timeout=12).read().decode())
+    try:
+        r = _g("https://brasilapi.com.br/api/cnpj/v1/"+c)
+        return {"razao":r.get("razao_social","") or "","fantasia":r.get("nome_fantasia","") or "",
+                "atividade":r.get("cnae_fiscal_descricao","") or "","cidade":r.get("municipio","") or "",
+                "uf":r.get("uf","") or "","porte":r.get("porte","") or "","abertura":r.get("data_inicio_atividade","") or ""}
+    except Exception:
+        try:
+            r = _g("https://receitaws.com.br/v1/cnpj/"+c)
+            ats = (r.get("atividade_principal") or [{}])[0].get("text","")
+            return {"razao":r.get("nome","") or "","fantasia":r.get("fantasia","") or "","atividade":ats,
+                    "cidade":r.get("municipio","") or "","uf":r.get("uf","") or "","porte":r.get("porte","") or "","abertura":r.get("abertura","") or ""}
+        except Exception as e: print("[cnpj]", e); return None
+
+def email_creds(uid):
+    c = get_blob(uid, "email", {}) or {}; return (c.get("key",""), c.get("from",""))
+def email_salvar(uid, key, frm):
+    set_blob(uid, "email", {"key":(key or "").strip(), "from":(frm or "").strip()}); return {"ok":True}
+def email_status(uid):
+    k,f = email_creds(uid); return {"ok":True, "on":bool(k and f), "from":f}
+def enviar_email(u, to, assunto, corpo):
+    key, frm = email_creds(u["id"])
+    if not (key and frm): return {"ok":False,"erro":"Conecte seu e-mail (Resend) no Painel primeiro, senhor."}
+    to = (to or "").strip()
+    if "@" not in to: return {"ok":False,"erro":"E-mail do destinatario invalido."}
+    body = {"from":frm, "to":[to], "subject":(assunto or "Contato")[:200], "text":(corpo or "")[:9000]}
+    try:
+        req = urllib.request.Request("https://api.resend.com/emails", data=json.dumps(body).encode(),
+            headers={"Authorization":f"Bearer {key}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
+        r = json.loads(urllib.request.urlopen(req, timeout=20).read().decode())
+        return {"ok":True, "id":r.get("id","")}
+    except urllib.error.HTTPError as e:
+        det=""
+        try: det=json.loads(e.read().decode()).get("message","")
+        except Exception: pass
+        return {"ok":False,"erro":det or f"Erro Resend ({e.code})"}
+    except Exception as e: return {"ok":False,"erro":str(e)}
+
 def painel_resumo(u):
     return {"ok":True, "crm":crm_resumo(u["id"]), "briefings":len(briefings_get(u["id"])),
-            "plano":plano_de(u), "meta_on":bool(meta_creds(u["id"])[0])}
+            "plano":plano_de(u), "meta_on":bool(meta_creds(u["id"])[0]), "email_on":bool(email_creds(u["id"])[0])}
 
 # ---- IA do Painel (analise de metricas, copy, leads/cold mail, criativo) ----
 def painel_analise_metricas(u, contexto=""):
@@ -750,13 +792,22 @@ def painel_analisar_lead(u, lead):
     if not pode["ok"]: return {"ok":False,"erro":pode["motivo"]}
     uso_reg(u, "msg")
     nome=(lead.get("nome") or "").strip(); empresa=(lead.get("empresa") or "").strip(); perfil=(lead.get("perfil") or "").strip()
-    if not (nome or empresa): return {"ok":False,"erro":"Informe ao menos o nome ou a empresa do lead."}
+    cnpj=(lead.get("cnpj") or "").strip()
+    dados_emp = ""
+    if cnpj:
+        e = enriquecer_cnpj(cnpj)
+        if e:
+            if not empresa: empresa = e.get("fantasia") or e.get("razao") or empresa
+            dados_emp = (f" Dados publicos da empresa (CNPJ): razao social '{e.get('razao','')}', "
+                         f"nome fantasia '{e.get('fantasia','')}', atividade '{e.get('atividade','')}', "
+                         f"local {e.get('cidade','')}/{e.get('uf','')}, porte {e.get('porte','')}, aberta em {e.get('abertura','')}.")
+    if not (nome or empresa): return {"ok":False,"erro":"Informe ao menos o nome, a empresa ou o CNPJ do lead."}
     sys = (PERSONA + " Voce e SDR/closer B2B. Analise o lead e a empresa, identifique a provavel DOR e o gancho de valor, "
            "e escreva um COLD MAIL curto e persuasivo (com ASSUNTO + corpo de 5 a 8 linhas), personalizado, com CTA de reuniao. "
            "Se precisar, pesquise a empresa na web. Estruture a resposta em: ANALISE / DOR PROVAVEL / COLD MAIL.")
-    msg = f"Lead: {nome or '(sem nome)'}. Empresa: {empresa or '(nao informada)'}. Perfil/observacoes: {perfil or '(nada)'}."
+    msg = f"Lead: {nome or '(sem nome)'}. Empresa: {empresa or '(nao informada)'}. Perfil/observacoes: {perfil or '(nada)'}.{dados_emp}"
     out = cloud_chat_web(sys, [{"role":"user","content":msg}], 1000)
-    return {"ok":True, "resultado":out}
+    return {"ok":True, "resultado":out, "empresa":empresa}
 
 def chat_area(u, area, frase):
     """Chat ESPECIALISTA por aba (trading / trafego), com o contexto daquela area."""
@@ -1810,7 +1861,7 @@ class H(BaseHTTPRequestHandler):
         elif path == "/binance/salvar":
             self._send(binance_salvar(u["id"], d.get("key",""), d.get("secret","")) if u else {"ok":False,"erro":"faca login"})
         elif path in ("/crm/lead/salvar","/crm/lead/apagar","/briefing/salvar","/briefing/apagar","/meta/salvar",
-                       "/painel/analise","/painel/copy","/painel/lead_analise"):
+                       "/painel/analise","/painel/copy","/painel/lead_analise","/email/salvar","/email/enviar","/email/status"):
             if not (u and plano_de(u) in ("business","adm","trafego")): self._send({"ok":False,"erro":"so Trafego/Business/ADM"}); return
             if path == "/crm/lead/salvar": self._send(crm_lead_salvar(u["id"], d))
             elif path == "/crm/lead/apagar": self._send(crm_lead_apagar(u["id"], d.get("id")))
@@ -1820,6 +1871,9 @@ class H(BaseHTTPRequestHandler):
             elif path == "/painel/analise": self._send(painel_analise_metricas(u, d.get("contexto","")))
             elif path == "/painel/copy": self._send(painel_copy_criativo(u, d.get("briefing",""), d.get("imagem")))
             elif path == "/painel/lead_analise": self._send(painel_analisar_lead(u, d))
+            elif path == "/email/salvar": self._send(email_salvar(u["id"], d.get("key",""), d.get("from","")))
+            elif path == "/email/status": self._send(email_status(u["id"]))
+            elif path == "/email/enviar": self._send(enviar_email(u, d.get("to",""), d.get("assunto",""), d.get("corpo","")))
         elif path == "/binance/ordem":
             self._send(binance_ordem(u, d.get("symbol",""), d.get("side",""), d.get("valor",0), bool(d.get("confirmar"))) if u else {"ok":False,"erro":"faca login"})
         elif path == "/admin/conhecimento/limpar":

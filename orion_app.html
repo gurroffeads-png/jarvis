@@ -698,9 +698,9 @@ const ICON={
 const NAV=[
  {sec:'Principal'},
  {id:'home',nome:'Inicio',icon:'home'},
- {id:'code',nome:'Orion Code',icon:'soon',planos:['business','adm']},
- {id:'painel',nome:'Painel Business',icon:'trading',planos:['trafego','business','adm']},
- {id:'agentes',nome:'Agentes de IA',icon:'memoria',planos:['business','adm']},
+ {id:'code',nome:'Orion Code',icon:'soon',planos:['business','adm'],cloud:true},
+ {id:'painel',nome:'Painel Business',icon:'trading',planos:['trafego','business','adm'],cloud:true},
+ {id:'agentes',nome:'Agentes de IA',icon:'memoria',planos:['business','adm'],cloud:true},
  {id:'documentos',nome:'Documentos',icon:'doc'},
  {id:'rotina',nome:'Rotina & Progresso',icon:'rotina'},
  {id:'aprender',nome:'Aprender',icon:'aprender'},
@@ -722,6 +722,7 @@ function renderNav(){
   const plano=(USER&&USER.plano)||'free';
   NAV.forEach(it=>{
     if(it.sec){const s=document.createElement('div');s.className='sb-sec';s.textContent=it.sec;n.appendChild(s);return;}
+    if(it.cloud && !window.ORION_CLOUD) return;          // abas que dependem da nuvem nao aparecem no desktop
     if(it.planos && it.planos.indexOf(plano)<0) return;  // esconde se o plano nao bate
     const b=document.createElement('button');b.className='nav-item'+(it.id===VIEW?' active':'');b.dataset.id=it.id;
     b.innerHTML=ICON[it.icon]+'<span>'+it.nome+'</span>';
@@ -1384,7 +1385,7 @@ function tgRenderModo(){
       </div>
     </div>
     <div id="tgRealBox" style="margin-top:14px"></div>
-    <div style="margin-top:14px">${miniChatCard('mcTrade','trading','Especialista de Trading','Pergunte sobre um ativo, tendencia, gestao de risco...')}</div>`;
+    ${window.ORION_CLOUD?`<div style="margin-top:14px">${miniChatCard('mcTrade','trading','Especialista de Trading','Pergunte sobre um ativo, tendencia, gestao de risco...')}</div>`:''}`;
     tgRenderWatch(); tgChart(TG.sel); tgRenderReal();
     const sw=document.getElementById('tgSw'); if(sw) sw.classList.toggle('on',!!TG.estado.agente);
   }
@@ -2008,14 +2009,35 @@ async function renderPainel(){
       <div id="cpRes" style="margin-top:10px;white-space:pre-wrap;font-size:14px;line-height:1.55"></div>
     </div>
     <div class="card" style="margin-top:14px"><h3>Analisador de leads <span class="mbadge" style="margin-left:6px">cold mail</span></h3>
-      <div class="hint" style="margin-bottom:10px">Informe o lead/empresa. O Orion identifica a dor e já escreve um cold mail pronto.</div>
+      <div class="hint" style="margin-bottom:10px">Informe o lead/empresa (ou só o CNPJ). O Orion puxa os dados públicos da empresa, identifica a dor e já escreve um cold mail pronto.</div>
       <div class="tg-order" style="flex-wrap:wrap;gap:8px">
         <input id="laNome" placeholder="Nome do contato" style="flex:1;min-width:120px">
         <input id="laEmpresa" placeholder="Empresa" style="flex:1;min-width:120px">
+        <input id="laCnpj" placeholder="CNPJ (opcional)" style="flex:1;min-width:120px">
       </div>
       <div class="field" style="margin-top:8px"><textarea id="laPerfil" rows="2" placeholder="Perfil/observacoes: site, segmento, cargo, o que voce sabe dele..."></textarea></div>
       <div class="row"><button class="btn primary" onclick="laAnalisar()">Analisar e gerar cold mail</button></div>
       <div id="laRes" style="margin-top:10px;white-space:pre-wrap;font-size:14px;line-height:1.55"></div>
+      <div id="laSend" style="display:none;margin-top:12px;border-top:1px solid var(--line2);padding-top:12px">
+        <div class="hint" style="margin-bottom:8px">Enviar este cold mail por e-mail (precisa conectar o e-mail abaixo):</div>
+        <div class="tg-order" style="flex-wrap:wrap;gap:8px">
+          <input id="laTo" placeholder="E-mail do destinatario" style="flex:1;min-width:160px">
+          <input id="laAssunto" placeholder="Assunto" style="flex:1;min-width:160px">
+        </div>
+        <div class="field" style="margin-top:8px"><textarea id="laCorpo" rows="6" placeholder="Corpo do e-mail"></textarea></div>
+        <div class="row"><button class="btn primary" onclick="laEnviar()">Enviar e-mail</button></div>
+        <div id="laEnvMsg" class="hint" style="margin-top:6px"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Conectar e-mail <span class="mbadge" style="margin-left:6px">Resend</span></h3>
+      <div class="hint" style="margin-bottom:10px">Pra DISPARAR os cold mails de verdade. Crie uma conta grátis em resend.com, gere uma API key e use um remetente do seu domínio verificado (ex: contato@suaempresa.com.br).</div>
+      <div id="emStatus" class="hint" style="margin-bottom:8px">verificando...</div>
+      <div class="tg-order" style="flex-wrap:wrap;gap:8px">
+        <input id="emFrom" placeholder="Remetente (ex: contato@suaempresa.com)" style="flex:1;min-width:160px">
+        <input id="emKey" type="password" placeholder="API Key (re_...)" style="flex:1;min-width:160px">
+      </div>
+      <div class="row" style="margin-top:8px"><button class="btn primary" onclick="emSalvar()">Salvar e-mail</button></div>
+      <div id="emMsg" class="hint" style="margin-top:6px"></div>
     </div>
     <div class="card" style="margin-top:14px"><h3>Leads & Clientes</h3>
       <div class="tg-order" style="flex-wrap:wrap;gap:8px;margin-bottom:12px">
@@ -2038,7 +2060,7 @@ async function renderPainel(){
       <div class="hint">Seu plano: <b style="color:var(--text)">${(plano||'').toUpperCase()}</b>. Gerencie assinatura na aba Conta.</div>
       <button class="btn" style="margin-top:10px" onclick="go('conta')">Ir pra Conta</button>
     </div>`;
-  metaRender(); ldRender(); bfRender();
+  metaRender(); ldRender(); bfRender(); emStatus();
 }
 async function metaRender(){
   const box=document.getElementById('metaBox'); if(!box) return;
@@ -2146,9 +2168,39 @@ async function cpGerarImg(){
 }
 async function laAnalisar(){
   const box=document.getElementById('laRes'); box.textContent='Analisando o lead e escrevendo o cold mail...';
-  try{ const r=await (await fetch('/painel/lead_analise',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:document.getElementById('laNome').value.trim(),empresa:document.getElementById('laEmpresa').value.trim(),perfil:document.getElementById('laPerfil').value.trim()})})).json();
+  document.getElementById('laSend').style.display='none';
+  try{ const r=await (await fetch('/painel/lead_analise',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:document.getElementById('laNome').value.trim(),empresa:document.getElementById('laEmpresa').value.trim(),perfil:document.getElementById('laPerfil').value.trim(),cnpj:document.getElementById('laCnpj').value.trim()})})).json();
     box.textContent = r.ok ? r.resultado : (r.erro||'Nao consegui analisar.');
+    if(r.ok){ // tenta separar ASSUNTO + corpo do cold mail pro envio
+      const txt=r.resultado||'';
+      const mAss=txt.match(/assunto\s*[:\-]\s*(.+)/i);
+      let corpo=txt; const iCold=txt.search(/cold\s*mail/i);
+      if(iCold>=0) corpo=txt.slice(iCold).replace(/^.*cold\s*mail.*\n?/i,'').replace(/^assunto\s*[:\-].*\n?/i,'').trim();
+      document.getElementById('laAssunto').value=(mAss?mAss[1].trim():('Contato '+(r.empresa||''))).slice(0,120);
+      document.getElementById('laCorpo').value=corpo;
+      document.getElementById('laSend').style.display='block';
+    }
   }catch(e){ box.textContent='Sem conexao.'; }
+}
+async function laEnviar(){
+  const m=document.getElementById('laEnvMsg'); m.textContent='Enviando...';
+  try{ const r=await (await fetch('/email/enviar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:document.getElementById('laTo').value.trim(),assunto:document.getElementById('laAssunto').value.trim(),corpo:document.getElementById('laCorpo').value})})).json();
+    m.textContent = r.ok ? '✓ E-mail enviado, senhor.' : ('Erro: '+(r.erro||'falhou')); m.style.color=r.ok?'var(--good)':'var(--bad)';
+  }catch(e){ m.textContent='Sem conexao.'; }
+}
+async function emStatus(){
+  const s=document.getElementById('emStatus'); if(!s) return;
+  try{ const r=await (await fetch('/email/status',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();
+    if(r.on){ s.textContent='✓ E-mail conectado: '+(r.from||''); s.style.color='var(--good)'; document.getElementById('emFrom').value=r.from||''; }
+    else { s.textContent='Nenhum e-mail conectado ainda.'; s.style.color='var(--muted)'; }
+  }catch(e){ s.textContent=''; }
+}
+async function emSalvar(){
+  const m=document.getElementById('emMsg'); m.textContent='Salvando...';
+  try{ const r=await (await fetch('/email/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:document.getElementById('emKey').value.trim(),from:document.getElementById('emFrom').value.trim()})})).json();
+    m.textContent = r.ok ? '✓ E-mail salvo.' : 'Nao consegui salvar.'; m.style.color=r.ok?'var(--good)':'var(--bad)';
+    if(r.ok){ document.getElementById('emKey').value=''; emStatus(); }
+  }catch(e){ m.textContent='Sem conexao.'; }
 }
 let _AGS=[], _AG_SEL=null;
 async function renderAgentes(){
