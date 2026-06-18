@@ -663,11 +663,31 @@ def crm_lead_salvar(uid, d):
     leads = crm_leads(uid); lid = d.get("id") or int(time.time()*1000)
     nome = (d.get("nome") or "").strip()[:80]
     if not nome: return {"ok":False,"erro":"De um nome ao lead, senhor."}
-    lead = {"id":lid, "nome":nome, "contato":(d.get("contato") or "").strip()[:80],
-            "origem":(d.get("origem") or "").strip()[:40], "status":(d.get("status") or "novo"),
-            "valor":float(d.get("valor") or 0), "nota":(d.get("nota") or "").strip()[:500], "criado":time.time()}
+    # preserva campos antigos quando for edicao
+    antigo = next((l for l in leads if l.get("id")==lid), {})
+    lead = {"id":lid, "nome":nome, "contato":(d.get("contato") or antigo.get("contato") or "").strip()[:80],
+            "origem":(d.get("origem") or antigo.get("origem") or "").strip()[:40], "status":(d.get("status") or antigo.get("status") or "novo"),
+            "valor":float(d.get("valor") or antigo.get("valor") or 0), "nota":(d.get("nota") or antigo.get("nota") or "").strip()[:500],
+            "nicho":(d.get("nicho") or antigo.get("nicho") or "").strip()[:40],
+            "instagram":(d.get("instagram") or antigo.get("instagram") or "").strip()[:60],
+            "seguidores":(d.get("seguidores") or antigo.get("seguidores") or "").strip()[:20] if isinstance(d.get("seguidores") or antigo.get("seguidores"),str) else str(d.get("seguidores") or antigo.get("seguidores") or ""),
+            "criado":antigo.get("criado") or time.time()}
     leads = [l for l in leads if l.get("id")!=lid]; leads.insert(0, lead)
-    set_blob(uid, "leads", leads[:500]); return {"ok":True, "lead":lead}
+    set_blob(uid, "leads", leads[:1000]); return {"ok":True, "lead":lead}
+def crm_leads_lote(uid, itens):
+    """Importa varios leads de uma vez (prospeccao em massa). itens = [{nome,instagram,nicho,seguidores,contato}]."""
+    leads = crm_leads(uid); add=0
+    existentes = {(l.get("nome","").lower(), l.get("instagram","").lower()) for l in leads}
+    for it in (itens or [])[:300]:
+        nome=(it.get("nome") or "").strip()[:80]
+        if not nome: continue
+        ig=(it.get("instagram") or "").strip()[:60]
+        if (nome.lower(), ig.lower()) in existentes: continue
+        leads.insert(0, {"id":int(time.time()*1000)+add, "nome":nome, "contato":(it.get("contato") or "").strip()[:80],
+            "origem":"prospeccao", "status":"novo", "valor":0.0, "nota":"",
+            "nicho":(it.get("nicho") or "").strip()[:40], "instagram":ig, "seguidores":str(it.get("seguidores") or "")[:20], "criado":time.time()})
+        existentes.add((nome.lower(), ig.lower())); add+=1
+    set_blob(uid, "leads", leads[:1000]); return {"ok":True, "adicionados":add, "total":len(leads)}
 def crm_lead_apagar(uid, lid):
     set_blob(uid, "leads", [l for l in crm_leads(uid) if l.get("id")!=lid]); return {"ok":True}
 def crm_resumo(uid):
@@ -754,7 +774,58 @@ def enviar_email(u, to, assunto, corpo):
 
 def painel_resumo(u):
     return {"ok":True, "crm":crm_resumo(u["id"]), "briefings":len(briefings_get(u["id"])),
-            "plano":plano_de(u), "meta_on":bool(meta_creds(u["id"])[0]), "email_on":bool(email_creds(u["id"])[0])}
+            "plano":plano_de(u), "meta_on":bool(meta_creds(u["id"])[0]), "email_on":bool(email_creds(u["id"])[0]),
+            "wa_on":bool((get_blob(u["id"],"wa_phone",{}) or {}).get("confirmed")), "wa_server":wa_on(),
+            "agentes":len(agentes_get(u["id"]))}
+
+# ---- Precificacao + Vendas (persistencia simples por blob) ----
+def precos_get(uid): return get_blob(uid, "precos", {}) or {}
+def precos_salvar(uid, d):
+    cfg = {"custo_hora":float(d.get("custo_hora") or 0), "horas":float(d.get("horas") or 0),
+           "custos_fixos":float(d.get("custos_fixos") or 0), "margem":float(d.get("margem") or 0),
+           "imposto":float(d.get("imposto") or 0), "servico":(d.get("servico") or "").strip()[:80]}
+    set_blob(uid, "precos", cfg); return {"ok":True, "precos":cfg}
+def vendas_get(uid): return get_blob(uid, "vendas", []) or []
+def venda_salvar(uid, d):
+    vs = vendas_get(uid); vid = d.get("id") or int(time.time()*1000)
+    v = {"id":vid, "cliente":(d.get("cliente") or "").strip()[:80], "servico":(d.get("servico") or "").strip()[:80],
+         "valor":float(d.get("valor") or 0), "custo":float(d.get("custo") or 0),
+         "data":(d.get("data") or datetime.date.today().strftime("%Y-%m-%d")), "status":(d.get("status") or "fechada")}
+    vs = [x for x in vs if x.get("id")!=vid]; vs.insert(0, v)
+    set_blob(uid, "vendas", vs[:1000]); return {"ok":True, "venda":v}
+def venda_apagar(uid, vid):
+    set_blob(uid, "vendas", [x for x in vendas_get(uid) if x.get("id")!=vid]); return {"ok":True}
+def vendas_resumo(uid):
+    vs = vendas_get(uid)
+    receita = sum(float(v.get("valor") or 0) for v in vs)
+    custo = sum(float(v.get("custo") or 0) for v in vs)
+    n = len(vs)
+    return {"total":n, "receita":receita, "custo":custo, "lucro":receita-custo,
+            "ticket":(receita/n if n else 0), "margem":((receita-custo)/receita*100 if receita else 0)}
+
+def wa_disparar(u, telefones, mensagem):
+    """Disparo em massa pelo WhatsApp Cloud API (so se conectado no servidor). Rate-limitado, gated, confirma no front.
+    OBS: o Cloud API exige template aprovado/opt-in pra primeiro contato; pra prospeccao fria o caminho legal e o link wa.me
+    (gerado no front, clique a clique). Aqui mandamos via API pra quem ja e contato/opt-in."""
+    if plano_de(u) not in ("business","adm","trafego"): return {"ok":False,"erro":"Disparo no plano Trafego/Business/ADM, senhor."}
+    if not wa_on(): return {"ok":False,"erro":"O WhatsApp (Cloud API) ainda nao foi ligado no servidor. Use os links wa.me pra prospeccao, senhor."}
+    msg = (mensagem or "").strip()
+    if len(msg) < 5: return {"ok":False,"erro":"Escreva a mensagem (minimo 5 letras)."}
+    nums=[]
+    for t in (telefones or [])[:50]:   # teto de 50 por disparo (anti-ban)
+        p=_wa_normaliza(t)
+        if p and p not in nums: nums.append(p)
+    if not nums: return {"ok":False,"erro":"Nenhum telefone valido."}
+    pode = uso_pode(u, "msg")
+    if not pode["ok"]: return {"ok":False,"erro":pode["motivo"]}
+    enviados=0
+    for p in nums:
+        try:
+            if wa_send(p, msg): enviados+=1
+            time.sleep(0.4)   # respiro anti-flood
+        except Exception: pass
+    uso_reg(u, "msg")
+    return {"ok":True, "enviados":enviados, "total":len(nums)}
 
 # ---- IA do Painel (analise de metricas, copy, leads/cold mail, criativo) ----
 def painel_analise_metricas(u, contexto=""):
@@ -1182,22 +1253,52 @@ def conv_anexar(uid, cid, msg):
 
 # ======================= ORION CODE (Business+, agente que mostra o raciocinio) =======================
 ORION_CODE_SYS = (
-    "Voce e o Orion Code: um agente de IA estilo Claude Code que mostra o RACIOCINIO em voz alta."
-    " Para cada pedido, organize a resposta em passos numerados (1, 2, 3...): para cada passo, diga"
-    " o QUE vai fazer, depois o RESULTADO em codigo/lista/texto, e ao final um RESUMO de 1 linha."
-    " Use a ferramenta buscar_web para fatos atuais. Foco em ensinar o raciocinio - cada passo deve"
-    " ensinar algo. Codigo deve vir em blocos markdown ```linguagem ... ```. Portugues do Brasil,"
-    " direto, sem travessao."
+    "Voce e o Orion Code: um engenheiro de software senior estilo Claude Code. Voce ajuda a CONSTRUIR de verdade."
+    " Fluxo: (1) se faltar algo essencial, faca 1-2 perguntas curtas antes; senao ja resolve. (2) Mostre um PLANO"
+    " curto em passos numerados. (3) Entregue o codigo COMPLETO e funcional (arquivo inteiro quando fizer sentido,"
+    " nao trechos soltos), cada bloco em markdown ```linguagem com o caminho do arquivo no comentario do topo."
+    " (4) Explique como rodar/testar e o proximo passo. Lembre do historico da conversa pra iterar (corrigir bug,"
+    " adicionar feature) sem recomecar. Use buscar_web pra docs/versoes atuais. Seja pratico e honesto sobre limites."
+    " Portugues do Brasil, direto, sem travessao."
 )
-def orion_code_run(u, pedido):
+def orion_code_run(u, pedido, reset=False):
     pode = uso_pode(u, "msg")
     if not pode["ok"]: return {"ok":False,"erro":pode["motivo"]}
     pl = plano_de(u)
     if pl not in ("business","adm"): return {"ok":False,"erro":"Orion Code esta disponivel no plano Business e ADM, senhor."}
+    pedido = (pedido or "").strip()
+    if reset: set_blob(u["id"], "code_hist", []);
+    if not pedido: return {"ok":True,"resposta":"Me diga o que voce quer construir, senhor.","reset":bool(reset)}
     uso_reg(u, "msg"); marcar_ativo(u["id"])
     hoje = datetime.date.today().strftime("%d/%m/%Y")
     sysp = ORION_CODE_SYS + f" Hoje e {hoje}."
-    return {"ok":True,"resposta":cloud_chat_web(sysp, [{"role":"user","content":pedido}], 1500)}
+    hist = (get_blob(u["id"], "code_hist", []) or [])[-10:]   # memoria da sessao de codigo
+    resp = cloud_chat_web(sysp, hist + [{"role":"user","content":pedido}], 1600)
+    hist = (hist + [{"role":"user","content":pedido},{"role":"assistant","content":resp}])[-16:]
+    set_blob(u["id"], "code_hist", hist)
+    return {"ok":True,"resposta":resp}
+def orion_code_hist(u): return {"ok":True, "hist":(get_blob(u["id"], "code_hist", []) or [])}
+
+# ---- Preferencias de aparencia/voz (skin do mascote, tema, palavra-chave) ----
+def prefs_get(uid): return get_blob(uid, "prefs", {}) or {}
+def prefs_salvar(uid, d):
+    p = prefs_get(uid)
+    for k in ("skin","tema","wakeword"):
+        if k in d: p[k] = str(d.get(k) or "")[:40]
+    set_blob(uid, "prefs", p); return {"ok":True, "prefs":p}
+
+# ---- Onboarding: o usuario responde umas perguntas e o Orion ja passa a saber ----
+def onboarding_salvar(u, respostas):
+    uid = u["id"]; r = respostas or {}
+    mapa = [("tratamento","Prefere ser chamado de"),("negocio","Trabalha com / negocio"),
+            ("objetivo","Principal objetivo com o Orion"),("area","Area de interesse")]
+    salvos = 0
+    for chave, rotulo in mapa:
+        val = (str(r.get(chave) or "")).strip()[:160]
+        if len(val) >= 2:
+            grafo_add(uid, f"{rotulo}: {val}", "voce"); salvos += 1
+    set_blob(uid, "onboarding_ok", {"feito":True, "quando":time.time()})
+    return {"ok":True, "salvos":salvos}
 
 # ======================= WHATSAPP (Meta Cloud API) =======================
 WA_TOKEN = os.environ.get("WHATSAPP_TOKEN", "")
@@ -1632,12 +1733,14 @@ class H(BaseHTTPRequestHandler):
             self._send({"ok":True,"agentes":agentes_get(u["id"])} if u else {"ok":False,"erro":"faca login"})
         elif path == "/binance/conta":
             self._send(binance_conta(u) if u else {"ok":False,"erro":"faca login"})
-        elif path in ("/painel","/crm/leads","/briefings","/meta/resumo"):
+        elif path in ("/painel","/crm/leads","/briefings","/meta/resumo","/painel/precos","/painel/vendas"):
             if not (u and plano_de(u) in ("business","adm","trafego")): self._send({"ok":False,"erro":"Painel disponivel no plano Trafego, Business e ADM, senhor.","plano_baixo":True}); return
             if path == "/painel": self._send(painel_resumo(u))
             elif path == "/crm/leads": self._send({"ok":True,"leads":crm_leads(u["id"])})
             elif path == "/briefings": self._send({"ok":True,"briefings":briefings_get(u["id"])})
             elif path == "/meta/resumo": self._send(meta_resumo(u["id"]))
+            elif path == "/painel/precos": self._send({"ok":True,"precos":precos_get(u["id"])})
+            elif path == "/painel/vendas": self._send({"ok":True,"vendas":vendas_get(u["id"]),"resumo":vendas_resumo(u["id"])})
         elif path == "/admin/conhecimento":
             self._send({"ok":True,"itens":conhecimento_listar()} if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/conversas": self._send(conv_listar(u["id"]) if u else {"ok":False,"erro":"faca login"})
@@ -1645,6 +1748,8 @@ class H(BaseHTTPRequestHandler):
             try: cid = int(path.split("/conversa/")[1])
             except Exception: cid = 0
             self._send(conv_abrir(u["id"], cid) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/prefs": self._send({"ok":True,"prefs":prefs_get(u["id"]), "onboarding": bool((get_blob(u["id"],"onboarding_ok",{}) or {}).get("feito"))} if u else {"ok":True,"prefs":{}})
+        elif path == "/code/hist": self._send(orion_code_hist(u) if u else {"ok":False,"erro":"faca login"})
         elif path == "/brain/opcoes": self._send({"providers":BRAIN_PROVIDERS, "atual": (get_blob(u["id"],"brain",{}) if u else {})})
         elif path == "/estado":
             self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
@@ -1849,22 +1954,24 @@ class H(BaseHTTPRequestHandler):
         elif path == "/chat/area":
             self._send(chat_area(u, d.get("area","trading"), d.get("frase","")) if u else {"ok":False,"erro":"faca login"})
         elif path == "/agente/criar":
-            if u and plano_de(u) in ("adm","business"):
+            if u and plano_de(u) in ("adm","business","trafego"):
                 self._send(agente_criar(u["id"], d.get("nome",""), d.get("descricao",""), d.get("instrucoes","")))
-            else: self._send({"ok":False,"erro":"O gerador de agentes esta no plano ADM (e Business), senhor."})
+            else: self._send({"ok":False,"erro":"O gerador de agentes esta nos planos Trafego, Business e ADM, senhor."})
         elif path == "/agente/apagar":
             self._send(agente_apagar(u["id"], d.get("id")) if u else {"ok":False,"erro":"faca login"})
         elif path == "/agente/run":
-            if u and plano_de(u) in ("adm","business"):
+            if u and plano_de(u) in ("adm","business","trafego"):
                 self._send(agente_run(u, d.get("id"), d.get("mensagem","")))
-            else: self._send({"ok":False,"erro":"Disponivel no plano ADM e Business, senhor."})
+            else: self._send({"ok":False,"erro":"Disponivel nos planos Trafego, Business e ADM, senhor."})
         elif path == "/binance/salvar":
             self._send(binance_salvar(u["id"], d.get("key",""), d.get("secret","")) if u else {"ok":False,"erro":"faca login"})
-        elif path in ("/crm/lead/salvar","/crm/lead/apagar","/briefing/salvar","/briefing/apagar","/meta/salvar",
-                       "/painel/analise","/painel/copy","/painel/lead_analise","/email/salvar","/email/enviar","/email/status"):
+        elif path in ("/crm/lead/salvar","/crm/lead/apagar","/crm/lote","/briefing/salvar","/briefing/apagar","/meta/salvar",
+                       "/painel/analise","/painel/copy","/painel/lead_analise","/email/salvar","/email/enviar","/email/status",
+                       "/painel/precos/salvar","/painel/venda/salvar","/painel/venda/apagar","/wa/disparar"):
             if not (u and plano_de(u) in ("business","adm","trafego")): self._send({"ok":False,"erro":"so Trafego/Business/ADM"}); return
             if path == "/crm/lead/salvar": self._send(crm_lead_salvar(u["id"], d))
             elif path == "/crm/lead/apagar": self._send(crm_lead_apagar(u["id"], d.get("id")))
+            elif path == "/crm/lote": self._send(crm_leads_lote(u["id"], d.get("itens") or []))
             elif path == "/briefing/salvar": self._send(briefing_salvar(u["id"], d))
             elif path == "/briefing/apagar": self._send(briefing_apagar(u["id"], d.get("id")))
             elif path == "/meta/salvar": self._send(meta_salvar(u["id"], d.get("token",""), d.get("act","")))
@@ -1874,6 +1981,10 @@ class H(BaseHTTPRequestHandler):
             elif path == "/email/salvar": self._send(email_salvar(u["id"], d.get("key",""), d.get("from","")))
             elif path == "/email/status": self._send(email_status(u["id"]))
             elif path == "/email/enviar": self._send(enviar_email(u, d.get("to",""), d.get("assunto",""), d.get("corpo","")))
+            elif path == "/painel/precos/salvar": self._send(precos_salvar(u["id"], d))
+            elif path == "/painel/venda/salvar": self._send(venda_salvar(u["id"], d))
+            elif path == "/painel/venda/apagar": self._send(venda_apagar(u["id"], d.get("id")))
+            elif path == "/wa/disparar": self._send(wa_disparar(u, d.get("telefones") or [], d.get("mensagem","")))
         elif path == "/binance/ordem":
             self._send(binance_ordem(u, d.get("symbol",""), d.get("side",""), d.get("valor",0), bool(d.get("confirmar"))) if u else {"ok":False,"erro":"faca login"})
         elif path == "/admin/conhecimento/limpar":
@@ -1885,7 +1996,11 @@ class H(BaseHTTPRequestHandler):
         elif path == "/conversa/apagar":
             self._send(conv_apagar(u["id"], int(d.get("id") or 0)) if u else {"ok":False,"erro":"faca login"})
         elif path == "/code/run":
-            self._send(orion_code_run(u, d.get("pedido","")) if u else {"ok":False,"erro":"faca login"})
+            self._send(orion_code_run(u, d.get("pedido",""), bool(d.get("reset"))) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/prefs/salvar":
+            self._send(prefs_salvar(u["id"], d) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/perfil/onboarding":
+            self._send(onboarding_salvar(u, d.get("respostas") or {}) if u else {"ok":False,"erro":"faca login"})
         elif path == "/brain/salvar":
             if u:
                 pref = {"key": (d.get("key") or "").strip(), "base":(d.get("base") or "").strip(), "model":(d.get("model") or "").strip()}

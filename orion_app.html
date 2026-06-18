@@ -251,6 +251,11 @@ button{font-family:inherit;cursor:pointer}
 .rot-item.done span{text-decoration:line-through;color:var(--faint)}
 .apr-licao{margin:0 0 8px 30px}
 .apr-l-in{background:var(--bg);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:10px;padding:14px 16px;font-size:14px;line-height:1.65}
+/* painel sub-abas */
+.pn-tabbar{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.pn-tab{flex-shrink:0;background:transparent;border:1px solid var(--line2);color:var(--dim);border-radius:20px;padding:7px 14px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:inherit;transition:.15s}
+.pn-tab:hover{color:var(--text);border-color:var(--accent)}
+.pn-tab.on{background:var(--accent);border-color:var(--accent);color:#0a0c11;font-weight:600}
 /* mind map */
 #mindmap{width:100%;height:560px;border:1px solid var(--line);border-radius:16px;background:radial-gradient(900px 500px at 50% 40%,rgba(122,162,255,.06),var(--bg2));overflow:hidden;position:relative;cursor:grab}
 #mindmap.drag{cursor:grabbing}
@@ -698,9 +703,9 @@ const ICON={
 const NAV=[
  {sec:'Principal'},
  {id:'home',nome:'Inicio',icon:'home'},
- {id:'code',nome:'Orion Code',icon:'soon',planos:['business','adm'],cloud:true},
+ {id:'code',nome:'Orion Code',icon:'soon',planos:['business','adm']},
  {id:'painel',nome:'Painel Business',icon:'trading',planos:['trafego','business','adm'],cloud:true},
- {id:'agentes',nome:'Agentes de IA',icon:'memoria',planos:['business','adm'],cloud:true},
+ {id:'agentes',nome:'Agentes de IA',icon:'memoria',planos:['trafego','business','adm'],cloud:true},
  {id:'documentos',nome:'Documentos',icon:'doc'},
  {id:'rotina',nome:'Rotina & Progresso',icon:'rotina'},
  {id:'aprender',nome:'Aprender',icon:'aprender'},
@@ -948,6 +953,7 @@ function aplicaUser(){
   if(USER&&USER.foto){av.innerHTML='<img src="'+USER.foto+'">';} else {av.textContent=(nm||'?')[0].toUpperCase();}
   const plano=(USER&&USER.plano)||'free';
   setPlanoBadge(plano);
+  carregaPrefs();   // aplica tema + skin do mascote da conta
   // re-renderiza a pagina atual que depende do usuario (corrige painel de dono nao aparecer no 1o load)
   if(VIEW==='conta') renderConta(); else if(VIEW==='config') renderConfig(); else if(VIEW==='planos') renderPlanos(); else if(VIEW==='code') renderCode();
   renderNav();
@@ -995,36 +1001,185 @@ orb();
 // ===================== STARFIELD (fundo do chat) =====================
 const sc2=document.getElementById('stars'), sx=sc2.getContext('2d'); let STARSARR=[],sph=0;
 function initStars(){
-  sc2.width=sc2.offsetWidth; sc2.height=sc2.offsetHeight; STARSARR=[];
-  const n=Math.floor(sc2.width*sc2.height/9000);
-  for(let i=0;i<n;i++) STARSARR.push({x:Math.random()*sc2.width,y:Math.random()*sc2.height,
-    r:Math.random()*1.3+0.2,a:Math.random(),s:Math.random()*0.02+0.003});
+  const w=sc2.offsetWidth, h=sc2.offsetHeight;
+  if(!w || !h) return;   // canvas escondido (outra aba) -> NAO apaga o starfield (bug do fundo "sumido")
+  sc2.width=w; sc2.height=h; STARSARR=[];
+  const n=Math.min(220, Math.floor(w*h/11000));   // densidade discreta
+  for(let i=0;i<n;i++) STARSARR.push({x:Math.random()*w,y:Math.random()*h,
+    r:Math.random()*1.1+0.2,a:Math.random(),s:Math.random()*0.015+0.002});
 }
 function stars(){
   if(!sx || VIEW!=='home'){requestAnimationFrame(stars);return;}   // so anima na home (economiza CPU)
-  const w=sc2.width,h=sc2.height; sph+=0.004;
-  // nebula de fundo
+  if(!sc2.width || !STARSARR.length) initStars();                  // garante o fundo ao voltar pra home
+  const w=sc2.width,h=sc2.height; if(!w){requestAnimationFrame(stars);return;}
   sx.clearRect(0,0,w,h);
-  let nb=sx.createRadialGradient(w*0.7,h*0.25,0,w*0.7,h*0.25,w*0.7);
-  nb.addColorStop(0,'rgba(40,40,90,.22)'); nb.addColorStop(1,'rgba(10,12,20,0)');
+  // nebula de fundo — bem sutil, so um toque de profundidade espacial (sem chamar atencao)
+  let nb=sx.createRadialGradient(w*0.72,h*0.22,0,w*0.72,h*0.22,w*0.75);
+  nb.addColorStop(0,'rgba(46,52,104,.10)'); nb.addColorStop(1,'rgba(10,12,20,0)');
   sx.fillStyle=nb; sx.fillRect(0,0,w,h);
-  let nb2=sx.createRadialGradient(w*0.2,h*0.8,0,w*0.2,h*0.8,w*0.6);
-  nb2.addColorStop(0,'rgba(60,40,90,.18)'); nb2.addColorStop(1,'rgba(10,12,20,0)');
+  let nb2=sx.createRadialGradient(w*0.18,h*0.82,0,w*0.18,h*0.82,w*0.6);
+  nb2.addColorStop(0,'rgba(64,46,98,.08)'); nb2.addColorStop(1,'rgba(10,12,20,0)');
   sx.fillStyle=nb2; sx.fillRect(0,0,w,h);
   for(const st of STARSARR){
     st.a+=st.s; const tw=0.5+0.5*Math.sin(st.a*6.28);
-    sx.fillStyle='rgba(200,215,255,'+(0.25+tw*0.6)+')';
-    sx.beginPath(); sx.arc(st.x,st.y,st.r*(0.7+tw*0.5),0,7); sx.fill();
+    sx.fillStyle='rgba(196,210,255,'+(0.12+tw*0.38)+')';   // estrelas discretas
+    sx.beginPath(); sx.arc(st.x,st.y,st.r*(0.7+tw*0.4),0,7); sx.fill();
   }
   requestAnimationFrame(stars);
 }
-addEventListener('resize',()=>{initStars();});
+let _starsRz=null;
+addEventListener('resize',()=>{ clearTimeout(_starsRz); _starsRz=setTimeout(initStars,200); });
 
 // ===================== CONFIG =====================
 const VOZ_LABEL={'pt-PT-DuarteNeural':'Duarte (PT, mordomo)','pt-PT-RaquelNeural':'Raquel (PT)',
   'pt-BR-AntonioNeural':'Antonio (BR)','pt-BR-FranciscaNeural':'Francisca (BR)',
   'pt-BR-ThalitaMultilingualNeural':'Thalita (BR, multilingue)'};
 function vozLabel(v){ return VOZ_LABEL[v]||v; }
+// ===================== APARENCIA: TEMAS + SKINS DO MASCOTE (por plano) =====================
+const TEMAS={
+  espaco:{nome:'Espaço',free:true,vars:{}},
+  esmeralda:{nome:'Esmeralda',free:true,vars:{'--accent':'#46d39a','--accent2':'#2fb98a'}},
+  grafite:{nome:'Grafite',free:true,vars:{'--accent':'#9aa6bf','--accent2':'#7c8aa6'}},
+  ambar:{nome:'Âmbar',free:false,vars:{'--accent':'#ffb454','--accent2':'#ff8c42'}},
+  rose:{nome:'Rosé',free:false,vars:{'--accent':'#ff6b9d','--accent2':'#c44fe0'}},
+  cyber:{nome:'Cyber',free:false,vars:{'--accent':'#22d3ee','--accent2':'#3b82f6'}},
+};
+const SKINS={
+  // elementais
+  cosmo:{nome:'Cosmo',free:true,stops:['#cfdcff','#5b8cff','#2a36c8'],glow:'#6f97ff'},
+  aurora:{nome:'Aurora',free:true,stops:['#cffce8','#46d39a','#0f8a63'],glow:'#46d39a'},
+  plasma:{nome:'Plasma',free:true,stops:['#ccf7ff','#22d3ee','#0e7490'],glow:'#22d3ee'},
+  nebulosa:{nome:'Nebulosa',free:false,stops:['#efcfff','#b06bff','#5a23a8'],glow:'#b06bff'},
+  solar:{nome:'Solar',free:false,stops:['#ffe7b3','#ffb454','#b5651d'],glow:'#ffb454'},
+  lumen:{nome:'Lúmen',free:false,stops:['#ffd6e7','#ff6b9d','#b02a63'],glow:'#ff6b9d'},
+  // profissões
+  professor:{nome:'Professor',free:true,stops:['#ede9fe','#8b5cf6','#4c1d95'],glow:'#8b5cf6',emoji:'🎓'},
+  gamer:{nome:'Gamer',free:true,stops:['#dcfce7','#22c55e','#14532d'],glow:'#22c55e',emoji:'🎮'},
+  dev:{nome:'Dev',free:false,stops:['#e0e7ff','#6366f1','#312e81'],glow:'#6366f1',emoji:'💻'},
+  trader:{nome:'Trader',free:false,stops:['#d1fae5','#10b981','#065f46'],glow:'#10b981',emoji:'📈'},
+  marketer:{nome:'Marketer',free:false,stops:['#ffe4f0','#ec4899','#831843'],glow:'#ec4899',emoji:'📣'},
+  medico:{nome:'Médico',free:false,stops:['#e0f2fe','#38bdf8','#075985'],glow:'#38bdf8',emoji:'🩺'},
+  advogado:{nome:'Advogado',free:false,stops:['#fef3c7','#d97706','#78350f'],glow:'#d97706',emoji:'⚖️'},
+  chef:{nome:'Chef',free:false,stops:['#fee2e2','#ef4444','#7f1d1d'],glow:'#ef4444',emoji:'👨‍🍳'},
+  designer:{nome:'Designer',free:false,stops:['#fae8ff','#d946ef','#701a75'],glow:'#d946ef',emoji:'🎨'},
+  coach:{nome:'Coach',free:false,stops:['#fff7cc','#eab308','#713f12'],glow:'#eab308',emoji:'🔥'},
+};
+let _PREFS={skin:'cosmo',tema:'espaco',wakeword:''};
+function planoLib(){ return (USER&&USER.plano)||'free'; }
+function podeUsar(it){ return it.free || planoLib()!=='free'; }
+function aplicaTema(id){ const t=TEMAS[id]||TEMAS.espaco; const r=document.documentElement;
+  ['--accent','--accent2'].forEach(k=>r.style.removeProperty(k));
+  Object.entries(t.vars||{}).forEach(([k,v])=>r.style.setProperty(k,v)); }
+function mascoteSVG(skin){ const s=SKINS[skin]||SKINS.cosmo;
+  return `<svg viewBox="0 0 100 100"><defs><radialGradient id="cg" cx="50%" cy="34%" r="72%"><stop offset="0%" stop-color="${s.stops[0]}"/><stop offset="46%" stop-color="${s.stops[1]}"/><stop offset="100%" stop-color="${s.stops[2]}"/></radialGradient></defs>
+    <circle cx="50" cy="50" r="38" fill="${s.glow}" opacity=".18"/><circle cx="50" cy="50" r="30" fill="url(#cg)"/>
+    <ellipse cx="50" cy="40" rx="12" ry="6" fill="#fff" fill-opacity=".18"/>
+    <circle cx="43" cy="50" r="3.4" fill="#0a0c11"/><circle cx="57" cy="50" r="3.4" fill="#0a0c11"/>
+    <circle cx="44.2" cy="48.6" r="1" fill="#fff"/><circle cx="58.2" cy="48.6" r="1" fill="#fff"/>
+    <path d="M43 57 q7 5 14 0" fill="none" stroke="#0a0c11" stroke-width="2.2" stroke-linecap="round"/>
+    ${s.emoji?`<circle cx="74" cy="74" r="13" fill="#0a0c11" opacity=".55"/><text x="74" y="80" font-size="15" text-anchor="middle">${s.emoji}</text>`:''}</svg>`; }
+function aplicaMascote(skin){ const c=document.getElementById('companion'); if(c) c.innerHTML=mascoteSVG(skin); }
+function aplicaAparencia(){ aplicaTema(_PREFS.tema); aplicaMascote(_PREFS.skin); }
+async function carregaPrefs(){
+  try{ const lp=JSON.parse(localStorage.getItem('orion_prefs')||'{}'); _PREFS=Object.assign(_PREFS,lp); }catch(e){}
+  aplicaAparencia();
+  try{ const r=await (await fetch('/prefs')).json();
+    if(r&&r.prefs){ _PREFS=Object.assign(_PREFS,{skin:r.prefs.skin||_PREFS.skin,tema:r.prefs.tema||_PREFS.tema,wakeword:r.prefs.wakeword||_PREFS.wakeword});
+      localStorage.setItem('orion_prefs',JSON.stringify(_PREFS)); aplicaAparencia(); }
+    _PREFS._onboarding=!!(r&&r.onboarding);
+  }catch(e){}
+}
+async function salvarPref(campo,val){ _PREFS[campo]=val; localStorage.setItem('orion_prefs',JSON.stringify(_PREFS));
+  try{ await fetch('/prefs/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[campo]:val})}); }catch(e){} }
+function setTema(id){ const t=TEMAS[id]; if(!t) return; if(!podeUsar(t)){ if(confirm('Esse tema é dos planos pagos. Ver planos?')) go('planos'); return; }
+  salvarPref('tema',id); aplicaTema(id); apRender(); piscarSave('TEMA'); }
+function setSkin(id){ const s=SKINS[id]; if(!s) return; if(!podeUsar(s)){ if(confirm('Essa skin é dos planos pagos. Ver planos?')) go('planos'); return; }
+  salvarPref('skin',id); aplicaMascote(id); apRender(); compFala('Novo visual, '+compNome()+'! 😎',3000); piscarSave('MASCOTE'); }
+function mascoteMini(s){ const gid='m'+s.stops[1].replace('#',''); return '<svg width="32" height="32" viewBox="0 0 100 100"><defs><radialGradient id="'+gid+'" cx="50%" cy="34%" r="72%"><stop offset="0%" stop-color="'+s.stops[0]+'"/><stop offset="46%" stop-color="'+s.stops[1]+'"/><stop offset="100%" stop-color="'+s.stops[2]+'"/></radialGradient></defs><circle cx="50" cy="50" r="30" fill="url(#'+gid+')"/><circle cx="43" cy="52" r="3.4" fill="#0a0c11"/><circle cx="57" cy="52" r="3.4" fill="#0a0c11"/>'+(s.emoji?'<text x="74" y="80" font-size="22" text-anchor="middle">'+s.emoji+'</text>':'')+'</svg>'; }
+function apRender(){
+  const el=document.getElementById('apArea'); if(!el) return; el.innerHTML='';
+  const mk=(titulo,obj,cur,fn,preview)=>{
+    const wrap=document.createElement('div'); wrap.style.marginBottom='14px';
+    const h=document.createElement('div'); h.className='hint'; h.style.marginBottom='8px'; h.textContent=titulo; wrap.appendChild(h);
+    const grid=document.createElement('div'); grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px';
+    Object.entries(obj).forEach(([id,it])=>{
+      const lock=!podeUsar(it); const b=document.createElement('button');
+      b.style.cssText='position:relative;border:2px solid '+(cur===id?'var(--accent)':'var(--line2)')+';background:var(--panel);border-radius:12px;padding:8px;cursor:pointer;text-align:center';
+      b.innerHTML=preview(id,it)+'<div style="font-size:11px;margin-top:6px;color:var(--text)">'+it.nome+'</div>'+(lock?'<span style="position:absolute;top:4px;right:6px;font-size:11px">🔒</span>':'');
+      b.onclick=()=>fn(id); grid.appendChild(b);
+    });
+    wrap.appendChild(grid); el.appendChild(wrap);
+  };
+  mk('Tema do app', TEMAS, _PREFS.tema, setTema, (id,it)=>{ const a=(it.vars&&it.vars['--accent'])||'#7aa2ff', a2=(it.vars&&it.vars['--accent2'])||'#9b8cff'; return '<div style="height:28px;border-radius:8px;background:linear-gradient(135deg,'+a+','+a2+')"></div>'; });
+  mk('Skin do mascote', SKINS, _PREFS.skin, setSkin, (id,it)=>'<div style="display:flex;justify-content:center">'+mascoteMini(it)+'</div>');
+}
+// ----- audio devices (navegador) -----
+let _AUDEVS={inp:[],out:[]};
+async function audioInit(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices){ return; }
+  try{ const devs=await navigator.mediaDevices.enumerateDevices();
+    _AUDEVS.inp=devs.filter(d=>d.kind==='audioinput'); _AUDEVS.out=devs.filter(d=>d.kind==='audiooutput'); audioRender();
+  }catch(e){}
+}
+async function audioPermitir(){ try{ const s=await navigator.mediaDevices.getUserMedia({audio:true}); s.getTracks().forEach(t=>t.stop()); }catch(e){} audioInit(); }
+function audioRender(){
+  const el=document.getElementById('audArea'); if(!el) return;
+  const mic=localStorage.getItem('orion_mic')||'', out=localStorage.getItem('orion_out')||'';
+  const opts=(arr,cur)=>arr.map((d,i)=>'<option value="'+d.deviceId+'" '+(cur===d.deviceId?'selected':'')+'>'+esc(d.label||('Dispositivo '+(i+1)))+'</option>').join('');
+  el.innerHTML='<div class="field"><label>Microfone</label><select id="audMic" onchange="localStorage.setItem(\'orion_mic\',this.value)">'+(_AUDEVS.inp.length?opts(_AUDEVS.inp,mic):'<option value="">Clique em Permitir pra listar</option>')+'</select></div>'+
+    '<div class="field"><label>Saída de áudio</label><select id="audOut" onchange="localStorage.setItem(\'orion_out\',this.value)">'+(_AUDEVS.out.length?opts(_AUDEVS.out,out):'<option value="">Clique em Permitir pra listar</option>')+'</select></div>'+
+    '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" onclick="audioPermitir()">Permitir / atualizar lista</button><button class="btn" onclick="audioTestar()">Testar saída</button></div>'+
+    '<div class="hint" style="margin-top:6px">No navegador, o ditado por voz usa o microfone padrão do sistema; a escolha acima fica salva e vale pros sons do app onde o navegador permite. No app desktop, o microfone usa o ganho/sensibilidade acima.</div>';
+}
+async function audioTestar(){
+  const out=localStorage.getItem('orion_out')||'';
+  try{ const Ctx=window.AudioContext||window.webkitAudioContext; const ctx=new Ctx();
+    if(out && ctx.setSinkId){ try{ await ctx.setSinkId(out); }catch(e){} }
+    const o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.value=660; g.gain.value=0.05;
+    o.connect(g); g.connect(ctx.destination); o.start(); setTimeout(()=>{ try{o.stop();ctx.close();}catch(e){} },260);
+  }catch(e){}
+}
+async function wwSalvar(){ const v=(document.getElementById('cfgWake').value||'').trim().toLowerCase().slice(0,20);
+  salvarPref('wakeword',v);
+  try{ await fetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({wake_word:v})}); }catch(e){}
+  piscarSave('PALAVRA-CHAVE'); }
+// ----- onboarding (primeiras perguntas) -----
+const OB_Q=[
+  {k:'tratamento',q:'Como você prefere ser chamado?',ph:'ex: Sr. Pontes, Murilo, chefe...'},
+  {k:'negocio',q:'Com o que você trabalha / qual seu negócio?',ph:'ex: agência de tráfego, loja, autônomo...'},
+  {k:'objetivo',q:'Qual seu principal objetivo com o Orion?',ph:'ex: prospectar mais, organizar a rotina, vender...'},
+  {k:'area',q:'O que mais te interessa?',ph:'ex: tráfego pago, trading, produtividade...'},
+];
+function checkOnboarding(){
+  if(!USER || USER.convidado){ return; }
+  if(localStorage.getItem('orion_onb_'+USER.id)==='1' || _PREFS._onboarding){ setTimeout(tourComeca,500); return; }
+  obShow();
+}
+function obShow(){
+  let m=document.getElementById('obModal');
+  if(!m){ m=document.createElement('div'); m.id='obModal';
+    m.style.cssText='position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(6,8,14,.75);backdrop-filter:blur(6px);padding:18px';
+    document.body.appendChild(m); }
+  m.innerHTML='<div style="max-width:440px;width:100%;background:var(--panel);border:1px solid var(--line2);border-radius:18px;padding:22px">'+
+    '<div style="display:flex;justify-content:center;margin-bottom:8px">'+mascoteSVGwrap()+'</div>'+
+    '<h2 style="text-align:center;font-size:20px;margin-bottom:4px">Vamos nos conhecer</h2>'+
+    '<div class="hint" style="text-align:center;margin-bottom:16px">4 perguntinhas rápidas pra eu já te atender do seu jeito.</div>'+
+    OB_Q.map(o=>'<div class="field"><label>'+o.q+'</label><input id="ob_'+o.k+'" placeholder="'+esc(o.ph)+'"></div>').join('')+
+    '<div class="row" style="gap:8px;margin-top:6px"><button class="btn primary" style="flex:1" onclick="obSubmit()">Pronto, vamos!</button><button class="btn ghost" onclick="obPular()">Pular</button></div>'+
+    '</div>';
+  if(USER&&USER.tratamento){ const t=document.getElementById('ob_tratamento'); if(t) t.value=USER.tratamento; }
+}
+function mascoteSVGwrap(){ return '<div style="width:64px;height:64px">'+mascoteSVG(_PREFS.skin)+'</div>'; }
+async function obSubmit(){
+  const r={}; OB_Q.forEach(o=>{ const e=document.getElementById('ob_'+o.k); if(e) r[o.k]=e.value.trim(); });
+  try{ await fetch('/perfil/onboarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({respostas:r})}); }catch(e){}
+  if(r.tratamento && USER){ USER.tratamento=r.tratamento; }
+  obFim();
+}
+function obPular(){ obFim(); }
+function obFim(){ const m=document.getElementById('obModal'); if(m) m.remove();
+  if(USER) localStorage.setItem('orion_onb_'+USER.id,'1'); _PREFS._onboarding=true; setTimeout(tourComeca,400); }
+
 async function renderConfig(){
   try{ CFG=await (await fetch('/config')).json(); }catch(e){ CFG={}; }
   let integ={}; try{ integ=await (await fetch('/integra/status')).json(); }catch(e){}
@@ -1086,6 +1241,17 @@ async function renderConfig(){
     <div class="field"><label>Sensibilidade (limiar de ruido)</label><div class="range-row"><input type="range" id="cfgSens" min="100" max="2000" step="50" value="${CFG.mic_sens??400}"><span class="v" id="cfgSensV">${CFG.mic_sens??400}</span></div></div>
     <div class="field"><label><input type="checkbox" id="cfgRuido" ${CFG.mic_ruido?'checked':''} style="width:auto;vertical-align:middle"> Supressao de ruido</label></div>
   </div>
+  <div class="card"><h3>Aparência <span class="mbadge" style="margin-left:6px">tema + mascote</span></h3>
+    <div class="hint" style="margin-bottom:12px">Deixe o Orion com a sua cara. Alguns temas e skins são grátis; os marcados com 🔒 liberam nos planos pagos.</div>
+    <div id="apArea"></div>
+  </div>
+  <div class="card"><h3>Áudio (microfone e saída)</h3>
+    <div id="audArea"></div>
+  </div>
+  <div class="card"><h3>Palavra-chave</h3>
+    <div class="hint" style="margin-bottom:10px">A palavra que ativa o Orion por voz (além de "Orion" e "Jarvis"). ${window.ORION_CLOUD?'No navegador o microfone é por toque; isto fica salvo e vale no app desktop.':'Vale no app desktop, com o microfone sempre ouvindo.'}</div>
+    <div class="tg-order" style="gap:8px"><input id="cfgWake" placeholder="ex: assistente, sol, chefe..." value="${esc(_PREFS.wakeword||CFG.wake_word||'')}" style="flex:1;min-width:140px"><button class="btn primary" onclick="wwSalvar()">Salvar</button></div>
+  </div>
   <div class="card"><h3>Privacidade e dados</h3>
     <div class="hint" style="margin-bottom:12px">O cerebro padrao roda local. Senhas, cartoes e tokens nunca sao guardados na memoria.</div>
     <div class="row">
@@ -1138,6 +1304,7 @@ async function renderConfig(){
     };
     bp.onchange=refresh; refresh();
   }
+  apRender(); audioRender(); audioInit();
 }
 async function salvarMP(){
   const t=(document.getElementById('cfgMP')||{}).value; if(!t||t==='********'){ alert('Cole o token, senhor.'); return; }
@@ -1973,21 +2140,51 @@ async function miniChatSend(id, area){
     if(pend) pend.textContent = r.reply || 'Nao consegui responder.';
   }catch(e){ if(pend) pend.textContent='Sem conexao.'; }
 }
+let _PN_TAB='dash', _PN_RESUMO={};
+const _PN_TABS=[
+  {id:'dash',  ic:'📊', nome:'Dashboard'},
+  {id:'prosp', ic:'🎯', nome:'Prospecção'},
+  {id:'clientes',ic:'👥',nome:'Clientes'},
+  {id:'precos',ic:'🧮', nome:'Precificação'},
+  {id:'vendas',ic:'💰', nome:'Vendas'},
+  {id:'meta',  ic:'📈', nome:'Meta Ads'},
+  {id:'auto',  ic:'🤖', nome:'Automação'},
+];
 async function renderPainel(){
   const plano=(USER&&USER.plano)||'free'; const area=document.getElementById('painelArea');
   if(plano!=='business'&&plano!=='adm'&&plano!=='trafego'){
-    area.innerHTML='<div class="card"><h3>Disponivel no plano Trafego</h3><div class="hint">O Painel (Meta Ads, leads, clientes, briefings, cold mail) esta no plano Trafego/Agencia, no Business e no seu ADM.</div><button class="btn primary" style="margin-top:10px" onclick="go(\'planos\')">Ver planos</button></div>';
+    area.innerHTML='<div class="card"><h3>Disponivel no plano Trafego</h3><div class="hint">O Painel (Meta Ads, prospeccao, leads, clientes, precificacao, vendas, agentes de IA) esta no plano Trafego/Agencia, no Business e no seu ADM.</div><button class="btn primary" style="margin-top:10px" onclick="go(\'planos\')">Ver planos</button></div>';
     return;
   }
-  let p={crm:{},briefings:0}; try{ p=await (await fetch('/painel')).json(); }catch(e){}
-  const c=p.crm||{}; const fmt=n=>'R$ '+(Number(n||0)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const card=(t,v,cor)=>`<div style="flex:1;min-width:120px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:14px"><div class="hint" style="font-size:11px">${t}</div><div style="font-size:22px;font-weight:800;color:${cor||'var(--text)'}">${v}</div></div>`;
-  area.innerHTML=`
+  try{ _PN_RESUMO=await (await fetch('/painel')).json(); }catch(e){ _PN_RESUMO={}; }
+  const tabbar=_PN_TABS.map(t=>`<button class="pn-tab${t.id===_PN_TAB?' on':''}" data-pt="${t.id}" onclick="pnTab('${t.id}')">${t.ic} ${t.nome}</button>`).join('');
+  area.innerHTML=`<div class="pn-tabbar">${tabbar}</div><div id="pnBody"></div>`;
+  pnTab(_PN_TAB);
+}
+function pnTab(t){
+  _PN_TAB=t;
+  document.querySelectorAll('.pn-tab').forEach(b=>b.classList.toggle('on', b.dataset.pt===t));
+  const b=document.getElementById('pnBody'); if(!b) return;
+  if(t==='dash') pnDash(b);
+  else if(t==='prosp') pnProsp(b);
+  else if(t==='clientes') pnClientes(b);
+  else if(t==='precos') pnPrecos(b);
+  else if(t==='vendas') pnVendas(b);
+  else if(t==='meta') pnMeta(b);
+  else if(t==='auto') pnAuto(b);
+}
+const _fmtBR=n=>'R$ '+(Number(n||0)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+// ---------- DASHBOARD ----------
+function pnDash(b){
+  const c=(_PN_RESUMO&&_PN_RESUMO.crm)||{};
+  const card=(t,v,cor,id)=>`<div style="flex:1;min-width:120px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:14px"><div class="hint" style="font-size:11px">${t}</div><div id="${id}" style="font-size:22px;font-weight:800;color:${cor||'var(--text)'}">${v}</div></div>`;
+  b.innerHTML=`
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-      ${card('Leads', c.total||0)}
-      ${card('Clientes', c.clientes||0, 'var(--good)')}
-      ${card('Pipeline', fmt(c.pipeline), 'var(--accent)')}
-      ${card('Receita', fmt(c.receita), 'var(--good)')}
+      ${card('Leads', c.total||0,'var(--text)','kpiLeads')}
+      ${card('Clientes', c.clientes||0,'var(--good)','kpiClientes')}
+      ${card('Pipeline', _fmtBR(c.pipeline),'var(--accent)','kpiPipe')}
+      ${card('Receita', _fmtBR(c.receita),'var(--good)','kpiRec')}
     </div>
     <div class="card"><h3>Meta Ads</h3><div id="metaBox">carregando...</div></div>
     <div class="card" style="margin-top:14px"><h3>Análise de IA <span class="mbadge" style="margin-left:6px">estrategia</span></h3>
@@ -1996,6 +2193,18 @@ async function renderPainel(){
       <div class="row"><button class="btn primary" onclick="anAnalisar()">Analisar e me dar estrategia</button></div>
       <div id="anRes" style="margin-top:10px;white-space:pre-wrap;font-size:14px;line-height:1.55"></div>
     </div>
+    <div style="margin-top:14px">${miniChatCard('mcTraf','trafego','Especialista de Trafego','Pergunte sobre seus anuncios, copy, funil, leads...')}</div>`;
+  metaRender();
+}
+async function renderPainelKPIs(){ try{ const p=await (await fetch('/painel')).json(); const c=p.crm||{}; _PN_RESUMO=p;
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+  set('kpiLeads',c.total||0); set('kpiClientes',c.clientes||0); set('kpiPipe',_fmtBR(c.pipeline)); set('kpiRec',_fmtBR(c.receita));
+  }catch(e){} }
+
+// ---------- META ADS + COPY ----------
+function pnMeta(b){
+  b.innerHTML=`
+    <div class="card"><h3>Meta Ads</h3><div id="metaBox">carregando...</div></div>
     <div class="card" style="margin-top:14px"><h3>Copy de criativo <span class="mbadge" style="margin-left:6px">com imagem</span></h3>
       <div class="hint" style="margin-bottom:10px">Descreva o produto/oferta. Pode enviar a imagem do criativo que eu leio e adapto a copy.</div>
       <div class="field"><textarea id="cpBrief" rows="2" placeholder="ex: curso de ingles online, publico 25-40 anos, promo de R$197"></textarea></div>
@@ -2007,8 +2216,14 @@ async function renderPainel(){
         <span id="cpImgNome" class="hint"></span>
       </div>
       <div id="cpRes" style="margin-top:10px;white-space:pre-wrap;font-size:14px;line-height:1.55"></div>
-    </div>
-    <div class="card" style="margin-top:14px"><h3>Analisador de leads <span class="mbadge" style="margin-left:6px">cold mail</span></h3>
+    </div>`;
+  metaRender();
+}
+
+// ---------- CLIENTES (cold mail + e-mail + CRM + briefings) ----------
+function pnClientes(b){
+  b.innerHTML=`
+    <div class="card"><h3>Analisador de leads <span class="mbadge" style="margin-left:6px">cold mail</span></h3>
       <div class="hint" style="margin-bottom:10px">Informe o lead/empresa (ou só o CNPJ). O Orion puxa os dados públicos da empresa, identifica a dor e já escreve um cold mail pronto.</div>
       <div class="tg-order" style="flex-wrap:wrap;gap:8px">
         <input id="laNome" placeholder="Nome do contato" style="flex:1;min-width:120px">
@@ -2054,13 +2269,341 @@ async function renderPainel(){
       <div class="field"><textarea id="bfConteudo" rows="3" placeholder="Briefing do projeto: objetivo, publico, prazo, observacoes..."></textarea></div>
       <div class="row"><button class="btn primary" onclick="bfSalvar()">Salvar briefing</button></div>
       <div id="briefLista" style="margin-top:12px"></div>
-    </div>
-    <div style="margin-top:14px">${miniChatCard('mcTraf','trafego','Especialista de Trafego','Pergunte sobre seus anuncios, copy, funil, leads...')}</div>
-    <div class="card" style="margin-top:14px"><h3>Pagamentos</h3>
-      <div class="hint">Seu plano: <b style="color:var(--text)">${(plano||'').toUpperCase()}</b>. Gerencie assinatura na aba Conta.</div>
-      <button class="btn" style="margin-top:10px" onclick="go('conta')">Ir pra Conta</button>
     </div>`;
-  metaRender(); ldRender(); bfRender(); emStatus();
+  ldRender(); bfRender(); emStatus();
+}
+
+// ---------- PROSPECÇÃO (Solarys integrado) ----------
+function psTemplate(){ return localStorage.getItem('orion_ps_template') || 'Olá! Tudo bem? 😊 Vi o perfil de vocês ({nome}) e acredito que posso ajudar a crescer a presença digital de vocês — conteúdo estratégico e resultados reais. Quando tiver um minutinho, adoraria trocar uma ideia!'; }
+function pnProsp(b){
+  const cidade=localStorage.getItem('orion_ps_cidade')||'';
+  b.innerHTML=`
+    <div class="card"><h3>🌐 Buscar novos clientes na internet</h3>
+      <div class="hint" style="margin-bottom:12px">Escolha o nicho e a região. O Orion monta as buscas certas e abre direto no Instagram, Google e Maps — você acha o cliente, anota e adiciona à lista. (grátis, sem API)</div>
+      <div class="tg-order" style="flex-wrap:wrap;gap:8px">
+        <input id="psNicho" list="psNichos" placeholder="Nicho (ex: barbearia, restaurante...)" style="flex:1;min-width:140px" oninput="psQuery()">
+        <datalist id="psNichos"><option>barbearia</option><option>restaurante lanchonete</option><option>estética automotiva</option><option>salão de beleza</option><option>academia</option><option>clínica odontológica</option><option>petshop</option><option>loja de roupas</option><option>imobiliária</option><option>advocacia</option></datalist>
+        <input id="psCidade" placeholder="Cidade / bairro" value="${esc(cidade)}" style="flex:1;min-width:140px" oninput="psQuery()">
+        <input id="psExtra" placeholder="Extra (ex: sem site)" style="flex:1;min-width:120px" oninput="psQuery()">
+      </div>
+      <div class="hint" style="margin:10px 0 4px">Busca: <span id="psPreview" style="color:var(--accent)"></span></div>
+      <div id="psBtns" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:6px"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>➕ Adicionar lead encontrado</h3>
+      <div class="tg-order" style="flex-wrap:wrap;gap:8px">
+        <input id="psNome" placeholder="Nome da empresa" style="flex:1;min-width:130px">
+        <input id="psIg" placeholder="@instagram" style="flex:1;min-width:110px">
+        <input id="psWpp" placeholder="WhatsApp (DDD+num)" style="flex:1;min-width:120px">
+        <input id="psNichoLead" placeholder="Nicho" style="width:120px">
+        <button class="btn primary" onclick="psAddLead()">Adicionar</button>
+      </div>
+      <div id="psAddMsg" class="hint" style="margin-top:6px"></div>
+      <details style="margin-top:10px"><summary style="cursor:pointer;color:var(--accent);font-size:13px">Importar vários de uma vez (colar lista)</summary>
+        <div class="hint" style="margin:8px 0">Cole uma linha por lead: <code>Nome ; @instagram ; whatsapp ; nicho</code></div>
+        <textarea id="psBulk" rows="4" style="width:100%" placeholder="Barbearia X ; @barbeariax ; 82999990000 ; barbearia&#10;Salão Y ; @salaoy ; 82988887777 ; salão"></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn" onclick="psImport()">Importar lista</button></div>
+        <div id="psBulkMsg" class="hint" style="margin-top:6px"></div>
+      </details>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>📋 Minha lista de prospecção <span id="psCount" class="mbadge" style="margin-left:6px">0</span></h3>
+      <div class="field" style="margin-top:6px"><label>Mensagem padrão do WhatsApp (use {nome})</label>
+        <textarea id="psMsg" rows="3" onchange="localStorage.setItem('orion_ps_template',this.value)">${esc(psTemplate())}</textarea></div>
+      <div class="row" style="flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <button class="btn" onclick="psFiltro('todos',this)">Todos</button>
+        <button class="btn" onclick="psFiltro('novo',this)">Pendentes</button>
+        <button class="btn" onclick="psFiltro('contato',this)">Contatados</button>
+        <button class="btn" onclick="psFiltro('cliente',this)">Clientes</button>
+      </div>
+      <div id="psLista"></div>
+    </div>`;
+  psQuery(); psRender();
+}
+let _PS_FILTRO='todos';
+function psQuery(){
+  const nicho=(document.getElementById('psNicho').value||'').trim();
+  const cidade=(document.getElementById('psCidade').value||'').trim();
+  const extra=(document.getElementById('psExtra').value||'').trim();
+  if(cidade) localStorage.setItem('orion_ps_cidade',cidade);
+  const q=[nicho,cidade,extra].filter(Boolean).join(' ')||'negócios locais';
+  document.getElementById('psPreview').textContent='"'+q+'"';
+  const enc=encodeURIComponent(q), encIg=encodeURIComponent((nicho||'negócios')+' '+(cidade||''));
+  const btns=[
+    {ic:'📸',bg:'linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)',t:'Instagram',d:'Perfis e feed',u:'https://www.instagram.com/explore/search/keyword/?q='+encIg},
+    {ic:'🗺️',bg:'linear-gradient(135deg,#4285F4,#34A853)',t:'Google Maps',d:'Telefone e endereço',u:'https://www.google.com/maps/search/'+enc},
+    {ic:'🔍',bg:'linear-gradient(135deg,#4285F4,#EA4335)',t:'Google',d:'Site e contatos',u:'https://www.google.com/search?q='+enc},
+    {ic:'📘',bg:'linear-gradient(135deg,#1877F2,#0a5dc2)',t:'Facebook',d:'Páginas com contato',u:'https://www.facebook.com/search/pages/?q='+enc},
+  ];
+  document.getElementById('psBtns').innerHTML=btns.map(x=>`<a href="${x.u}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line2);border-radius:12px;text-decoration:none;background:var(--panel)">
+    <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;background:${x.bg}">${x.ic}</div>
+    <div><div style="font-size:13px;font-weight:600;color:var(--text)">${x.t}</div><div class="hint" style="font-size:11px">${x.d}</div></div></a>`).join('');
+}
+async function psAddLead(){
+  const nome=(document.getElementById('psNome').value||'').trim(); const m=document.getElementById('psAddMsg');
+  if(!nome){ m.style.color='var(--warn)'; m.textContent='Diga o nome da empresa.'; return; }
+  await fetch('/crm/lead/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    nome, instagram:document.getElementById('psIg').value.trim(), contato:document.getElementById('psWpp').value.trim(),
+    nicho:document.getElementById('psNichoLead').value.trim(), origem:'prospeccao', status:'novo'})});
+  ['psNome','psIg','psWpp','psNichoLead'].forEach(id=>document.getElementById(id).value='');
+  m.style.color='var(--good)'; m.textContent='✓ Lead adicionado.'; psRender(); renderPainelKPIs();
+}
+async function psImport(){
+  const txt=(document.getElementById('psBulk').value||'').trim(); const m=document.getElementById('psBulkMsg');
+  if(!txt){ m.textContent='Cole a lista.'; return; }
+  const itens=txt.split('\n').map(l=>{const p=l.split(/[;|\t]/).map(x=>x.trim()); return p[0]?{nome:p[0],instagram:p[1]||'',contato:p[2]||'',nicho:p[3]||''}:null;}).filter(Boolean);
+  m.textContent='Importando...';
+  try{ const r=await (await fetch('/crm/lote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itens})})).json();
+    m.style.color='var(--good)'; m.textContent='✓ '+(r.adicionados||0)+' adicionados.'; document.getElementById('psBulk').value=''; psRender(); renderPainelKPIs();
+  }catch(e){ m.textContent='Erro ao importar.'; }
+}
+function psFiltro(f,el){ _PS_FILTRO=f; if(el){el.parentNode.querySelectorAll('.btn').forEach(b=>b.classList.remove('primary')); el.classList.add('primary');} psRender(); }
+async function psRender(){
+  const box=document.getElementById('psLista'); if(!box) return;
+  let r={leads:[]}; try{ r=await (await fetch('/crm/leads')).json(); }catch(e){}
+  _LEADS=r.leads||[];
+  let lst=_LEADS.filter(l=>_PS_FILTRO==='todos'||l.status===_PS_FILTRO);
+  document.getElementById('psCount').textContent=_LEADS.length;
+  const corS={novo:'var(--dim)',contato:'var(--accent)',proposta:'var(--warn)',cliente:'var(--good)',perdido:'var(--bad)'};
+  box.innerHTML=lst.map(l=>{
+    const ig=(l.instagram||'').replace('@','');
+    const igL=ig?`<a class="igl" href="https://instagram.com/${esc(ig)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:11px">@${esc(ig)}</a>`:'';
+    const wpp=(l.contato||'').replace(/\D/g,'');
+    const waBtn=wpp?`<button class="btn primary" style="padding:5px 10px;font-size:12px" onclick="psWa(${l.id})">WhatsApp</button>`:'';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)">
+      <div style="min-width:0"><b>${esc(l.nome)}</b> ${l.nicho?`<span class="mbadge" style="font-size:10px">${esc(l.nicho)}</span>`:''}
+        <div class="hint">${igL}${igL&&wpp?' · ':''}${wpp?esc(l.contato):''}</div></div>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        ${waBtn}
+        <select onchange="ldStatus(${l.id},this.value);psRender()" style="font-size:12px;color:${corS[l.status]||'var(--dim)'}">${['novo','contato','proposta','cliente','perdido'].map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${s}</option>`).join('')}</select>
+        <button class="btn ghost" onclick="ldApagar(${l.id});setTimeout(psRender,200)">&#10005;</button>
+      </div></div>`;
+  }).join('')||'<div class="hint">Nenhum lead aqui. Use a busca acima e adicione.</div>';
+}
+function psWa(id){
+  const l=_LEADS.find(x=>x.id===id); if(!l) return;
+  const wpp=(l.contato||'').replace(/\D/g,''); if(!wpp) return;
+  const msg=(document.getElementById('psMsg').value||psTemplate()).replace(/\{nome\}/g,l.nome);
+  window.open('https://wa.me/'+wpp+'?text='+encodeURIComponent(msg),'_blank');
+  if(l.status==='novo'){ ldStatus(id,'contato').then(()=>psRender()); }
+}
+
+// ---------- PRECIFICAÇÃO ----------
+async function pnPrecos(b){
+  let p={}; try{ p=(await (await fetch('/painel/precos')).json()).precos||{}; }catch(e){}
+  const v=(k)=>p[k]!=null?p[k]:'';
+  b.innerHTML=`
+    <div class="card"><h3>🧮 Calculadora de precificação</h3>
+      <div class="hint" style="margin-bottom:12px">Descubra quanto cobrar pra ter lucro de verdade. Preenche os custos, a margem que quer e os impostos.</div>
+      <div class="tg-order" style="flex-wrap:wrap;gap:10px">
+        <div class="field" style="flex:1;min-width:140px"><label>Serviço</label><input id="pcServico" value="${esc(v('servico'))}" placeholder="ex: Gestão de tráfego"></div>
+        <div class="field" style="flex:1;min-width:110px"><label>Custo/hora (R$)</label><input id="pcCH" type="number" value="${v('custo_hora')}" oninput="pcCalc()" placeholder="ex: 50"></div>
+        <div class="field" style="flex:1;min-width:90px"><label>Horas no projeto</label><input id="pcH" type="number" value="${v('horas')}" oninput="pcCalc()" placeholder="ex: 20"></div>
+      </div>
+      <div class="tg-order" style="flex-wrap:wrap;gap:10px;margin-top:4px">
+        <div class="field" style="flex:1;min-width:110px"><label>Custos fixos (R$)</label><input id="pcCF" type="number" value="${v('custos_fixos')}" oninput="pcCalc()" placeholder="ex: 200"></div>
+        <div class="field" style="flex:1;min-width:90px"><label>Margem de lucro (%)</label><input id="pcM" type="number" value="${v('margem')}" oninput="pcCalc()" placeholder="ex: 40"></div>
+        <div class="field" style="flex:1;min-width:90px"><label>Impostos (%)</label><input id="pcI" type="number" value="${v('imposto')}" oninput="pcCalc()" placeholder="ex: 6"></div>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="btn" onclick="pcSalvar()">Salvar config</button></div>
+      <div id="pcOut" style="margin-top:14px"></div>
+    </div>`;
+  pcCalc();
+}
+function pcCalc(){
+  const num=id=>parseFloat(document.getElementById(id).value)||0;
+  const ch=num('pcCH'),h=num('pcH'),cf=num('pcCF'),m=num('pcM'),imp=num('pcI');
+  const custo=ch*h+cf;
+  const comMargem=m<100?custo/(1-m/100):custo*2;   // preço pra atingir a margem
+  const preco=imp>0?comMargem/(1-imp/100):comMargem; // embute imposto
+  const lucro=preco*(1-imp/100)-custo;
+  const linha=(t,val,cor)=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)"><span class="hint">${t}</span><b style="color:${cor||'var(--text)'}">${val}</b></div>`;
+  document.getElementById('pcOut').innerHTML=`
+    ${linha('Custo total', _fmtBR(custo))}
+    ${linha('Lucro estimado', _fmtBR(lucro),'var(--good)')}
+    <div style="margin-top:12px;background:var(--panel);border:1px solid var(--accent);border-radius:14px;padding:16px;text-align:center">
+      <div class="hint">Preço sugerido</div>
+      <div style="font-size:30px;font-weight:900;color:var(--accent)">${_fmtBR(preco)}</div>
+      <div class="hint" style="margin-top:4px">margem de ${m||0}% · impostos de ${imp||0}%</div>
+    </div>`;
+}
+async function pcSalvar(){
+  const num=id=>parseFloat(document.getElementById(id).value)||0;
+  await fetch('/painel/precos/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    servico:document.getElementById('pcServico').value.trim(),custo_hora:num('pcCH'),horas:num('pcH'),custos_fixos:num('pcCF'),margem:num('pcM'),imposto:num('pcI')})});
+  piscarSave('PRECIFICACAO');
+}
+
+// ---------- VENDAS / LUCROS ----------
+async function pnVendas(b){
+  b.innerHTML=`
+    <div class="card"><h3>💰 Registrar venda</h3>
+      <div class="tg-order" style="flex-wrap:wrap;gap:8px">
+        <input id="vdCliente" placeholder="Cliente" style="flex:1;min-width:120px">
+        <input id="vdServico" placeholder="Serviço" style="flex:1;min-width:120px">
+        <input id="vdValor" type="number" placeholder="Valor R$" style="width:110px">
+        <input id="vdCusto" type="number" placeholder="Custo R$" style="width:110px">
+        <input id="vdData" type="date" style="width:140px">
+        <button class="btn primary" onclick="vdSalvar()">Registrar</button>
+      </div>
+      <div id="vdMsg" class="hint" style="margin-top:6px"></div>
+    </div>
+    <div id="vdResumo" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px"></div>
+    <div class="card" style="margin-top:14px"><h3>Histórico de vendas</h3><div id="vdLista" style="margin-top:8px"></div></div>`;
+  document.getElementById('vdData').value=new Date().toISOString().slice(0,10);
+  vdRender();
+}
+async function vdSalvar(){
+  const n=id=>parseFloat(document.getElementById(id).value)||0;
+  const cliente=document.getElementById('vdCliente').value.trim(); const m=document.getElementById('vdMsg');
+  if(!cliente){ m.style.color='var(--warn)'; m.textContent='Diga o cliente.'; return; }
+  await fetch('/painel/venda/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    cliente,servico:document.getElementById('vdServico').value.trim(),valor:n('vdValor'),custo:n('vdCusto'),data:document.getElementById('vdData').value})});
+  ['vdCliente','vdServico','vdValor','vdCusto'].forEach(id=>document.getElementById(id).value='');
+  m.style.color='var(--good)'; m.textContent='✓ Venda registrada.'; piscarSave('VENDA'); vdRender();
+}
+async function vdRender(){
+  let r={vendas:[],resumo:{}}; try{ r=await (await fetch('/painel/vendas')).json(); }catch(e){}
+  const rs=r.resumo||{};
+  const card=(t,v,cor)=>`<div style="flex:1;min-width:110px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:14px"><div class="hint" style="font-size:11px">${t}</div><div style="font-size:20px;font-weight:800;color:${cor||'var(--text)'}">${v}</div></div>`;
+  const box=document.getElementById('vdResumo'); if(box) box.innerHTML=
+    card('Receita',_fmtBR(rs.receita),'var(--good)')+card('Lucro',_fmtBR(rs.lucro),'var(--accent)')+card('Vendas',rs.total||0)+card('Ticket médio',_fmtBR(rs.ticket))+card('Margem',(Number(rs.margem||0)).toFixed(0)+'%');
+  const lst=r.vendas||[]; const l=document.getElementById('vdLista'); if(!l) return;
+  l.innerHTML=lst.map(v=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)">
+    <div><b>${esc(v.cliente)}</b> <span class="hint">${esc(v.servico||'')}</span><div class="hint">${esc(v.data||'')} · lucro ${_fmtBR((v.valor||0)-(v.custo||0))}</div></div>
+    <div style="display:flex;gap:8px;align-items:center"><b style="color:var(--good)">${_fmtBR(v.valor)}</b><button class="btn ghost" onclick="vdApagar(${v.id})">&#10005;</button></div></div>`).join('')||'<div class="hint">Nenhuma venda registrada ainda.</div>';
+}
+async function vdApagar(id){ await fetch('/painel/venda/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); vdRender(); }
+
+// ---------- AUTOMAÇÃO (agentes + mapa mental + whatsapp) ----------
+const AG_TEMPLATES=[
+  {nome:'Vendedor IA',ic:'🤝',descricao:'Fecha vendas e tira objeções',instrucoes:'Você é um vendedor consultivo da minha empresa. Seja simpático e direto, faça perguntas pra entender a dor do cliente, mostre valor (não só preço), contorne objeções com calma e sempre conduza pra um próximo passo (reunião ou proposta). Responda curto, em português do Brasil.'},
+  {nome:'Prospector IA',ic:'🎯',descricao:'Qualifica e escreve a 1ª abordagem',instrucoes:'Você é um SDR de prospecção. A partir do nome/nicho da empresa, identifique a provável dor e escreva uma primeira abordagem curta, personalizada e humana pra WhatsApp ou Instagram, terminando com uma pergunta que gere resposta. Nada de texto genérico nem spam.'},
+  {nome:'Atendente WhatsApp',ic:'💬',descricao:'Responde no WhatsApp',instrucoes:'Você é o atendente oficial da empresa no WhatsApp. Cumprimente, entenda o que a pessoa precisa, responda com clareza, passe preço/horário quando perguntarem e, se for venda, conduza pro fechamento ou pega o contato. Tom acolhedor, mensagens curtas.'},
+  {nome:'Recepcionista IA',ic:'📞',descricao:'Recebe e triagem de contatos',instrucoes:'Você recepciona novos contatos. Dê boas-vindas, pergunte o nome e o que a pessoa procura, classifique o interesse (orçamento, dúvida, suporte) e encaminhe com um resumo. Seja educado e eficiente.'},
+  {nome:'DevOps interno',ic:'⚙️',descricao:'Ajuda em deploy, GitHub, Render',instrucoes:'Você é o assistente técnico interno. Explique passo a passo como subir atualização no GitHub e fazer deploy no Render, como configurar variáveis de ambiente e resolver erros comuns de build. Dê comandos prontos e seja didático.'},
+  {nome:'Vendedor do Orion',ic:'🚀',descricao:'Vende o próprio Orion',instrucoes:'Você vende o Orion, um assistente de IA brasileiro pra negócios (tráfego pago, prospecção, CRM, agentes de IA). Planos: Trading R$49,99, Tráfego R$89,99, Business. Apresente os benefícios pra agências e donos de negócio, contorne objeções e conduza pro cadastro/teste.'},
+];
+async function pnAuto(b){
+  let ags=[]; try{ ags=(await (await fetch('/agentes')).json()).agentes||[]; }catch(e){}
+  let wa={on:false}; try{ wa=await (await fetch('/wa/status')).json(); }catch(e){}
+  _AGS=ags;
+  b.innerHTML=`
+    <div class="card"><h3>🤖 Agentes prontos <span class="mbadge" style="margin-left:6px">1 clique</span></h3>
+      <div class="hint" style="margin-bottom:12px">Crie agentes de IA com função pronta. Depois é só testar e usar. Você pode editar as instruções na lista abaixo.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
+        ${AG_TEMPLATES.map((t,i)=>`<div style="border:1px solid var(--line2);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:20px">${t.ic}</div><b>${t.nome}</b><div class="hint" style="font-size:11px;flex:1">${t.descricao}</div>
+          <button class="btn primary" style="padding:6px 10px;font-size:12px" onclick="autCriar(${i})">Criar agente</button></div>`).join('')}
+      </div>
+      <div id="autMsg" class="hint" style="margin-top:8px"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Criar do zero</h3>
+      <div class="field"><label>Nome</label><input id="agNome" placeholder="ex: Atendente da loja"></div>
+      <div class="field"><label>O que ele faz</label><input id="agDesc" placeholder="ex: tira duvidas e fecha vendas"></div>
+      <div class="field"><label>Instruções (personalidade, regras, objetivo)</label><textarea id="agInstr" rows="3" placeholder="ex: Voce e o atendente da Loja X..."></textarea></div>
+      <div class="row"><button class="btn primary" onclick="agCriar2()">Criar agente</button></div>
+      <div id="agMsg" class="hint" style="margin-top:6px"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Meus agentes</h3><div id="autLista"></div>
+      <div id="agTesteCard" style="display:none;margin-top:12px;border-top:1px solid var(--line2);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:8px" id="agTesteTit">Testar</div>
+        <div id="agChat" style="max-height:260px;overflow:auto;margin-bottom:10px"></div>
+        <div class="tg-order" style="gap:8px"><input id="agInp" placeholder="Fale com o agente..." style="flex:1" onkeydown="if(event.key==='Enter')agEnviar()"><button class="btn primary" onclick="agEnviar()">Enviar</button></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>🧠 Mapa mental — agentes & integrações</h3>
+      <div class="hint" style="margin-bottom:10px">Como tudo se conecta. Verde = ligado, cinza = falta conectar.</div>
+      <div id="autMapa" style="width:100%;overflow:auto"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>💬 WhatsApp — conexão & disparo</h3>
+      <div id="waStatus" class="hint" style="margin-bottom:10px"></div>
+      <div class="field"><label>Mensagem do disparo</label><textarea id="waMsg" rows="3" placeholder="Escreva a mensagem que vai pros contatos..."></textarea></div>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <button class="btn primary" onclick="psDispararLinks()">Abrir wa.me dos pendentes (grátis)</button>
+        <button class="btn" onclick="waDisparar()">Disparar via API (se conectado)</button>
+      </div>
+      <div class="hint" style="margin-top:8px">Pra prospecção fria o caminho seguro é o wa.me (clique a clique, sem risco de ban). O disparo via API só funciona com o WhatsApp Cloud API ligado no servidor e contatos que aceitaram receber.</div>
+      <div id="waMsg2" class="hint" style="margin-top:6px"></div>
+    </div>`;
+  autLista(); autMapa(wa); autWaStatus(wa);
+}
+async function autCriar(i){
+  const t=AG_TEMPLATES[i]; const m=document.getElementById('autMsg'); m.style.color=''; m.textContent='Criando '+t.nome+'...';
+  try{ const r=await (await fetch('/agente/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:t.nome,descricao:t.descricao,instrucoes:t.instrucoes})})).json();
+    if(r.ok){ m.style.color='var(--good)'; m.textContent='✓ '+t.nome+' criado!'; pnAuto(document.getElementById('pnBody')); }
+    else { m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui.'; }
+  }catch(e){ m.style.color='var(--warn)'; m.textContent='Sem conexao.'; }
+}
+async function agCriar2(){
+  const m=document.getElementById('agMsg');
+  const nome=document.getElementById('agNome').value.trim(), desc=document.getElementById('agDesc').value.trim(), instr=document.getElementById('agInstr').value.trim();
+  if(!nome||instr.length<10){ m.style.color='var(--warn)'; m.textContent='De um nome e instrucoes (min. 10 letras).'; return; }
+  m.style.color=''; m.textContent='Criando...';
+  try{ const r=await (await fetch('/agente/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,descricao:desc,instrucoes:instr})})).json();
+    if(r.ok){ pnAuto(document.getElementById('pnBody')); } else { m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui.'; }
+  }catch(e){ m.style.color='var(--warn)'; m.textContent='Sem conexao.'; }
+}
+function autLista(){
+  const box=document.getElementById('autLista'); if(!box) return;
+  box.innerHTML=_AGS.map(a=>`<div style="border:1px solid var(--line2);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+    <div style="min-width:0"><b>${esc(a.nome)}</b><div class="hint">${esc(a.descricao||'')}</div></div>
+    <div style="display:flex;gap:6px;flex-shrink:0"><button class="btn" onclick="agTestar(${a.id})">Testar</button><button class="btn ghost" onclick="agApagar2(${a.id})">&#10005;</button></div>
+  </div>`).join('')||'<div class="hint">Nenhum agente ainda. Crie um acima (1 clique nos prontos).</div>';
+}
+async function agApagar2(id){ if(!confirm('Apagar este agente?')) return;
+  await fetch('/agente/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); pnAuto(document.getElementById('pnBody')); }
+function autMapa(wa){
+  const el=document.getElementById('autMapa'); if(!el) return;
+  const integ=[
+    {nome:'Meta Ads',on:!!(_PN_RESUMO&&_PN_RESUMO.meta_on)},
+    {nome:'E-mail',on:!!(_PN_RESUMO&&_PN_RESUMO.email_on)},
+    {nome:'WhatsApp',on:!!(wa&&(wa.confirmado||wa.on))},
+    {nome:'CRM',on:true},
+  ];
+  const nodes=integ.concat(_AGS.map(a=>({nome:a.nome,agent:true,on:true})));
+  const cx=300,cy=170,R=120; const n=nodes.length||1;
+  let svg=`<svg viewBox="0 0 600 340" style="width:100%;max-width:600px;height:auto;display:block;margin:0 auto">`;
+  nodes.forEach((nd,i)=>{ const a=(i/n)*Math.PI*2-Math.PI/2; const x=cx+R*Math.cos(a), y=cy+R*Math.sin(a);
+    const col=nd.on?'#46d39a':'var(--faint)';
+    svg+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="rgba(122,162,255,.3)" stroke-width="1.5"/>`;
+  });
+  svg+=`<circle cx="${cx}" cy="${cy}" r="34" fill="rgba(122,162,255,.18)" stroke="#7aa2ff" stroke-width="2"/><text x="${cx}" y="${cy+5}" text-anchor="middle" fill="#e7eaf0" font-size="15" font-weight="700" font-family="system-ui">Orion</text>`;
+  nodes.forEach((nd,i)=>{ const a=(i/n)*Math.PI*2-Math.PI/2; const x=cx+R*Math.cos(a), y=cy+R*Math.sin(a);
+    const col=nd.on?'#46d39a':'#6b7280'; const w=Math.max(64,(nd.nome.length*7+20));
+    svg+=`<g><rect x="${x-w/2}" y="${y-14}" width="${w}" height="28" rx="8" fill="rgba(18,22,31,.95)" stroke="${col}" stroke-width="1.6"/>
+      <circle cx="${x-w/2+12}" cy="${y}" r="4" fill="${col}"/>
+      <text x="${x-w/2+22}" y="${y+4}" fill="#e7eaf0" font-size="12" font-family="system-ui">${esc(nd.nome)}${nd.agent?' 🤖':''}</text></g>`;
+  });
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+function autWaStatus(wa){
+  const s=document.getElementById('waStatus'); if(!s) return;
+  if(wa&&wa.confirmado){ s.innerHTML='✓ Seu WhatsApp está ligado: '+esc(wa.telefone||''); s.style.color='var(--good)'; }
+  else if(wa&&wa.on){ s.innerHTML='O servidor tem WhatsApp Cloud API ligado. Vincule seu número na aba Integrações pra receber.'; s.style.color='var(--muted)'; }
+  else { s.innerHTML='WhatsApp Cloud API não está ligado no servidor — use os links wa.me (grátis) pra prospectar.'; s.style.color='var(--muted)'; }
+}
+async function psDispararLinks(){
+  const m=document.getElementById('waMsg2'); let leads=_LEADS;
+  if(!leads||!leads.length){ try{ leads=(await (await fetch('/crm/leads')).json()).leads||[]; }catch(e){ leads=[]; } _LEADS=leads; }
+  const msgBase=(document.getElementById('waMsg').value||psTemplate());
+  const pend=leads.filter(l=>l.status==='novo' && (l.contato||'').replace(/\D/g,'').length>=10).slice(0,10);
+  if(!pend.length){ m.style.color='var(--warn)'; m.textContent='Nenhum lead pendente com WhatsApp. Adicione na aba Prospecção.'; return; }
+  m.style.color='var(--muted)'; m.textContent='Abrindo '+pend.length+' conversas (libere o popup do navegador)...';
+  pend.forEach((l,i)=>setTimeout(()=>{ const wpp=(l.contato||'').replace(/\D/g,'');
+    window.open('https://wa.me/'+wpp+'?text='+encodeURIComponent(msgBase.replace(/\{nome\}/g,l.nome)),'_blank'); }, i*600));
+}
+async function waDisparar(){
+  const m=document.getElementById('waMsg2'); const msg=(document.getElementById('waMsg').value||'').trim();
+  if(msg.length<5){ m.style.color='var(--warn)'; m.textContent='Escreva a mensagem.'; return; }
+  let leads=_LEADS; if(!leads||!leads.length){ try{ leads=(await (await fetch('/crm/leads')).json()).leads||[]; }catch(e){ leads=[]; } }
+  const tels=leads.filter(l=>l.status!=='perdido').map(l=>l.contato).filter(t=>(t||'').replace(/\D/g,'').length>=10);
+  if(!tels.length){ m.style.color='var(--warn)'; m.textContent='Nenhum contato com telefone válido.'; return; }
+  if(!confirm('Disparar via API pra '+tels.length+' contato(s)? (só pra quem aceitou receber)')) return;
+  m.style.color='var(--muted)'; m.textContent='Disparando...';
+  try{ const r=await (await fetch('/wa/disparar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({telefones:tels,mensagem:msg})})).json();
+    if(r.ok){ m.style.color='var(--good)'; m.textContent='✓ '+r.enviados+'/'+r.total+' enviados.'; }
+    else { m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui disparar.'; }
+  }catch(e){ m.style.color='var(--warn)'; m.textContent='Sem conexao.'; }
 }
 async function metaRender(){
   const box=document.getElementById('metaBox'); if(!box) return;
@@ -2206,8 +2749,8 @@ let _AGS=[], _AG_SEL=null;
 async function renderAgentes(){
   const plano=(USER&&USER.plano)||'free';
   const area=document.getElementById('agentesArea');
-  if(plano!=='business' && plano!=='adm'){
-    area.innerHTML='<div class="card"><h3>Disponivel no Business e ADM</h3><div class="hint">O gerador de agentes esta no Business e no seu ADM, senhor.</div><button class="btn primary" style="margin-top:10px" onclick="go(\'planos\')">Ver planos</button></div>';
+  if(plano!=='business' && plano!=='adm' && plano!=='trafego'){
+    area.innerHTML='<div class="card"><h3>Disponivel no Trafego, Business e ADM</h3><div class="hint">O gerador de agentes esta nos planos Trafego, Business e no seu ADM, senhor.</div><button class="btn primary" style="margin-top:10px" onclick="go(\'planos\')">Ver planos</button></div>';
     return;
   }
   let r={agentes:[]}; try{ r=await (await fetch('/agentes')).json(); }catch(e){}
@@ -2274,21 +2817,111 @@ async function renderCode(){
     return;
   }
   document.getElementById('codeArea').innerHTML=`
-    <div class="card"><h3>Pergunte qualquer coisa, o Orion explica passo a passo</h3>
-      <div class="hint" style="margin-bottom:10px">Ex.: "como faco um bot de WhatsApp em Python?" / "explica meu erro: Cannot read undefined"</div>
-      <div class="field"><textarea id="codePedido" rows="4" placeholder="Descreva o que voce quer fazer, ou cole um erro/codigo pra eu te explicar..."></textarea></div>
-      <div class="row"><button class="btn primary" onclick="codeExec()">Pedir ao Orion Code</button></div>
+    <div class="card" style="display:flex;flex-direction:column;height:calc(100vh - 220px);min-height:420px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <h3 style="margin:0;flex:1">Orion Code <span class="mbadge" style="margin-left:4px">engenheiro</span></h3>
+        <button class="btn ghost" onclick="codeReset()">Nova sessão</button>
+      </div>
+      <div id="codeChat" style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px"></div>
+      <div class="composer" style="border-radius:12px;margin-top:10px"><textarea id="codePedido" rows="1" placeholder="O que vamos construir? (ex: um bot de WhatsApp em Python, ou cole um erro)" style="flex:1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();codeExec();}"></textarea><button class="send" onclick="codeExec()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
     </div>
-    <div class="card" style="margin-top:14px"><h3>Resposta</h3><div id="codeRes" style="font-size:14px;line-height:1.55;white-space:pre-wrap">Aqui aparece a resposta com cada passo do raciocinio.</div></div>`;
+    ${window.ORION_CLOUD?'':`<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><h3 style="margin:0;flex:1">Workspace &amp; Console</h3><button class="btn ghost" onclick="codeAbrirPasta()">Abrir pasta</button><button class="btn ghost" onclick="codeFiles()">Atualizar</button></div>
+      <div class="hint" style="margin-bottom:8px">Os arquivos ficam em <code>Desktop/Jarvis/OrionCode</code> e rodam aqui no seu PC.</div>
+      <div id="codeFiles" class="hint"></div>
+      <pre id="codeOut" style="background:#0a0e16;border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;font-size:12.5px;line-height:1.5;max-height:240px;margin-top:10px;white-space:pre-wrap">A saída dos programas que você rodar aparece aqui.</pre>
+    </div>`}`;
+  let h={hist:[]}; try{ h=await (await fetch('/code/hist')).json(); }catch(e){}
+  const chat=document.getElementById('codeChat');
+  if(h.hist&&h.hist.length){ h.hist.forEach(m=>codeAddMsg(m.role==='user'?'user':'ai', m.content)); }
+  else { chat.innerHTML='<div class="hint" style="margin:auto;text-align:center;max-width:360px">Sou o Orion Code, seu engenheiro. '+(window.ORION_CLOUD?'Eu planejo e escrevo o código completo — você baixa os arquivos e pode rodar páginas web aqui mesmo.':'Eu planejo, escrevo, CRIO os arquivos e EXECUTO de verdade no seu PC. Manda o que você quer construir.')+'</div>'; }
+  if(!window.ORION_CLOUD) codeFiles();
+  chat.scrollTop=chat.scrollHeight;
+}
+const _CB={};   // mapa id->{lang,code,fname}
+const _CB_EXT={python:'py',py:'py',javascript:'js',js:'js',node:'js',mjs:'mjs',html:'html',htm:'html',css:'css',json:'json',bash:'sh',sh:'sh',powershell:'ps1',ps1:'ps1',sql:'sql',ts:'ts',java:'java',c:'c',cpp:'cpp',text:'txt','':'txt'};
+const _CB_RUN={py:'python',python:'python',js:'node',javascript:'node',node:'node',mjs:'node',ps1:'powershell -ExecutionPolicy Bypass -File',powershell:'powershell -ExecutionPolicy Bypass -File'};
+function _cbFname(lang,code){
+  const m=(code||'').split('\n')[0].match(/(?:#|\/\/|<!--)\s*([\w./-]+\.\w{1,5})/);
+  if(m) return m[1].replace(/^.*[\\/]/,'');
+  const ext=_CB_EXT[(lang||'').toLowerCase()]||'txt';
+  return ({py:'main.py',js:'app.js',mjs:'app.mjs',html:'index.html',css:'style.css',ps1:'script.ps1',sh:'run.sh'}[ext])||('arquivo.'+ext);
+}
+function codeMD(txt){
+  const parts=String(txt||'').split(/```/); let html='';
+  parts.forEach((p,i)=>{
+    if(i%2===1){ const nl=p.indexOf('\n'); const lang=(nl>0?p.slice(0,nl).trim():'').toLowerCase(); const code=nl>0?p.slice(nl+1):p;
+      const id='cb'+Math.random().toString(36).slice(2,8); const fname=_cbFname(lang,code);
+      _CB[id]={lang,code,fname};
+      const L=(lang||'').toLowerCase(); const runnable=!!_CB_RUN[L]||L==='html'||L==='htm';
+      let acts='<button class="btn ghost" style="padding:3px 8px;font-size:11px" onclick="codeCopiar(\''+id+'\')">Copiar</button>';
+      if(window.ORION_CLOUD){ acts+='<button class="btn ghost" style="padding:3px 8px;font-size:11px" onclick="codeBaixar(\''+id+'\')">Baixar</button>';
+        if(L==='html'||L==='htm') acts+='<button class="btn" style="padding:3px 8px;font-size:11px" onclick="codePreview(\''+id+'\')">Preview</button>'; }
+      else { acts+='<button class="btn ghost" style="padding:3px 8px;font-size:11px" onclick="codeSalvar(\''+id+'\')">Salvar</button>';
+        if(runnable) acts+='<button class="btn" style="padding:3px 8px;font-size:11px;background:var(--good);color:#0a0c11;border:none" onclick="codeRodar(\''+id+'\')">Rodar</button>'; }
+      html+='<div style="margin:8px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden">'+
+        '<div style="display:flex;align-items:center;gap:6px;background:#0c1018;padding:5px 8px;font-size:11px;color:var(--dim)"><span style="flex:1">'+esc(fname)+(lang?' · '+esc(lang):'')+'</span>'+acts+'</div>'+
+        '<pre id="'+id+'" style="background:#0a0e16;padding:12px;overflow:auto;font-size:12.5px;line-height:1.5;margin:0"><code>'+esc(code)+'</code></pre></div>';
+    } else { html+=esc(p).replace(/\n/g,'<br>').replace(/`([^`]+)`/g,'<code style="background:var(--panel2);padding:1px 5px;border-radius:5px">$1</code>'); }
+  });
+  return html;
+}
+function codeCopiar(id){ const b=_CB[id]; if(!b) return;
+  navigator.clipboard.writeText(b.code||'').then(()=>piscarSave('COPIADO')).catch(()=>{}); }
+function codeBaixar(id){ const b=_CB[id]; if(!b) return;
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([b.code],{type:'text/plain'}));
+  a.download=b.fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); piscarSave('BAIXADO'); }
+function codePreview(id){ const b=_CB[id]; if(!b) return;
+  const w=window.open('','_blank'); if(w){ w.document.open(); w.document.write(b.code); w.document.close(); } }
+async function codeSalvar(id){ const b=_CB[id]; if(!b) return;
+  const nome=prompt('Salvar como:', b.fname); if(!nome) return;
+  try{ const r=await (await fetch('/code/fs/write',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,conteudo:b.code})})).json();
+    if(r.ok){ piscarSave('SALVO'); codeFiles(); } else alert(r.erro||'Nao consegui salvar.');
+  }catch(e){ alert('Sem conexao com o app.'); }
+}
+async function codeRodar(id){ const b=_CB[id]; if(!b) return;
+  const out=document.getElementById('codeOut'); const L=(b.lang||'').toLowerCase();
+  if(L==='html'||L==='htm'){ // salva e abre no navegador padrao do PC
+    await fetch('/code/fs/write',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:b.fname,conteudo:b.code})});
+    await fetch('/code/exec',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'start "" "'+b.fname+'"'})});
+    if(out) out.textContent='Abri '+b.fname+' no seu navegador.'; codeFiles(); return;
+  }
+  const runner=_CB_RUN[L]; if(!runner){ alert('Não sei rodar esse tipo aqui. Use Salvar.'); return; }
+  if(out) out.textContent='Rodando '+b.fname+'...';
+  try{ const r=await (await fetch('/code/exec',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({cmd:runner+' "'+b.fname+'"', arquivo:b.fname, conteudo:b.code})})).json();
+    if(out){ if(r.ok){ out.textContent=(r.saida||'')+(r.erro_saida?('\n[stderr]\n'+r.erro_saida):'')+'\n[exit '+r.code+']'; }
+      else out.textContent='Erro: '+(r.erro||'falhou'); }
+    codeFiles();
+  }catch(e){ if(out) out.textContent='Sem conexao com o app.'; }
+}
+async function codeFiles(){ const el=document.getElementById('codeFiles'); if(!el) return;
+  try{ const r=await (await fetch('/code/fs/list')).json();
+    el.innerHTML=(r.arquivos&&r.arquivos.length)?('Arquivos: '+r.arquivos.map(f=>'<code style="background:var(--panel2);padding:1px 6px;border-radius:5px;margin-right:4px">'+esc(f)+'</code>').join('')):'Nenhum arquivo ainda.';
+  }catch(e){ el.textContent=''; } }
+async function codeAbrirPasta(){ try{ await fetch('/code/pasta',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); }catch(e){} }
+function codeAddMsg(role,txt){
+  const chat=document.getElementById('codeChat'); if(!chat) return null;
+  const wrap=document.createElement('div');
+  wrap.style.cssText=role==='user'
+    ? 'align-self:flex-end;max-width:85%;background:var(--accent);color:#0a0c11;border-radius:14px 14px 4px 14px;padding:10px 13px;font-size:14px;white-space:pre-wrap'
+    : 'align-self:flex-start;max-width:92%;background:var(--panel2);border:1px solid var(--line);border-radius:14px 14px 14px 4px;padding:12px 14px;font-size:14px;line-height:1.55';
+  if(role==='user') wrap.textContent=txt; else wrap.innerHTML=codeMD(txt);
+  chat.appendChild(wrap); chat.scrollTop=chat.scrollHeight; return wrap;
 }
 async function codeExec(){
-  const ta=document.getElementById('codePedido'); const out=document.getElementById('codeRes');
-  const p=(ta.value||'').trim();
-  if(!p){ out.textContent='Descreva o que precisa, senhor.'; return; }
-  out.textContent='Pensando passo a passo...';
+  const ta=document.getElementById('codePedido'); const p=(ta.value||'').trim();
+  if(!p) return; ta.value='';
+  codeAddMsg('user',p);
+  const pend=codeAddMsg('ai','Pensando passo a passo...');
   try{ const r=await (await fetch('/code/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pedido:p})})).json();
-    out.textContent = r.ok ? (r.resposta||'Sem resposta.') : (r.erro||'Erro.');
-  }catch(e){ out.textContent='Sem conexao.'; }
+    if(pend) pend.innerHTML=codeMD(r.ok ? (r.resposta||'Sem resposta.') : (r.erro||'Erro.'));
+    const chat=document.getElementById('codeChat'); if(chat) chat.scrollTop=chat.scrollHeight;
+  }catch(e){ if(pend) pend.textContent='Sem conexao.'; }
+}
+async function codeReset(){
+  if(!confirm('Começar uma sessão nova? O Orion esquece o contexto da conversa atual de código.')) return;
+  try{ await fetch('/code/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset:true})}); }catch(e){}
+  renderCode();
 }
 async function renderTarefas(){
   document.getElementById('tarefasArea').innerHTML=`
@@ -2435,7 +3068,7 @@ async function authCriar(){ const nome=document.getElementById('authNome').value
 async function authConvidado(){ const r=await (await fetch('/usuario/convidado',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:'Convidado'})})).json();
   if(r.ok) entrou(r.user); }
 function entrou(u){ USER=u; _salvaPerfLocal(u); aplicaUser(); document.getElementById('authModal').classList.remove('show'); piscarSave('BEM VINDO'); go('home');
-  setTimeout(tourComeca, 600);  // tour de boas-vindas (so 1a vez por aparelho)
+  carregaPrefs().then(checkOnboarding);  // perguntas iniciais (so 1a vez) e depois o tour
 }
 
 // ===================== SAVE TOAST =====================
@@ -2571,7 +3204,7 @@ function tourFim(){
 function hideSplash(){ var s=document.getElementById('splash'); if(!s) return; s.classList.add('hide');
   setTimeout(function(){ if(s&&s.parentNode) s.parentNode.removeChild(s); },600); }
 setTimeout(hideSplash, 1700);
-renderNav(); initStars(); stars();
+renderNav(); initStars(); stars(); carregaPrefs();
 authCheck(); poll(); checkRetornoPagamento();
 (function(){ const lg=new URLSearchParams(location.search).get('login'); if(!lg) return;
   if(lg==='google_off') alert('O login com Google ainda nao foi ligado no servidor, senhor. Por enquanto crie conta por e-mail, leva 10 segundos.');
