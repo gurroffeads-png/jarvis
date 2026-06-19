@@ -186,17 +186,43 @@ def session_uid(tok):
 PERSONA = ("Voce e o Orion, um assistente pessoal de IA em portugues do Brasil. "
            "Educado, direto, prestativo, com leve tom de mordomo (trata por 'senhor' as vezes). "
            "Nunca use o caractere travessao. Respostas curtas e uteis. Seu nome e sempre Orion.")
-def cloud_chat(system, messages, max_tokens=700):
-    if not LLM_KEY:
+# ---- MODOS (modelos) + ESFORCO: o usuario escolhe; planos liberam os melhores ----
+# Todos os modelos sao GRATIS (Groq). Modelos pagos so via BYOK (chave do proprio cliente).
+MODOS = {
+  "rapido":    {"nome":"Rápido",     "model":"llama-3.1-8b-instant",          "pago":False, "emoji":"⚡"},
+  "avancado":  {"nome":"Avançado",   "model":"llama-3.3-70b-versatile",       "pago":False, "emoji":"✨"},
+  "raciocinio":{"nome":"Raciocínio", "model":"deepseek-r1-distill-llama-70b", "pago":True,  "emoji":"🧠"},
+}
+ESFORCOS = {"normal":{"nome":"Normal","pago":False},"profundo":{"nome":"Profundo","pago":True}}
+def _modo_ok(u, modo):
+    m = MODOS.get(modo or "avancado") or MODOS["avancado"]
+    if m["pago"] and plano_de(u)=="free": return "avancado"   # free cai pro avancado
+    return modo if modo in MODOS else "avancado"
+def _esforco_ok(u, esf):
+    e = ESFORCOS.get(esf or "normal") or ESFORCOS["normal"]
+    if e["pago"] and plano_de(u)=="free": return "normal"
+    return esf if esf in ESFORCOS else "normal"
+def _llm_resolve(u, modo=None):
+    """Decide (key, base, model, fonte). BYOK (chave do cliente) tem prioridade e nao consome token nosso."""
+    pref = (get_blob(u["id"], "brain", {}) or {}) if u else {}
+    if pref.get("key"):
+        return (pref["key"], (pref.get("base") or LLM_BASE).rstrip("/"), pref.get("model") or LLM_MODEL, "byok")
+    mm = MODOS.get(_modo_ok(u, modo) if u else (modo or "avancado"), MODOS["avancado"])
+    return (LLM_KEY, LLM_BASE.rstrip("/"), mm["model"], "managed")
+def _llm_post(base, key, body, timeout=45):
+    req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
+    return json.loads(urllib.request.urlopen(req, timeout=timeout).read().decode())
+
+def cloud_chat(system, messages, max_tokens=700, u=None, modo=None):
+    key, base, model, fonte = _llm_resolve(u, modo)
+    if not key:
         return "O cerebro de nuvem ainda nao foi configurado, senhor. Falta a variavel LLM_API_KEY (ex: chave gratis do Groq)."
-    body = {"model": LLM_MODEL, "max_tokens": max_tokens, "temperature": 0.5,
+    body = {"model": model, "max_tokens": max_tokens, "temperature": 0.5,
             "messages": [{"role":"system","content":system}] + messages}
     try:
-        req = urllib.request.Request(LLM_BASE.rstrip("/") + "/chat/completions",
-            data=json.dumps(body).encode(),
-            headers={"Authorization": f"Bearer {LLM_KEY}", "Content-Type": "application/json",
-                     "User-Agent": "Mozilla/5.0"})  # Cloudflare da Groq bloqueia o UA padrao do urllib (403/1010)
-        r = json.loads(urllib.request.urlopen(req, timeout=40).read().decode())
+        r = _llm_post(base, key, body, timeout=40)
+        if u and fonte=="managed": tokens_registrar(u, r.get("usage") or {}, model)
         return (r["choices"][0]["message"]["content"] or "").strip()
     except urllib.error.HTTPError as e:
         corpo = e.read()[:300].decode("utf-8", "ignore")
@@ -249,20 +275,21 @@ BRAIN_PROVIDERS = [
     {"id":"deepinfra","nome":"DeepInfra (Llama)","base":"https://api.deepinfra.com/v1/openai","modelo":"meta-llama/Meta-Llama-3.1-70B-Instruct","como":"deepinfra.com (free credit)"},
     {"id":"mistral","nome":"Mistral AI","base":"https://api.mistral.ai/v1","modelo":"mistral-large-latest","como":"console.mistral.ai (free tier)"},
 ]
-def cloud_chat_web(system, messages, max_tokens=700):
+def cloud_chat_web(system, messages, max_tokens=700, u=None, modo=None, esforco=None):
     """Chat com ferramenta de busca: o modelo pesquisa na web quando precisa. Cai pro cloud_chat se algo falhar."""
-    if not LLM_KEY: return cloud_chat(system, messages, max_tokens)
+    key, base, model, fonte = _llm_resolve(u, modo)
+    if not key: return cloud_chat(system, messages, max_tokens, u, modo)
+    if u and _esforco_ok(u, esforco)=="profundo": max_tokens=int(max_tokens*1.6)+200   # esforco profundo: respostas mais completas
     tools=[{"type":"function","function":{"name":"buscar_web",
         "description":"Pesquisa na internet. Use SEMPRE que a pergunta for sobre fatos atuais, noticias, precos, eventos recentes, datas ou qualquer coisa que voce nao saiba com certeza.",
         "parameters":{"type":"object","properties":{"consulta":{"type":"string","description":"o termo de busca"}},"required":["consulta"]}}}]
     msgs=[{"role":"system","content":system}]+list(messages)
     def _call(body):
-        req=urllib.request.Request(LLM_BASE.rstrip("/")+"/chat/completions",data=json.dumps(body).encode(),
-            headers={"Authorization":f"Bearer {LLM_KEY}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
-        return json.loads(urllib.request.urlopen(req,timeout=40).read().decode())
+        return _llm_post(base, key, body, timeout=40)
     try:
         for _ in range(2):
-            r=_call({"model":LLM_MODEL,"max_tokens":max_tokens,"temperature":0.5,"messages":msgs,"tools":tools,"tool_choice":"auto"})
+            r=_call({"model":model,"max_tokens":max_tokens,"temperature":0.5,"messages":msgs,"tools":tools,"tool_choice":"auto"})
+            if u and fonte=="managed": tokens_registrar(u, r.get("usage") or {}, model)
             msg=r["choices"][0]["message"]; tcs=msg.get("tool_calls") or []
             if not tcs: return (msg.get("content") or "").strip()
             msgs.append({"role":"assistant","content":msg.get("content") or "","tool_calls":tcs})
@@ -274,10 +301,59 @@ def cloud_chat_web(system, messages, max_tokens=700):
                 cont=(resumo or "Nada encontrado.")
                 if fontes: cont+=" || Fontes: "+"; ".join(f.get("url","") for f in fontes[:3])
                 msgs.append({"role":"tool","tool_call_id":tc.get("id"),"name":"buscar_web","content":cont[:1800]})
-        r=_call({"model":LLM_MODEL,"max_tokens":max_tokens,"temperature":0.5,"messages":msgs})  # resposta final sem ferramenta
+        r=_call({"model":model,"max_tokens":max_tokens,"temperature":0.5,"messages":msgs})  # resposta final sem ferramenta
+        if u and fonte=="managed": tokens_registrar(u, r.get("usage") or {}, model)
         return (r["choices"][0]["message"].get("content") or "").strip()
     except Exception as e:
-        print("[llm-web]", e); return cloud_chat(system, messages, max_tokens)
+        print("[llm-web]", e); return cloud_chat(system, messages, max_tokens, u, modo)
+
+# ======================= SISTEMA DE TOKENS DO ORION (uso, cota mensal, recarga avulsa) =======================
+PLANO_TOKENS = {"free":150000, "pro":2000000, "trading":1500000, "trafego":4000000, "business":8000000, "adm":10**12}
+TOKEN_PACOTES = [
+  {"id":"tk20","preco":19.90,"tokens":500000,  "nome":"500 mil tokens"},
+  {"id":"tk50","preco":49.90,"tokens":1500000, "nome":"1,5 milhão de tokens"},
+  {"id":"tk100","preco":99.90,"tokens":4000000,"nome":"4 milhões de tokens"},
+]
+# tabela de CUSTO real por modelo (R$ por 1k tokens) - editavel. Groq = 0 (gratis pra nos). BYOK = custo do cliente.
+CUSTO_MODELO = {"llama-3.1-8b-instant":0.0,"llama-3.3-70b-versatile":0.0,"deepseek-r1-distill-llama-70b":0.0,
+                "gpt-4o-mini":0.004,"gpt-4o":0.05,"claude-sonnet-4-6":0.06}
+def tokens_estado(u):
+    w = get_blob(u["id"], "tokens", {}) or {}
+    mes = datetime.date.today().strftime("%Y-%m")
+    if w.get("mes") != mes:   # vira o mes: zera o uso, MANTEM os avulsos comprados (extra)
+        w = {"mes":mes, "usados":0, "in":0, "out":0, "extra":w.get("extra",0), "custo":0.0}
+        set_blob(u["id"], "tokens", w)
+    grant = PLANO_TOKENS.get(plano_de(u), PLANO_TOKENS["free"])
+    restante = grant - w.get("usados",0) + w.get("extra",0)
+    return {"grant":grant, "usados":w.get("usados",0), "extra":w.get("extra",0),
+            "restante":max(0,restante), "mes":mes, "custo":round(w.get("custo",0.0),4), "_w":w}
+def tokens_registrar(u, usage, model):
+    try:
+        tin=int(usage.get("prompt_tokens",0) or 0); tout=int(usage.get("completion_tokens",0) or 0)
+    except Exception: tin=tout=0
+    if tin+tout<=0: return
+    st=tokens_estado(u); w=st["_w"]
+    w["usados"]=w.get("usados",0)+tin+tout; w["in"]=w.get("in",0)+tin; w["out"]=w.get("out",0)+tout
+    w["custo"]=round(w.get("custo",0.0) + (tin+tout)/1000.0*CUSTO_MODELO.get(model,0.0), 5)
+    set_blob(u["id"], "tokens", w)
+    # agregado global (admin): custo total por usuario
+    try:
+        g=get_blob(1,"_tok_admin",{}) or {}; uid=str(u["id"])
+        e=g.get(uid) or {"nome":u.get("nome",""),"plano":plano_de(u),"tin":0,"tout":0,"custo":0.0}
+        e["tin"]+=tin; e["tout"]+=tout; e["custo"]=round(e["custo"]+(tin+tout)/1000.0*CUSTO_MODELO.get(model,0.0),5)
+        e["plano"]=plano_de(u); g[uid]=e; set_blob(1,"_tok_admin",g)
+    except Exception: pass
+def tokens_tem_saldo(u):
+    if plano_de(u)=="adm": return True
+    return tokens_estado(u)["restante"] > 0
+def tokens_add(u, qtd):
+    st=tokens_estado(u); w=st["_w"]; w["extra"]=w.get("extra",0)+int(qtd); set_blob(u["id"],"tokens",w)
+    return tokens_estado(u)
+def tokens_admin_resumo():
+    g=get_blob(1,"_tok_admin",{}) or {}
+    linhas=sorted(g.values(), key=lambda x:-x.get("custo",0))
+    return {"ok":True, "usuarios":linhas[:100], "custo_total":round(sum(x.get("custo",0) for x in g.values()),4),
+            "tokens_total":sum(x.get("tin",0)+x.get("tout",0) for x in g.values())}
 
 _FEEDS=[("MERCADO","https://www.infomoney.com.br/feed/"),
         ("BRASIL","https://g1.globo.com/rss/g1/economia/"),
@@ -575,6 +651,16 @@ def agente_criar(uid, nome, descricao, instrucoes):
     return {"ok":True, "agente":ag}
 def agente_apagar(uid, aid):
     set_blob(uid, "agentes", [a for a in agentes_get(uid) if a.get("id")!=aid]); return {"ok":True}
+def agente_editar(uid, aid, nome, descricao, instrucoes):
+    ags = agentes_get(uid); achou=False
+    for a in ags:
+        if a.get("id")==aid:
+            if nome is not None: a["nome"]=(nome or "").strip()[:60] or a.get("nome","Agente")
+            if descricao is not None: a["descricao"]=(descricao or "").strip()[:160]
+            if instrucoes is not None and len((instrucoes or "").strip())>=10: a["instrucoes"]=instrucoes.strip()[:2000]
+            achou=True; break
+    if not achou: return {"ok":False,"erro":"Agente nao encontrado."}
+    set_blob(uid, "agentes", ags); return {"ok":True}
 def agente_run(u, aid, mensagem):
     pode = uso_pode(u, "msg")
     if not pode["ok"]: return {"ok":False,"erro":pode["motivo"]}
@@ -1057,6 +1143,47 @@ def checkout(u, plano, provedor, burl):
         except Exception as e: return {"ok":False,"msg":f"Erro PayPal: {e}"}
     return {"ok":False,"msg":"Pagamento nao configurado no servidor. Ou use uma chave de ativacao em Planos."}
 
+def checkout_tokens(u, pacote_id, provedor, burl):
+    """Compra avulsa de tokens (so planos pagos). external_reference 'tk:<pacote>:<uid>'."""
+    if plano_de(u)=="free": return {"ok":False,"msg":"A recarga de tokens e pros planos pagos, senhor. Veja os planos."}
+    pac = next((p for p in TOKEN_PACOTES if p["id"]==pacote_id), None)
+    if not pac: return {"ok":False,"msg":"Pacote invalido."}
+    if not provedor: provedor = "mp" if mp_token() else ("paypal" if pp_creds()[0] else None)
+    ref = f"tk:{pac['id']}:{u['id']}"
+    if provedor == "mp" and mp_token():
+        try:
+            body={"items":[{"title":"Orion tokens - "+pac["nome"],"quantity":1,"unit_price":pac["preco"],"currency_id":"BRL"}],
+                  "external_reference":ref,"back_urls":{"success":f"{burl}/?pago=tokens","failure":f"{burl}/?pago=falhou"}}
+            if burl.startswith("https"): body["auto_return"]="approved"; body["notification_url"]=f"{burl}/pagamento/webhook"
+            req=urllib.request.Request("https://api.mercadopago.com/checkout/preferences",data=json.dumps(body).encode(),
+                headers={"Authorization":f"Bearer {mp_token()}","Content-Type":"application/json"})
+            r=json.loads(urllib.request.urlopen(req,timeout=15).read().decode())
+            url=r.get("init_point") or r.get("sandbox_init_point")
+            if url: return {"ok":True,"url":url}
+        except Exception as e: return {"ok":False,"msg":f"Erro MP: {e}"}
+    if provedor == "paypal" and pp_creds()[0]:
+        cid,sec,mode=pp_creds()
+        try:
+            base,tok=_pp_token(cid,sec,mode)
+            body={"intent":"CAPTURE","purchase_units":[{"amount":{"currency_code":"BRL","value":f"{pac['preco']:.2f}"},"custom_id":ref}],
+                  "application_context":{"return_url":f"{burl}/?pago=tokens&prov=paypal","cancel_url":f"{burl}/?pago=falhou"}}
+            r=json.loads(urllib.request.urlopen(urllib.request.Request(base+"/v2/checkout/orders",data=json.dumps(body).encode(),
+                headers={"Authorization":f"Bearer {tok}","Content-Type":"application/json"}),timeout=15).read())
+            link=next((l["href"] for l in r.get("links",[]) if l.get("rel")=="approve"),None)
+            if link: return {"ok":True,"url":link}
+        except Exception as e: return {"ok":False,"msg":f"Erro PayPal: {e}"}
+    return {"ok":False,"msg":"Pagamento nao configurado no servidor."}
+def _creditar_tokens_ref(ref):
+    """Se a ref for de compra de tokens (tk:<pacote>:<uid>), credita e retorna dict; senao None."""
+    if not ref.startswith("tk:"): return None
+    try:
+        _, pac, uid = ref.split(":",2)
+        p = next((x for x in TOKEN_PACOTES if x["id"]==pac), None)
+        uu = get_user(int(uid))
+        if p and uu: st=tokens_add(uu, p["tokens"]); return {"ok":True,"tokens":p["tokens"],"restante":st["restante"]}
+    except Exception as e: print("[creditar_tokens]", e)
+    return {"ok":False,"erro":"Nao consegui creditar os tokens."}
+
 def _set_plano(uid, plano):
     if plano not in ("free","pro","trading","trafego","business","adm"): return False
     try:
@@ -1088,6 +1215,8 @@ def confirmar_pagamento(pid, provedor):
                 pu = (r.get("purchase_units") or [{}])[0]
                 cust = pu.get("custom_id") or pu.get("payments",{}).get("captures",[{}])[0].get("custom_id","")
             except Exception: cust = ""
+            if r.get("status") == "COMPLETED" and cust.startswith("tk:"):
+                cr=_creditar_tokens_ref(cust);  return cr if cr else {"ok":False,"erro":"Falha ao creditar."}
             if r.get("status") == "COMPLETED" and ":" in cust:
                 plano,uid = cust.split(":",1)
                 if _set_plano(uid, plano): return {"ok":True,"plano":plano,"user":_pub(get_user(int(uid)))}
@@ -1097,6 +1226,8 @@ def confirmar_pagamento(pid, provedor):
             r = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.mercadopago.com/v1/payments/"+str(pid),
                 headers={"Authorization":f"Bearer {mp_token()}","User-Agent":"Mozilla/5.0"}),timeout=20).read())
             ext = r.get("external_reference") or ""
+            if r.get("status") == "approved" and ext.startswith("tk:"):
+                cr=_creditar_tokens_ref(ext);  return cr if cr else {"ok":False,"erro":"Falha ao creditar."}
             if r.get("status") == "approved" and ":" in ext:
                 plano,uid = ext.split(":",1)
                 if _set_plano(uid, plano): return {"ok":True,"plano":plano,"user":_pub(get_user(int(uid)))}
@@ -1252,14 +1383,26 @@ def conv_anexar(uid, cid, msg):
     return None
 
 # ======================= ORION CODE (Business+, agente que mostra o raciocinio) =======================
+# POLITICA DE USO: o Orion Code constroi quase tudo, mas recusa o que e claramente pra causar dano.
+POLITICA_USO = (" POLITICA DE USO (siga sempre): voce pode programar quase qualquer coisa legitima que o usuario queira."
+    " RECUSE, de forma educada e curta, pedidos claramente para causar dano: malware/virus/ransomware, invadir sistemas"
+    " ou contas de terceiros, roubo de senhas/dados, fraude, burlar pagamento/licenca, spam/golpe, assediar pessoas,"
+    " ou qualquer coisa ilegal. Se for ambiguo mas tiver uso legitimo (ex: seguranca defensiva, teste no proprio sistema),"
+    " ajude com responsabilidade. Nunca ensine a atacar terceiros.")
+_CODE_PROIBIDO = ("ransomware","keylogger","roubar senha","roubar senhas","roubar dados","steal password","stealer",
+    "invadir","hackear conta","hackear o","ddos","derrubar site","botnet","fraude","cartao de credito roubado",
+    "burlar licenca","burlar pagamento","crackear","spammer","enviar spam em massa","golpe","phishing","carding")
+def _uso_proibido(pedido):
+    p = (pedido or "").lower()
+    return any(t in p for t in _CODE_PROIBIDO)
 ORION_CODE_SYS = (
-    "Voce e o Orion Code: um engenheiro de software senior estilo Claude Code. Voce ajuda a CONSTRUIR de verdade."
+    "Voce e o Orion Code: um engenheiro de software senior. Voce ajuda a CONSTRUIR de verdade."
     " Fluxo: (1) se faltar algo essencial, faca 1-2 perguntas curtas antes; senao ja resolve. (2) Mostre um PLANO"
     " curto em passos numerados. (3) Entregue o codigo COMPLETO e funcional (arquivo inteiro quando fizer sentido,"
     " nao trechos soltos), cada bloco em markdown ```linguagem com o caminho do arquivo no comentario do topo."
     " (4) Explique como rodar/testar e o proximo passo. Lembre do historico da conversa pra iterar (corrigir bug,"
     " adicionar feature) sem recomecar. Use buscar_web pra docs/versoes atuais. Seja pratico e honesto sobre limites."
-    " Portugues do Brasil, direto, sem travessao."
+    " Portugues do Brasil, direto, sem travessao." + POLITICA_USO
 )
 def orion_code_run(u, pedido, reset=False):
     pode = uso_pode(u, "msg")
@@ -1269,11 +1412,13 @@ def orion_code_run(u, pedido, reset=False):
     pedido = (pedido or "").strip()
     if reset: set_blob(u["id"], "code_hist", []);
     if not pedido: return {"ok":True,"resposta":"Me diga o que voce quer construir, senhor.","reset":bool(reset)}
+    if _uso_proibido(pedido):
+        return {"ok":True,"resposta":"Isso foge da politica de uso do Orion, senhor: nao ajudo a criar nada pra invadir, roubar dados, fraudar ou causar dano a terceiros. Mas posso te ajudar a construir praticamente qualquer outra coisa legitima. O que vamos fazer?"}
     uso_reg(u, "msg"); marcar_ativo(u["id"])
     hoje = datetime.date.today().strftime("%d/%m/%Y")
     sysp = ORION_CODE_SYS + f" Hoje e {hoje}."
     hist = (get_blob(u["id"], "code_hist", []) or [])[-10:]   # memoria da sessao de codigo
-    resp = cloud_chat_web(sysp, hist + [{"role":"user","content":pedido}], 1600)
+    resp = cloud_chat_web(sysp, hist + [{"role":"user","content":pedido}], 1600, u, "raciocinio")
     hist = (hist + [{"role":"user","content":pedido},{"role":"assistant","content":resp}])[-16:]
     set_blob(u["id"], "code_hist", hist)
     return {"ok":True,"resposta":resp}
@@ -1401,6 +1546,8 @@ def mp_webhook(pid, topic=""):
             ok = status in ("approved","authorized","active")
             if not (ok and ":" in ext): continue
             parts = ext.split(":")
+            if parts[0] == "tk" and len(parts) >= 3:   # compra avulsa de tokens
+                _creditar_tokens_ref(ext); return
             if parts[0] == "sub" and len(parts) >= 3:
                 plano, uid = parts[1], parts[2]
                 if _set_plano(uid, plano):
@@ -1750,6 +1897,14 @@ class H(BaseHTTPRequestHandler):
             self._send(conv_abrir(u["id"], cid) if u else {"ok":False,"erro":"faca login"})
         elif path == "/prefs": self._send({"ok":True,"prefs":prefs_get(u["id"]), "onboarding": bool((get_blob(u["id"],"onboarding_ok",{}) or {}).get("feito"))} if u else {"ok":True,"prefs":{}})
         elif path == "/code/hist": self._send(orion_code_hist(u) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/tokens":
+            if u:
+                pl=plano_de(u); st=tokens_estado(u); st.pop("_w",None)
+                modos=[{"id":k,"nome":v["nome"],"emoji":v["emoji"],"liberado":(not v["pago"]) or pl!="free"} for k,v in MODOS.items()]
+                esfs=[{"id":k,"nome":v["nome"],"liberado":(not v["pago"]) or pl!="free"} for k,v in ESFORCOS.items()]
+                self._send({"ok":True,"saldo":st,"modos":modos,"esforcos":esfs,"pacotes":TOKEN_PACOTES,"plano":pl})
+            else: self._send({"ok":False,"erro":"faca login"})
+        elif path == "/admin/tokens": self._send(tokens_admin_resumo() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/brain/opcoes": self._send({"providers":BRAIN_PROVIDERS, "atual": (get_blob(u["id"],"brain",{}) if u else {})})
         elif path == "/estado":
             self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
@@ -1888,8 +2043,14 @@ class H(BaseHTTPRequestHandler):
                     + " Seja capaz, util e direto. Para fatos atuais, precos, eventos ou o que nao souber, USE a ferramenta buscar_web e cite a fonte. Nunca invente numeros. Se houver manchetes acima, resuma a partir delas.")
             conv_atual = next((c for c in _convs_get(u["id"]) if c["id"]==conv_id), None)
             hist = (conv_atual or {}).get("msgs",[])[-12:-1]   # historico sem a ultima msg (que ja vai abaixo)
-            motor = cloud_chat_web if precisa_web(frase) else cloud_chat   # rapido pra pergunta simples
-            reply = motor(sysp, hist + [{"role":"user","content":frase}])
+            modo = d.get("modo") or "avancado"; esforco = d.get("esforco") or "normal"
+            aviso = ""
+            if not tokens_tem_saldo(u):   # tokens acabaram: cai pro modo rapido e avisa (paid pode recarregar)
+                modo = "rapido"; aviso = "\n\n_Seus tokens do mês acabaram, senhor. Respondendo no modo Rápido. Recarregue em Conta para liberar os modos avançados._"
+            usar_web = precisa_web(frase) or _esforco_ok(u, esforco)=="profundo"
+            if usar_web: reply = cloud_chat_web(sysp, hist + [{"role":"user","content":frase}], 700, u, modo, esforco)
+            else: reply = cloud_chat(sysp, hist + [{"role":"user","content":frase}], 700, u, modo)
+            if aviso: reply = reply + aviso
             conv_anexar(u["id"], conv_id, {"role":"assistant","content":reply})
             threading.Thread(target=aprender_bg, args=(u["id"], frase), daemon=True).start()   # 1 chamada: memoria + conhecimento
             self._send({"ok":True,"reply":reply,"conv_id":conv_id})
@@ -1930,6 +2091,8 @@ class H(BaseHTTPRequestHandler):
             if u and u["criador"] and (d.get("plano") in ("pro","trading","trafego","business","adm")):
                 self._send({"ok":True,"plano":d["plano"],"chave":lic_registrar(d["plano"])})
             else: self._send({"ok":False,"erro":"so o dono gera chaves"})
+        elif path == "/tokens/comprar":
+            self._send(checkout_tokens(u, d.get("pacote",""), d.get("provedor"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
         elif path == "/pagamento/checkout":
             self._send(checkout(u, d.get("plano","pro"), d.get("provedor"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
         elif path == "/pagamento/assinar":
@@ -1959,6 +2122,10 @@ class H(BaseHTTPRequestHandler):
             else: self._send({"ok":False,"erro":"O gerador de agentes esta nos planos Trafego, Business e ADM, senhor."})
         elif path == "/agente/apagar":
             self._send(agente_apagar(u["id"], d.get("id")) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/agente/editar":
+            if u and plano_de(u) in ("adm","business","trafego"):
+                self._send(agente_editar(u["id"], d.get("id"), d.get("nome"), d.get("descricao"), d.get("instrucoes")))
+            else: self._send({"ok":False,"erro":"Disponivel nos planos Trafego, Business e ADM, senhor."})
         elif path == "/agente/run":
             if u and plano_de(u) in ("adm","business","trafego"):
                 self._send(agente_run(u, d.get("id"), d.get("mensagem","")))

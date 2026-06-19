@@ -56,7 +56,7 @@ button{font-family:inherit;cursor:pointer}
 .plan-trading{background:rgba(46,204,113,.18);color:#2ecc71}
 .plan-trafego{background:rgba(255,140,90,.18);color:#ff9b6b}
 
-/* ===================== SIDEBAR (recolhivel estilo Claude) ===================== */
+/* ===================== SIDEBAR (recolhivel) ===================== */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:65;opacity:0;pointer-events:none;transition:.2s}
 .scrim.on{opacity:1;pointer-events:auto}
 .sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sb);z-index:70;background:var(--bg2);
@@ -251,6 +251,29 @@ button{font-family:inherit;cursor:pointer}
 .rot-item.done span{text-decoration:line-through;color:var(--faint)}
 .apr-licao{margin:0 0 8px 30px}
 .apr-l-in{background:var(--bg);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:10px;padding:14px 16px;font-size:14px;line-height:1.65}
+/* carrossel de novidades (home) */
+.novidades{width:100%;max-width:560px;margin:18px auto 0;position:relative;border:1px solid var(--line2);border-radius:16px;overflow:hidden;background:linear-gradient(120deg,rgba(122,162,255,.14),rgba(155,140,255,.10));min-height:88px;display:none}
+.novidades.on{display:block}
+.nv-slide{display:none;padding:16px 44px 16px 18px;animation:nvfade .5s ease}
+.nv-slide.on{display:block}
+.nv-slide .nv-tag{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--accent)}
+.nv-slide h4{font-size:15px;font-weight:800;margin:3px 0 2px;color:var(--text)}
+.nv-slide p{font-size:12.5px;color:var(--dim);line-height:1.5}
+.nv-dots{position:absolute;bottom:8px;left:18px;display:flex;gap:5px}
+.nv-dots i{width:6px;height:6px;border-radius:50%;background:var(--line2);cursor:pointer}
+.nv-dots i.on{background:var(--accent)}
+.nv-x{position:absolute;top:8px;right:10px;color:var(--faint);cursor:pointer;font-size:15px;background:none;border:none}
+.nv-go{position:absolute;bottom:8px;right:12px;font-size:12px;color:var(--accent);cursor:pointer;font-weight:600}
+@keyframes nvfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* modos + tokens (acima do composer) */
+.chat-modes{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 2px 6px;font-size:12px}
+.chat-modes .mchip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line2);background:var(--panel);color:var(--dim);border-radius:18px;padding:3px 10px;cursor:pointer;font-size:12px;transition:.12s}
+.chat-modes .mchip:hover{color:var(--text);border-color:var(--accent)}
+.chat-modes .mchip.on{background:var(--accent);border-color:var(--accent);color:#0a0c11;font-weight:600}
+.chat-modes .mchip.lock{opacity:.5;cursor:not-allowed}
+.chat-modes .msep{width:1px;height:16px;background:var(--line2);margin:0 2px}
+.chat-modes .saldo{margin-left:auto;color:var(--faint);font-size:11px;cursor:pointer}
+.chat-modes .saldo b{color:var(--accent)}
 /* painel sub-abas */
 .pn-tabbar{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;border-bottom:1px solid var(--line)}
 .pn-tab{flex-shrink:0;background:transparent;border:1px solid var(--line2);color:var(--dim);border-radius:20px;padding:7px 14px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:inherit;transition:.15s}
@@ -326,8 +349,9 @@ button{font-family:inherit;cursor:pointer}
   .composer .mic,.composer .send{width:38px;height:38px}
   .composer .mic svg{width:17px;height:17px}}
 /* COMPANHEIRO (mascote sempre presente) */
-.companion{position:fixed;right:18px;bottom:84px;z-index:140;width:60px;height:60px;cursor:pointer;
-  display:none;filter:drop-shadow(0 6px 18px rgba(91,140,255,.45));transition:transform .2s}
+.companion{position:fixed;right:18px;bottom:84px;z-index:140;width:60px;height:60px;cursor:grab;
+  display:none;filter:drop-shadow(0 6px 18px rgba(91,140,255,.45));transition:transform .2s;touch-action:none;user-select:none}
+.companion:active{cursor:grabbing}
 .companion.show{display:block}
 .companion:hover{transform:scale(1.07)}
 .companion svg{width:100%;height:100%;animation:compFloat 3.2s ease-in-out infinite}
@@ -488,10 +512,12 @@ button{font-family:inherit;cursor:pointer}
               <button class="sug" onclick="sugere('Monta uma rotina de academia sustentavel pra iniciante')">Rotina de academia</button>
               <button class="sug" onclick="sugere('Resume as noticias do mercado hoje')">Noticias do mercado</button>
             </div>
+            <div id="novidades" class="novidades"></div>
           </div>
         </div>
       </div>
       <div class="chat-foot">
+        <div id="chatModes" class="chat-modes"></div>
         <div class="composer">
           <button class="mic" id="attachBtn" onclick="anexar()" title="Anexar arquivo" style="margin-right:2px">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg>
@@ -528,6 +554,12 @@ button{font-family:inherit;cursor:pointer}
     <div id="rotinaArea"></div>
   </div></section>
 
+  <!-- PERSONALIZACAO -->
+  <section class="view" id="viewPersonal"><div class="page">
+    <h1>Personalização</h1>
+    <div class="sub">Deixe o Orion com a sua cara: tema do app, skin do mascote, menu lateral e a palavra-chave de voz.</div>
+    <div id="personArea"></div>
+  </div></section>
   <!-- PAINEL BUSINESS -->
   <section class="view" id="viewPainel"><div class="page" style="max-width:1100px">
     <h1>Painel Business</h1>
@@ -543,7 +575,7 @@ button{font-family:inherit;cursor:pointer}
   <!-- ORION CODE (Business+) -->
   <section class="view" id="viewCode"><div class="page">
     <h1>Orion Code</h1>
-    <div class="sub">O Orion mostra o raciocinio passo a passo, como um Claude Code. Pra ensinar voce a fazer.</div>
+    <div class="sub">O Orion planeja, escreve o codigo completo e te ensina passo a passo. No app de computador ele cria os arquivos e roda de verdade na sua maquina.</div>
     <div id="codeArea"></div>
   </div></section>
   <!-- TAREFAS -->
@@ -714,6 +746,7 @@ const NAV=[
  {id:'trading',nome:'Trading IA',icon:'trading'},
  {id:'integracoes',nome:'Integracoes',icon:'integra'},
  {sec:'Conta'},
+ {id:'person',nome:'Personalizacao',icon:'config'},
  {id:'config',nome:'Configuracoes',icon:'config'},
  {id:'conta',nome:'Conta & Plano',icon:'conta'},
  {id:'planos',nome:'Planos',icon:'planos'},
@@ -729,6 +762,7 @@ function renderNav(){
     if(it.sec){const s=document.createElement('div');s.className='sb-sec';s.textContent=it.sec;n.appendChild(s);return;}
     if(it.cloud && !window.ORION_CLOUD) return;          // abas que dependem da nuvem nao aparecem no desktop
     if(it.planos && it.planos.indexOf(plano)<0) return;  // esconde se o plano nao bate
+    if(navOcultas().indexOf(it.id)>=0) return;           // usuario escondeu no menu lateral (Personalizacao)
     const b=document.createElement('button');b.className='nav-item'+(it.id===VIEW?' active':'');b.dataset.id=it.id;
     b.innerHTML=ICON[it.icon]+'<span>'+it.nome+'</span>';
     b.onclick=()=>{go(it.id);toggleSidebar(false);};
@@ -776,7 +810,7 @@ function go(id){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const map={home:'viewHome',documentos:'viewDocumentos',rotina:'viewRotina',tarefas:'viewTarefas',
     memoria:'viewMemoria',aprender:'viewAprender',trading:'viewTrading',integracoes:'viewIntegracoes',config:'viewConfig',conta:'viewConta',planos:'viewPlanos',
-    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode',agentes:'viewAgentes',painel:'viewPainel'};
+    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode',agentes:'viewAgentes',painel:'viewPainel',person:'viewPersonal'};
   document.getElementById(map[id]).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.id===id));
   if(id==='config') renderConfig();
@@ -787,6 +821,7 @@ function go(id){
   if(id==='rotina') renderRotina();
   if(id==='tarefas') renderTarefas();
   if(id==='code') renderCode();
+  if(id==='person') renderPersonalizacao();
   if(id==='agentes') renderAgentes();
   if(id==='painel') renderPainel();
   if(id==='memoria') renderMemoria();
@@ -832,9 +867,10 @@ async function enviar(){
   i.value=''; growInp(i);
   // mostra imediatamente a fala do usuario (o poll confirma depois)
   addMsg('user',txt,'local');
-  try{ const j=await (await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frase:txt, conv_id:CONV_ID})})).json();
+  try{ const j=await (await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frase:txt, conv_id:CONV_ID, modo:_MODO, esforco:_ESF})})).json();
     if(j && j.reply){ addMsg('assistant', j.reply); speakOrion(j.reply); compReage(); }
-    if(j && j.conv_id){ CONV_ID=j.conv_id; convAtualizarLista(); } }
+    if(j && j.conv_id){ CONV_ID=j.conv_id; convAtualizarLista(); }
+    tokensCarregar(); }
   catch(e){ addMsg('assistant','Nao consegui falar com o servidor, senhor.'); }
 }
 // ===== VOZ NO NAVEGADOR (celular/web): Orion fala as respostas + ditado por voz =====
@@ -954,6 +990,8 @@ function aplicaUser(){
   const plano=(USER&&USER.plano)||'free';
   setPlanoBadge(plano);
   carregaPrefs();   // aplica tema + skin do mascote da conta
+  tokensCarregar(); // saldo de tokens + modos no chat
+  novidadesRender(); // carrossel de novidades na home
   // re-renderiza a pagina atual que depende do usuario (corrige painel de dono nao aparecer no 1o load)
   if(VIEW==='conta') renderConta(); else if(VIEW==='config') renderConfig(); else if(VIEW==='planos') renderPlanos(); else if(VIEW==='code') renderCode();
   renderNav();
@@ -1035,6 +1073,46 @@ const VOZ_LABEL={'pt-PT-DuarteNeural':'Duarte (PT, mordomo)','pt-PT-RaquelNeural
   'pt-BR-AntonioNeural':'Antonio (BR)','pt-BR-FranciscaNeural':'Francisca (BR)',
   'pt-BR-ThalitaMultilingualNeural':'Thalita (BR, multilingue)'};
 function vozLabel(v){ return VOZ_LABEL[v]||v; }
+// ===================== MODOS + TOKENS =====================
+let _MODO=localStorage.getItem('orion_modo')||'avancado', _ESF=localStorage.getItem('orion_esf')||'normal', _TOKENS=null;
+function fmtTok(n){ n=Number(n||0); if(n>=1e6) return (n/1e6).toFixed(n>=1e7?0:1)+'M'; if(n>=1e3) return Math.round(n/1e3)+'k'; return ''+n; }
+async function tokensCarregar(){
+  if(!window.ORION_CLOUD || !USER || USER.convidado){ const el=document.getElementById('chatModes'); if(el) el.innerHTML=''; return; }
+  try{ _TOKENS=await (await fetch('/tokens')).json(); }catch(e){ _TOKENS=null; }
+  modesRender();
+}
+function modesRender(){
+  const el=document.getElementById('chatModes'); if(!el||!_TOKENS||!_TOKENS.ok) { if(el) el.innerHTML=''; return; }
+  const chip=(m)=>`<span class="mchip ${m.id===_MODO?'on':''} ${m.liberado?'':'lock'}" onclick="${m.liberado?`setModo('${m.id}')`:`go('planos')`}" title="${m.liberado?'':'Plano pago'}">${m.emoji||''} ${m.nome}${m.liberado?'':' 🔒'}</span>`;
+  const ech=(e)=>`<span class="mchip ${e.id===_ESF?'on':''} ${e.liberado?'':'lock'}" onclick="${e.liberado?`setEsf('${e.id}')`:`go('planos')`}">${e.nome==='Profundo'?'🔎 ':''}${e.nome}${e.liberado?'':' 🔒'}</span>`;
+  const s=_TOKENS.saldo||{};
+  el.innerHTML=(_TOKENS.modos||[]).map(chip).join('')+'<span class="msep"></span>'+(_TOKENS.esforcos||[]).map(ech).join('')+
+    `<span class="saldo" onclick="go('conta')" title="Tokens do mês (clique pra recarregar)">${s.restante!=null?('<b>'+fmtTok(s.restante)+'</b> tokens'):''}</span>`;
+}
+function setModo(id){ _MODO=id; localStorage.setItem('orion_modo',id); modesRender(); }
+function setEsf(id){ _ESF=id; localStorage.setItem('orion_esf',id); modesRender(); }
+// ===================== CARROSSEL DE NOVIDADES (home) =====================
+const NOVIDADES=[
+  {tag:'Novo',h:'Skins e temas pro Orion ✨',p:'Mais de 15 skins de mascote (com chapéu e roupinha) e novos temas do app. Deixe o Orion com a sua cara em Personalização.'},
+  {tag:'Novo',h:'Modos de IA + tokens 🧠',p:'Escolha Rápido, Avançado ou Raciocínio e o nível de esforço. Acompanhe seus tokens e recarregue quando quiser.'},
+  {tag:'Negócio',h:'Prospecção + agentes de IA 🤝',p:'No Tráfego: ache clientes, dispare no WhatsApp e crie agentes de vendas — tudo no Painel.'},
+  {tag:'Mascote',h:'Arraste o Orion pela tela 🛸',p:'Agora o mascote te acompanha onde você quiser. Toque e arraste pra posicionar.'},
+];
+let _nvI=0, _nvTimer=null;
+function novidadesRender(){
+  const el=document.getElementById('novidades'); if(!el) return;
+  if(localStorage.getItem('orion_nv_off')==='1' || !USER || USER.convidado){ el.classList.remove('on'); return; }
+  el.classList.add('on');
+  el.innerHTML='<button class="nv-x" onclick="novidadesFechar()">&times;</button>'+
+    NOVIDADES.map((n,i)=>`<div class="nv-slide ${i===0?'on':''}"><div class="nv-tag">${esc(n.tag)}</div><h4>${esc(n.h)}</h4><p>${esc(n.p)}</p></div>`).join('')+
+    '<div class="nv-dots">'+NOVIDADES.map((n,i)=>`<i class="${i===0?'on':''}" onclick="nvGo(${i})"></i>`).join('')+'</div>'+
+    '<span class="nv-go" onclick="go(\'person\')">Ver ›</span>';
+  _nvI=0; clearInterval(_nvTimer); _nvTimer=setInterval(()=>nvGo((_nvI+1)%NOVIDADES.length), 5000);
+}
+function nvGo(i){ _nvI=i; const el=document.getElementById('novidades'); if(!el) return;
+  el.querySelectorAll('.nv-slide').forEach((s,ix)=>s.classList.toggle('on',ix===i));
+  el.querySelectorAll('.nv-dots i').forEach((d,ix)=>d.classList.toggle('on',ix===i)); }
+function novidadesFechar(){ localStorage.setItem('orion_nv_off','1'); const el=document.getElementById('novidades'); if(el) el.classList.remove('on'); clearInterval(_nvTimer); }
 // ===================== APARENCIA: TEMAS + SKINS DO MASCOTE (por plano) =====================
 const TEMAS={
   espaco:{nome:'Espaço',free:true,vars:{}},
@@ -1043,6 +1121,12 @@ const TEMAS={
   ambar:{nome:'Âmbar',free:false,vars:{'--accent':'#ffb454','--accent2':'#ff8c42'}},
   rose:{nome:'Rosé',free:false,vars:{'--accent':'#ff6b9d','--accent2':'#c44fe0'}},
   cyber:{nome:'Cyber',free:false,vars:{'--accent':'#22d3ee','--accent2':'#3b82f6'}},
+  rubi:{nome:'Rubi',free:false,vars:{'--accent':'#ff5a6e','--accent2':'#e23b6d'}},
+  ouro:{nome:'Ouro',free:false,vars:{'--accent':'#e7c14b','--accent2':'#c89b2a'}},
+  oceano:{nome:'Oceano',free:false,vars:{'--accent':'#38bdf8','--accent2':'#2563eb'}},
+  vinho:{nome:'Vinho',free:false,vars:{'--accent':'#b06bff','--accent2':'#7c3aed'}},
+  matrix:{nome:'Matrix',free:false,vars:{'--accent':'#33ff99','--accent2':'#10b981'}},
+  carbon:{nome:'Carbono',free:true,vars:{'--accent':'#e7eaf0','--accent2':'#9aa6bf'}},
 };
 const SKINS={
   // elementais
@@ -1052,32 +1136,41 @@ const SKINS={
   nebulosa:{nome:'Nebulosa',free:false,stops:['#efcfff','#b06bff','#5a23a8'],glow:'#b06bff'},
   solar:{nome:'Solar',free:false,stops:['#ffe7b3','#ffb454','#b5651d'],glow:'#ffb454'},
   lumen:{nome:'Lúmen',free:false,stops:['#ffd6e7','#ff6b9d','#b02a63'],glow:'#ff6b9d'},
-  // profissões
-  professor:{nome:'Professor',free:true,stops:['#ede9fe','#8b5cf6','#4c1d95'],glow:'#8b5cf6',emoji:'🎓'},
-  gamer:{nome:'Gamer',free:true,stops:['#dcfce7','#22c55e','#14532d'],glow:'#22c55e',emoji:'🎮'},
-  dev:{nome:'Dev',free:false,stops:['#e0e7ff','#6366f1','#312e81'],glow:'#6366f1',emoji:'💻'},
-  trader:{nome:'Trader',free:false,stops:['#d1fae5','#10b981','#065f46'],glow:'#10b981',emoji:'📈'},
-  marketer:{nome:'Marketer',free:false,stops:['#ffe4f0','#ec4899','#831843'],glow:'#ec4899',emoji:'📣'},
-  medico:{nome:'Médico',free:false,stops:['#e0f2fe','#38bdf8','#075985'],glow:'#38bdf8',emoji:'🩺'},
-  advogado:{nome:'Advogado',free:false,stops:['#fef3c7','#d97706','#78350f'],glow:'#d97706',emoji:'⚖️'},
-  chef:{nome:'Chef',free:false,stops:['#fee2e2','#ef4444','#7f1d1d'],glow:'#ef4444',emoji:'👨‍🍳'},
-  designer:{nome:'Designer',free:false,stops:['#fae8ff','#d946ef','#701a75'],glow:'#d946ef',emoji:'🎨'},
-  coach:{nome:'Coach',free:false,stops:['#fff7cc','#eab308','#713f12'],glow:'#eab308',emoji:'🔥'},
+  // profissões (com roupinha; algumas com chapéu)
+  professor:{nome:'Professor',free:true,stops:['#ede9fe','#8b5cf6','#4c1d95'],glow:'#8b5cf6',hat:'mortar',roupa:'#3b1d6e'},
+  gamer:{nome:'Gamer',free:true,stops:['#dcfce7','#22c55e','#14532d'],glow:'#22c55e',hat:'cap',roupa:'#14532d'},
+  dev:{nome:'Dev',free:false,stops:['#e0e7ff','#6366f1','#312e81'],glow:'#6366f1',emoji:'💻',roupa:'#312e81'},
+  trader:{nome:'Trader',free:false,stops:['#d1fae5','#10b981','#065f46'],glow:'#10b981',emoji:'📈',roupa:'#0b3b30',tie:true},
+  marketer:{nome:'Marketer',free:false,stops:['#ffe4f0','#ec4899','#831843'],glow:'#ec4899',emoji:'📣',roupa:'#831843'},
+  medico:{nome:'Médico',free:false,stops:['#e0f2fe','#38bdf8','#075985'],glow:'#38bdf8',emoji:'🩺',roupa:'#eef4f8'},
+  advogado:{nome:'Advogado',free:false,stops:['#fef3c7','#d97706','#78350f'],glow:'#d97706',emoji:'⚖️',roupa:'#2a2018',tie:true},
+  chef:{nome:'Chef',free:false,stops:['#fee2e2','#ef4444','#7f1d1d'],glow:'#ef4444',hat:'toque',roupa:'#f3f4f6'},
+  designer:{nome:'Designer',free:false,stops:['#fae8ff','#d946ef','#701a75'],glow:'#d946ef',emoji:'🎨',roupa:'#701a75'},
+  coach:{nome:'Coach',free:false,stops:['#fff7cc','#eab308','#713f12'],glow:'#eab308',hat:'cap',roupa:'#5b3410'},
 };
+let _gidN=0;
+function _hatSVG(t){
+  if(t==='mortar') return '<g><rect x="36" y="15" width="28" height="5" rx="1.5" fill="#1b2230"/><polygon points="50,5 72,14 50,23 28,14" fill="#0f1626"/><line x1="70" y1="14" x2="70" y2="27" stroke="#fbbf24" stroke-width="1.6"/><circle cx="70" cy="28" r="2.2" fill="#fbbf24"/></g>';
+  if(t==='toque') return '<g><rect x="40" y="16" width="20" height="9" rx="2" fill="#fff" stroke="#dfe3ea" stroke-width="0.6"/><circle cx="43" cy="13" r="7" fill="#fff"/><circle cx="57" cy="13" r="7" fill="#fff"/><circle cx="50" cy="9" r="8" fill="#fff"/></g>';
+  if(t==='cap') return '<g><path d="M33 21 Q50 5 67 21 Z" fill="#1f2937"/><path d="M31 21 q-4 1 -2 4 q6 -1 9 -2 Z" fill="#111827"/><circle cx="50" cy="10" r="2" fill="#4b5563"/></g>';
+  return '';
+}
+function _mascInner(s,gid){
+  const roupa=s.roupa?('<path d="M22 97 Q22 75 50 75 Q78 75 78 97 Z" fill="'+s.roupa+'" stroke="rgba(0,0,0,.18)" stroke-width="0.8"/>'+(s.tie?'<polygon points="50,78 45.5,92 54.5,92" fill="#c0392b"/><rect x="47.5" y="76" width="5" height="4" fill="#c0392b"/>':'<path d="M44 78 L50 85 L56 78" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.4"/>')):'';
+  const defs='<defs><radialGradient id="'+gid+'" cx="50%" cy="34%" r="72%"><stop offset="0%" stop-color="'+s.stops[0]+'"/><stop offset="46%" stop-color="'+s.stops[1]+'"/><stop offset="100%" stop-color="'+s.stops[2]+'"/></radialGradient></defs>';
+  const orb='<circle cx="50" cy="50" r="38" fill="'+s.glow+'" opacity=".18"/><circle cx="50" cy="50" r="30" fill="url(#'+gid+')"/><ellipse cx="50" cy="40" rx="12" ry="6" fill="#fff" fill-opacity=".18"/>';
+  const face='<circle cx="43" cy="50" r="3.4" fill="#0a0c11"/><circle cx="57" cy="50" r="3.4" fill="#0a0c11"/><circle cx="44.2" cy="48.6" r="1" fill="#fff"/><circle cx="58.2" cy="48.6" r="1" fill="#fff"/><path d="M43 57 q7 5 14 0" fill="none" stroke="#0a0c11" stroke-width="2.2" stroke-linecap="round"/>';
+  const hat=_hatSVG(s.hat);
+  const badge=(!s.hat&&s.emoji)?'<circle cx="77" cy="38" r="11" fill="#0a0c11" opacity=".5"/><text x="77" y="43" font-size="13" text-anchor="middle">'+s.emoji+'</text>':'';
+  return defs+roupa+orb+face+hat+badge;
+}
 let _PREFS={skin:'cosmo',tema:'espaco',wakeword:''};
 function planoLib(){ return (USER&&USER.plano)||'free'; }
 function podeUsar(it){ return it.free || planoLib()!=='free'; }
 function aplicaTema(id){ const t=TEMAS[id]||TEMAS.espaco; const r=document.documentElement;
   ['--accent','--accent2'].forEach(k=>r.style.removeProperty(k));
   Object.entries(t.vars||{}).forEach(([k,v])=>r.style.setProperty(k,v)); }
-function mascoteSVG(skin){ const s=SKINS[skin]||SKINS.cosmo;
-  return `<svg viewBox="0 0 100 100"><defs><radialGradient id="cg" cx="50%" cy="34%" r="72%"><stop offset="0%" stop-color="${s.stops[0]}"/><stop offset="46%" stop-color="${s.stops[1]}"/><stop offset="100%" stop-color="${s.stops[2]}"/></radialGradient></defs>
-    <circle cx="50" cy="50" r="38" fill="${s.glow}" opacity=".18"/><circle cx="50" cy="50" r="30" fill="url(#cg)"/>
-    <ellipse cx="50" cy="40" rx="12" ry="6" fill="#fff" fill-opacity=".18"/>
-    <circle cx="43" cy="50" r="3.4" fill="#0a0c11"/><circle cx="57" cy="50" r="3.4" fill="#0a0c11"/>
-    <circle cx="44.2" cy="48.6" r="1" fill="#fff"/><circle cx="58.2" cy="48.6" r="1" fill="#fff"/>
-    <path d="M43 57 q7 5 14 0" fill="none" stroke="#0a0c11" stroke-width="2.2" stroke-linecap="round"/>
-    ${s.emoji?`<circle cx="74" cy="74" r="13" fill="#0a0c11" opacity=".55"/><text x="74" y="80" font-size="15" text-anchor="middle">${s.emoji}</text>`:''}</svg>`; }
+function mascoteSVG(skin){ const s=SKINS[skin]||SKINS.cosmo; return '<svg viewBox="0 0 100 100">'+_mascInner(s,'cg'+(_gidN++))+'</svg>'; }
 function aplicaMascote(skin){ const c=document.getElementById('companion'); if(c) c.innerHTML=mascoteSVG(skin); }
 function aplicaAparencia(){ aplicaTema(_PREFS.tema); aplicaMascote(_PREFS.skin); }
 async function carregaPrefs(){
@@ -1095,7 +1188,7 @@ function setTema(id){ const t=TEMAS[id]; if(!t) return; if(!podeUsar(t)){ if(con
   salvarPref('tema',id); aplicaTema(id); apRender(); piscarSave('TEMA'); }
 function setSkin(id){ const s=SKINS[id]; if(!s) return; if(!podeUsar(s)){ if(confirm('Essa skin é dos planos pagos. Ver planos?')) go('planos'); return; }
   salvarPref('skin',id); aplicaMascote(id); apRender(); compFala('Novo visual, '+compNome()+'! 😎',3000); piscarSave('MASCOTE'); }
-function mascoteMini(s){ const gid='m'+s.stops[1].replace('#',''); return '<svg width="32" height="32" viewBox="0 0 100 100"><defs><radialGradient id="'+gid+'" cx="50%" cy="34%" r="72%"><stop offset="0%" stop-color="'+s.stops[0]+'"/><stop offset="46%" stop-color="'+s.stops[1]+'"/><stop offset="100%" stop-color="'+s.stops[2]+'"/></radialGradient></defs><circle cx="50" cy="50" r="30" fill="url(#'+gid+')"/><circle cx="43" cy="52" r="3.4" fill="#0a0c11"/><circle cx="57" cy="52" r="3.4" fill="#0a0c11"/>'+(s.emoji?'<text x="74" y="80" font-size="22" text-anchor="middle">'+s.emoji+'</text>':'')+'</svg>'; }
+function mascoteMini(s){ return '<svg width="34" height="34" viewBox="0 0 100 100">'+_mascInner(s,'mm'+(_gidN++))+'</svg>'; }
 function apRender(){
   const el=document.getElementById('apArea'); if(!el) return; el.innerHTML='';
   const mk=(titulo,obj,cur,fn,preview)=>{
@@ -1143,6 +1236,33 @@ async function wwSalvar(){ const v=(document.getElementById('cfgWake').value||''
   salvarPref('wakeword',v);
   try{ await fetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({wake_word:v})}); }catch(e){}
   piscarSave('PALAVRA-CHAVE'); }
+// ----- aba Personalizacao (tema/skin/mascote + menu lateral + palavra-chave) -----
+function renderPersonalizacao(){
+  const a=document.getElementById('personArea'); if(!a) return;
+  a.innerHTML=`
+    <div class="card"><h3>Aparência <span class="mbadge" style="margin-left:6px">tema + mascote</span></h3>
+      <div class="hint" style="margin-bottom:12px">Alguns temas e skins são grátis; os marcados com 🔒 liberam nos planos pagos.</div>
+      <div id="apArea"></div></div>
+    <div class="card" style="margin-top:14px"><h3>Menu lateral</h3>
+      <div class="hint" style="margin-bottom:10px">Esconda o que você não usa (ex: Trading). Some do menu, mas você reativa aqui quando quiser.</div>
+      <div id="navEdit"></div></div>
+    <div class="card" style="margin-top:14px"><h3>Palavra-chave de voz</h3>
+      <div class="hint" style="margin-bottom:10px">A palavra que ativa o Orion por voz (além de "Orion" e "Jarvis"). ${window.ORION_CLOUD?'No navegador o microfone é por toque; fica salvo e vale no app de computador.':'Vale no app de computador, com o microfone sempre ouvindo.'}</div>
+      <div class="tg-order" style="gap:8px"><input id="cfgWake" placeholder="ex: assistente, sol, chefe..." value="${esc(_PREFS.wakeword||'')}" style="flex:1;min-width:140px"><button class="btn primary" onclick="wwSalvar()">Salvar</button></div></div>`;
+  apRender(); navEditRender();
+}
+function navOcultas(){ try{ return JSON.parse(localStorage.getItem('orion_nav_hidden')||'[]'); }catch(e){ return []; } }
+function navEditRender(){
+  const el=document.getElementById('navEdit'); if(!el) return;
+  const fixos=['home','person','config','conta','planos'];
+  const hidden=navOcultas();
+  el.innerHTML=NAV.filter(it=>it.id && !it.sec && fixos.indexOf(it.id)<0 && !(it.cloud&&!window.ORION_CLOUD) && !(it.planos&&it.planos.indexOf((USER&&USER.plano)||'free')<0)).map(it=>{
+    const off=hidden.indexOf(it.id)>=0;
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:14px"><input type="checkbox" ${off?'':'checked'} onchange="navToggle('${it.id}',this.checked)" style="width:auto"> ${esc(it.nome)}</label>`;
+  }).join('')||'<div class="hint">Nada pra esconder.</div>';
+}
+function navToggle(id,on){ let h=navOcultas(); if(on){ h=h.filter(x=>x!==id); } else if(h.indexOf(id)<0){ h.push(id); }
+  localStorage.setItem('orion_nav_hidden',JSON.stringify(h)); renderNav(); }
 // ----- onboarding (primeiras perguntas) -----
 const OB_Q=[
   {k:'tratamento',q:'Como você prefere ser chamado?',ph:'ex: Sr. Pontes, Murilo, chefe...'},
@@ -1241,16 +1361,9 @@ async function renderConfig(){
     <div class="field"><label>Sensibilidade (limiar de ruido)</label><div class="range-row"><input type="range" id="cfgSens" min="100" max="2000" step="50" value="${CFG.mic_sens??400}"><span class="v" id="cfgSensV">${CFG.mic_sens??400}</span></div></div>
     <div class="field"><label><input type="checkbox" id="cfgRuido" ${CFG.mic_ruido?'checked':''} style="width:auto;vertical-align:middle"> Supressao de ruido</label></div>
   </div>
-  <div class="card"><h3>Aparência <span class="mbadge" style="margin-left:6px">tema + mascote</span></h3>
-    <div class="hint" style="margin-bottom:12px">Deixe o Orion com a sua cara. Alguns temas e skins são grátis; os marcados com 🔒 liberam nos planos pagos.</div>
-    <div id="apArea"></div>
-  </div>
   <div class="card"><h3>Áudio (microfone e saída)</h3>
+    <div class="hint" style="margin-bottom:8px">Tema, skins e mascote agora ficam na aba <b>Personalização</b> (menu lateral).</div>
     <div id="audArea"></div>
-  </div>
-  <div class="card"><h3>Palavra-chave</h3>
-    <div class="hint" style="margin-bottom:10px">A palavra que ativa o Orion por voz (além de "Orion" e "Jarvis"). ${window.ORION_CLOUD?'No navegador o microfone é por toque; isto fica salvo e vale no app desktop.':'Vale no app desktop, com o microfone sempre ouvindo.'}</div>
-    <div class="tg-order" style="gap:8px"><input id="cfgWake" placeholder="ex: assistente, sol, chefe..." value="${esc(_PREFS.wakeword||CFG.wake_word||'')}" style="flex:1;min-width:140px"><button class="btn primary" onclick="wwSalvar()">Salvar</button></div>
   </div>
   <div class="card"><h3>Privacidade e dados</h3>
     <div class="hint" style="margin-bottom:12px">O cerebro padrao roda local. Senhas, cartoes e tokens nunca sao guardados na memoria.</div>
@@ -1304,7 +1417,7 @@ async function renderConfig(){
     };
     bp.onchange=refresh; refresh();
   }
-  apRender(); audioRender(); audioInit();
+  audioRender(); audioInit();
 }
 async function salvarMP(){
   const t=(document.getElementById('cfgMP')||{}).value; if(!t||t==='********'){ alert('Cole o token, senhor.'); return; }
@@ -1859,11 +1972,39 @@ function renderConta(){
     <div id="usoBox" style="margin-top:14px"></div>
     <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn primary" onclick="go('planos')">${plano==='free'?'Fazer upgrade':'Mudar de plano'}</button>${(plano==='pro'||plano==='business')?'<button class="btn ghost" onclick="cancelarAssinatura()">Cancelar assinatura</button>':''}</div>
   </div>
+  ${conv?'':'<div class="card"><h3>Tokens do Orion</h3><div class="hint" style="margin-bottom:10px">Os tokens medem o uso da IA. Cada plano tem uma cota mensal. Se acabar, voce pode recarregar avulso (planos pagos) ou usar o modo Rapido (gratis).</div><div id="tokBox">carregando...</div></div>'}
+  ${(u.criador)?'<div class="card"><h3>Admin - custo de tokens</h3><div class="hint" style="margin-bottom:10px">Custo real de API por usuario (so o dono ve).</div><div id="tokAdmin">carregando...</div></div>':''}
   ${conv?'':'<div class="card"><h3>WhatsApp</h3><div class="hint" style="margin-bottom:10px">Ligue seu numero pra conversar com o Orion direto no WhatsApp (respostas autonomas).</div><div id="waBox">carregando...</div></div>'}
   ${(u.criador)?'<div class="card" id="adminCard"><h3>Admin - contas e planos</h3><div class="hint" style="margin-bottom:10px">So o dono ve isto. Marque voce e seu socio como Business vitalicio, ou defina o plano de qualquer conta.</div><div id="adminLista">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Conhecimento global do Orion</h3><div class="hint" style="margin-bottom:10px">Fatos GERAIS que o Orion aprendeu (sem dado pessoal, filtrado). So o dono ve/limpa.</div><div id="conhecBox">carregando...</div></div>':''}`;
-  carregarUso(); carregarWa();
-  if(u.criador){ carregarAdmin(); carregarConhec(); }
+  carregarUso(); carregarWa(); if(!conv) carregarTokens();
+  if(u.criador){ carregarAdmin(); carregarConhec(); carregarTokAdmin(); }
+}
+async function carregarTokens(){
+  const box=document.getElementById('tokBox'); if(!box) return;
+  let r=null; try{ r=await (await fetch('/tokens')).json(); }catch(e){}
+  if(!r||!r.ok){ box.innerHTML='<div class="hint">Indisponivel.</div>'; return; }
+  const s=r.saldo||{}; const pago=r.plano&&r.plano!=='free';
+  const pct=s.grant?Math.max(0,Math.min(100,Math.round((s.grant-s.usados)/s.grant*100))):0;
+  box.innerHTML=`<div class="row" style="justify-content:space-between"><div><b style="font-size:20px;color:var(--accent)">${fmtTok(s.restante)}</b> <span class="hint">tokens restantes</span></div>
+      <span class="hint">cota ${fmtTok(s.grant)}/mês${s.extra?(' + '+fmtTok(s.extra)+' avulso'):''}</span></div>
+    <div style="height:8px;background:var(--panel3);border-radius:6px;overflow:hidden;margin:10px 0"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent2),var(--accent))"></div></div>
+    ${pago?('<div class="hint" style="margin-bottom:8px">Recarregar (avulso, a partir de R$ 19,90):</div><div class="row" style="flex-wrap:wrap;gap:8px">'+(r.pacotes||[]).map(p=>`<button class="btn" onclick="tokComprar('${p.id}')">${p.nome} · R$ ${p.preco.toFixed(2).replace('.',',')}</button>`).join('')+'</div>')
+      :'<div class="hint">A recarga avulsa e pros planos pagos. No Free voce tem cota mensal e o modo Rapido gratis.</div>'}
+    <div id="tokMsg" class="hint" style="margin-top:8px"></div>`;
+}
+async function tokComprar(pac){
+  const m=document.getElementById('tokMsg'); m.textContent='Abrindo o pagamento...';
+  try{ const r=await (await fetch('/tokens/comprar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pacote:pac})})).json();
+    if(r.ok&&r.url){ location.href=r.url; } else { m.style.color='var(--warn)'; m.textContent=r.msg||'Nao consegui abrir o pagamento.'; }
+  }catch(e){ m.textContent='Sem conexao.'; }
+}
+async function carregarTokAdmin(){
+  const box=document.getElementById('tokAdmin'); if(!box) return;
+  let r={usuarios:[]}; try{ r=await (await fetch('/admin/tokens')).json(); }catch(e){}
+  if(!r.ok){ box.innerHTML='<div class="hint">Indisponivel.</div>'; return; }
+  box.innerHTML=`<div class="hint" style="margin-bottom:8px">Custo total estimado: <b style="color:var(--text)">R$ ${(r.custo_total||0).toFixed(4)}</b> · ${fmtTok(r.tokens_total)} tokens</div>`+
+    ((r.usuarios||[]).slice(0,30).map(x=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>${esc(x.nome||'?')} <span class="hint">(${esc(x.plano||'')})</span></span><span>${fmtTok((x.tin||0)+(x.tout||0))} · R$ ${(x.custo||0).toFixed(4)}</span></div>`).join('')||'<div class="hint">Sem uso ainda.</div>');
 }
 async function carregarAdmin(){
   const box=document.getElementById('adminLista'); if(!box) return;
@@ -2546,11 +2687,21 @@ function autLista(){
   const box=document.getElementById('autLista'); if(!box) return;
   box.innerHTML=_AGS.map(a=>`<div style="border:1px solid var(--line2);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">
     <div style="min-width:0"><b>${esc(a.nome)}</b><div class="hint">${esc(a.descricao||'')}</div></div>
-    <div style="display:flex;gap:6px;flex-shrink:0"><button class="btn" onclick="agTestar(${a.id})">Testar</button><button class="btn ghost" onclick="agApagar2(${a.id})">&#10005;</button></div>
+    <div style="display:flex;gap:6px;flex-shrink:0"><button class="btn" onclick="agEditar(${a.id})">Editar</button><button class="btn" onclick="agTestar(${a.id})">Testar</button><button class="btn ghost" onclick="agApagar2(${a.id})">&#10005;</button></div>
   </div>`).join('')||'<div class="hint">Nenhum agente ainda. Crie um acima (1 clique nos prontos).</div>';
 }
 async function agApagar2(id){ if(!confirm('Apagar este agente?')) return;
   await fetch('/agente/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); pnAuto(document.getElementById('pnBody')); }
+async function agEditar(id){
+  const a=(_AGS||[]).find(x=>x.id===id); if(!a){ return; }
+  const nome=prompt('Nome do agente:', a.nome||''); if(nome===null) return;
+  const desc=prompt('O que ele faz (1 linha):', a.descricao||''); if(desc===null) return;
+  const instr=prompt('Instruções (personalidade, regras, objetivo) — edite pra controlar o agente:', a.instrucoes||''); if(instr===null) return;
+  try{ const r=await (await fetch('/agente/editar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,nome,descricao:desc,instrucoes:instr})})).json();
+    if(r.ok){ piscarSave('AGENTE'); if(VIEW==='painel'){ pnAuto(document.getElementById('pnBody')); } else { renderAgentes(); } }
+    else alert(r.erro||'Nao consegui salvar.');
+  }catch(e){ alert('Sem conexao.'); }
+}
 function autMapa(wa){
   const el=document.getElementById('autMapa'); if(!el) return;
   const integ=[
@@ -2774,7 +2925,7 @@ function agRenderLista(){
   const box=document.getElementById('agLista'); if(!box) return;
   box.innerHTML=_AGS.map(a=>`<div style="border:1px solid var(--line2);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">
     <div><b>${esc(a.nome)}</b><div class="hint">${esc(a.descricao||'')}</div></div>
-    <div style="display:flex;gap:6px"><button class="btn" onclick="agTestar(${a.id})">Testar</button><button class="btn ghost" onclick="agApagar(${a.id})">&#10005;</button></div>
+    <div style="display:flex;gap:6px"><button class="btn" onclick="agEditar(${a.id})">Editar</button><button class="btn" onclick="agTestar(${a.id})">Testar</button><button class="btn ghost" onclick="agApagar(${a.id})">&#10005;</button></div>
   </div>`).join('')||'<div class="hint">Nenhum agente ainda. Crie um acima.</div>';
 }
 async function agCriar(){
@@ -3090,8 +3241,9 @@ async function checkRetornoPagamento(){
     for(let i=0;i<3 && !ok;i++){
       try{ const r=await (await fetch('/pagamento/confirmar',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({payment_id:pid,plano:pago,provedor:prov})})).json();
-        if(r.ok){ ok=true; if(r.user) USER=Object.assign(USER||{},r.user); aplicaUser(); piscarSave('PLANO ATIVO');
-          alert('Tudo certo! Seu plano '+(r.plano||'').toUpperCase()+' esta ativo, senhor.'); }
+        if(r.ok){ ok=true;
+          if(pago==='tokens'||r.tokens){ piscarSave('TOKENS'); tokensCarregar(); alert('Recarga concluida! '+(r.tokens?(Number(r.tokens).toLocaleString('pt-BR')+' tokens'):'Tokens')+' adicionados, senhor.'); }
+          else { if(r.user) USER=Object.assign(USER||{},r.user); aplicaUser(); piscarSave('PLANO ATIVO'); alert('Tudo certo! Seu plano '+(r.plano||'').toUpperCase()+' esta ativo, senhor.'); } }
       }catch(e){}
       if(!ok) await new Promise(res=>setTimeout(res,2500));
     }
@@ -3123,6 +3275,7 @@ function compNome(){ return (USER && (USER.tratamento || USER.nome)) || 'senhor'
 function compAtivar(){
   if(!USER || USER.convidado) return;
   const c=document.getElementById('companion'); if(c) c.classList.add('show');
+  compDragInit();
   clearTimeout(_compIdle);
   _compIdle=setTimeout(()=>compFala('Tô aqui se precisar de algo, '+compNome()+'. 🙂', 6000), 9000);  // 1a saudacao
   _resetIdle();
@@ -3143,11 +3296,42 @@ function compFala(txt, ms){
   const b=document.getElementById('compBubble'), t=document.getElementById('compTxt');
   if(!b||!t||!USER||USER.convidado) return;
   t.textContent=txt; b.classList.add('show');
-  const c=document.getElementById('companion'); if(c){ c.classList.add('react'); setTimeout(()=>c.classList.remove('react'),500); }
+  const c=document.getElementById('companion');
+  if(c){ c.classList.add('react'); setTimeout(()=>c.classList.remove('react'),500);
+    // posiciona a bolha perto do mascote (ele pode ter sido arrastado)
+    const r=c.getBoundingClientRect();
+    requestAnimationFrame(()=>{ const bw=b.offsetWidth||220, bh=b.offsetHeight||60;
+      let left=r.left+r.width/2-bw/2; left=Math.max(8,Math.min(window.innerWidth-bw-8,left));
+      let top=r.top-bh-10; if(top<60) top=r.bottom+10;
+      b.style.left=left+'px'; b.style.top=top+'px'; b.style.right='auto'; b.style.bottom='auto'; });
+  }
   clearTimeout(b._t); b._t=setTimeout(()=>b.classList.remove('show'), ms||5000);
 }
 function compFecha(){ const b=document.getElementById('compBubble'); if(b) b.classList.remove('show'); }
-function compClick(){ go('home'); const i=document.getElementById('inp'); if(i) i.focus();
+let _compDragged=false;
+function compDragInit(){
+  const c=document.getElementById('companion'); if(!c||c._dragInit) return; c._dragInit=true;
+  try{ const pos=JSON.parse(localStorage.getItem('orion_comp_pos')||'null');
+    if(pos&&pos.left!=null){ c.style.left=pos.left+'px'; c.style.top=pos.top+'px'; c.style.right='auto'; c.style.bottom='auto'; } }catch(e){}
+  let sx,sy,ox,oy,moved=false,down=false;
+  const onDown=(e)=>{ down=true; moved=false; const p=e.touches?e.touches[0]:e; sx=p.clientX; sy=p.clientY;
+    const r=c.getBoundingClientRect(); ox=r.left; oy=r.top; c.style.transition='none'; };
+  const onMove=(e)=>{ if(!down) return; const p=e.touches?e.touches[0]:e; const dx=p.clientX-sx, dy=p.clientY-sy;
+    if(!moved && Math.abs(dx)+Math.abs(dy)>5){ moved=true; _compDragged=true; compFecha(); }
+    if(!moved) return;
+    let nx=Math.max(4,Math.min(window.innerWidth-c.offsetWidth-4,ox+dx));
+    let ny=Math.max(60,Math.min(window.innerHeight-c.offsetHeight-4,oy+dy));
+    c.style.left=nx+'px'; c.style.top=ny+'px'; c.style.right='auto'; c.style.bottom='auto';
+    if(e.cancelable) e.preventDefault();
+  };
+  const onUp=()=>{ if(!down) return; down=false; c.style.transition='';
+    if(moved){ try{ localStorage.setItem('orion_comp_pos',JSON.stringify({left:parseInt(c.style.left),top:parseInt(c.style.top)})); }catch(e){} }
+    setTimeout(()=>{ _compDragged=false; },60);
+  };
+  c.addEventListener('pointerdown',onDown); window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp);
+  c.addEventListener('touchstart',onDown,{passive:false}); window.addEventListener('touchmove',onMove,{passive:false}); window.addEventListener('touchend',onUp);
+}
+function compClick(){ if(_compDragged) return; go('home'); const i=document.getElementById('inp'); if(i) i.focus();
   compFala('Manda ver, '+compNome()+'. O que vamos fazer?', 5000); }
 function compReage(){ // chamado quando chega resposta do chat
   const c=document.getElementById('companion'); if(c&&c.classList.contains('show')){ c.classList.add('react'); setTimeout(()=>c.classList.remove('react'),500); }
