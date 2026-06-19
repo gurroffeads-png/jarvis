@@ -154,11 +154,26 @@ def google_upsert(email, nome, foto):
             (nome.title(), email, None, nome, "", foto, "free", 1 if n==0 else 0, "google",
              datetime.datetime.now().strftime("%d/%m/%Y %H:%M")))
         c.commit(); return cur.lastrowid
+# ---- MULTI-EMPRESA: dados de negocio sao isolados por empresa ativa (empresa 0 = padrao, chave sem prefixo) ----
+_BIZ_KEYS = {"leads","vendas","despesas","folha","briefings","fluxo","precos","agentes","meta"}
+def _empresa_ativa_raw(uid):
+    try:
+        with _db() as c:
+            r = c.execute("SELECT v FROM kv WHERE user_id=? AND k='empresa_ativa'", (uid,)).fetchone()
+            return int(json.loads(r["v"])) if r else 0
+    except Exception: return 0
+def _bkey(uid, k):
+    if k in _BIZ_KEYS:
+        e = _empresa_ativa_raw(uid)
+        if e: return f"e{e}:{k}"   # empresa 0 (padrao) fica sem prefixo = preserva dados existentes
+    return k
 def get_blob(uid, k, default):
+    k = _bkey(uid, k)
     with _db() as c:
         r = c.execute("SELECT v FROM kv WHERE user_id=? AND k=?", (uid,k)).fetchone()
         return json.loads(r["v"]) if r else json.loads(json.dumps(default))
 def set_blob(uid, k, obj):
+    k = _bkey(uid, k)
     with _db() as c:
         c.execute("INSERT OR REPLACE INTO kv(user_id,k,v) VALUES(?,?,?)", (uid,k,json.dumps(obj,ensure_ascii=False)))
         c.commit()
@@ -208,7 +223,7 @@ def _llm_resolve(u, modo=None):
     if pref.get("key"):
         return (pref["key"], (pref.get("base") or LLM_BASE).rstrip("/"), pref.get("model") or LLM_MODEL, "byok")
     mm = MODOS.get(_modo_ok(u, modo) if u else (modo or "avancado"), MODOS["avancado"])
-    return (LLM_KEY, LLM_BASE.rstrip("/"), mm["model"], "managed")
+    return (llm_key(), LLM_BASE.rstrip("/"), mm["model"], "managed")
 def _llm_post(base, key, body, timeout=45):
     req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(),
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
@@ -265,9 +280,9 @@ def web_search(q):
 
 def _user_brain(u):
     """Preferencia de cerebro do user. Cai pro padrao (Groq) se nao houver."""
-    if not u: return (LLM_KEY, LLM_BASE, LLM_MODEL)
+    if not u: return (llm_key(), LLM_BASE, LLM_MODEL)
     pref = get_blob(u["id"], "brain", {}) or {}
-    return (pref.get("key") or LLM_KEY, (pref.get("base") or LLM_BASE).rstrip("/"), pref.get("model") or LLM_MODEL)
+    return (pref.get("key") or llm_key(), (pref.get("base") or LLM_BASE).rstrip("/"), pref.get("model") or LLM_MODEL)
 BRAIN_PROVIDERS = [
     {"id":"groq","nome":"Groq (Llama 3.3 70B) - gratis","base":"https://api.groq.com/openai/v1","modelo":"llama-3.3-70b-versatile","como":"console.groq.com -> API Keys (gratis, rapido)"},
     {"id":"openai","nome":"OpenAI (GPT-4o-mini)","base":"https://api.openai.com/v1","modelo":"gpt-4o-mini","como":"platform.openai.com (pago)"},
@@ -651,7 +666,11 @@ def agente_criar(uid, nome, descricao, instrucoes):
     return {"ok":True, "agente":ag}
 def agente_apagar(uid, aid):
     set_blob(uid, "agentes", [a for a in agentes_get(uid) if a.get("id")!=aid]); return {"ok":True}
-def agente_editar(uid, aid, nome, descricao, instrucoes):
+def fluxo_get(uid): return get_blob(uid, "fluxo", {"nodes":[],"conns":[]}) or {"nodes":[],"conns":[]}
+def fluxo_salvar(uid, d):
+    f = {"nodes":(d.get("nodes") or [])[:80], "conns":(d.get("conns") or [])[:160]}
+    set_blob(uid, "fluxo", f); return {"ok":True}
+def agente_editar(uid, aid, nome, descricao, instrucoes, categoria=None):
     ags = agentes_get(uid); achou=False
     for a in ags:
         if a.get("id")==aid:
@@ -791,7 +810,7 @@ def briefing_salvar(uid, d):
     bs = [x for x in bs if x.get("id")!=bid]; bs.insert(0,b); set_blob(uid,"briefings",bs[:200]); return {"ok":True,"briefing":b}
 def briefing_apagar(uid, bid):
     set_blob(uid, "briefings", [x for x in briefings_get(uid) if x.get("id")!=bid]); return {"ok":True}
-def meta_app_creds(): return (os.environ.get("META_APP_ID",""), os.environ.get("META_APP_SECRET",""))
+def meta_app_creds(): return (gcfg("meta_app_id","META_APP_ID"), gcfg("meta_app_secret","META_APP_SECRET"))
 def meta_creds(uid):
     c = get_blob(uid, "meta", {}) or {}; return (c.get("token",""), c.get("act",""))
 def meta_salvar(uid, token, act):
@@ -823,15 +842,18 @@ def enriquecer_cnpj(cnpj):
     def _g(url): return json.loads(urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"}),timeout=12).read().decode())
     try:
         r = _g("https://brasilapi.com.br/api/cnpj/v1/"+c)
+        tel = (str(r.get("ddd_telefone_1","") or "")).strip()
         return {"razao":r.get("razao_social","") or "","fantasia":r.get("nome_fantasia","") or "",
                 "atividade":r.get("cnae_fiscal_descricao","") or "","cidade":r.get("municipio","") or "",
-                "uf":r.get("uf","") or "","porte":r.get("porte","") or "","abertura":r.get("data_inicio_atividade","") or ""}
+                "uf":r.get("uf","") or "","porte":r.get("porte","") or "","abertura":r.get("data_inicio_atividade","") or "",
+                "telefone":tel, "email":(r.get("email","") or "")}
     except Exception:
         try:
             r = _g("https://receitaws.com.br/v1/cnpj/"+c)
             ats = (r.get("atividade_principal") or [{}])[0].get("text","")
             return {"razao":r.get("nome","") or "","fantasia":r.get("fantasia","") or "","atividade":ats,
-                    "cidade":r.get("municipio","") or "","uf":r.get("uf","") or "","porte":r.get("porte","") or "","abertura":r.get("abertura","") or ""}
+                    "cidade":r.get("municipio","") or "","uf":r.get("uf","") or "","porte":r.get("porte","") or "","abertura":r.get("abertura","") or "",
+                    "telefone":(r.get("telefone","") or ""), "email":(r.get("email","") or "")}
         except Exception as e: print("[cnpj]", e); return None
 
 def email_creds(uid):
@@ -842,6 +864,8 @@ def email_status(uid):
     k,f = email_creds(uid); return {"ok":True, "on":bool(k and f), "from":f}
 def enviar_email(u, to, assunto, corpo):
     key, frm = email_creds(u["id"])
+    if not (key and frm):   # fallback: e-mail global do app (configurado pelo dono no painel ADM)
+        key = key or gcfg("resend_key","RESEND_API_KEY"); frm = frm or gcfg("resend_from","RESEND_FROM")
     if not (key and frm): return {"ok":False,"erro":"Conecte seu e-mail (Resend) no Painel primeiro, senhor."}
     to = (to or "").strip()
     if "@" not in to: return {"ok":False,"erro":"E-mail do destinatario invalido."}
@@ -888,6 +912,61 @@ def vendas_resumo(uid):
     n = len(vs)
     return {"total":n, "receita":receita, "custo":custo, "lucro":receita-custo,
             "ticket":(receita/n if n else 0), "margem":((receita-custo)/receita*100 if receita else 0)}
+
+# ---- Multi-empresa (perfis de negocio; dados isolados pela empresa ativa) ----
+def empresas_get(uid):
+    lst = get_blob(uid, "empresas", []) or []
+    return lst if lst else [{"id":0,"nome":"Minha empresa"}]
+def empresa_criar(uid, nome):
+    nome=(nome or "").strip()[:60]
+    if not nome: return {"ok":False,"erro":"Diga o nome da empresa, senhor."}
+    lst=empresas_get(uid); nid=max([int(e.get("id",0)) for e in lst], default=0)+1
+    lst.append({"id":nid,"nome":nome}); set_blob(uid,"empresas",lst); set_blob(uid,"empresa_ativa",nid)
+    return {"ok":True,"empresas":lst,"ativa":nid}
+def empresa_trocar(uid, eid):
+    set_blob(uid,"empresa_ativa",int(eid)); return {"ok":True,"ativa":int(eid)}
+def empresa_apagar(uid, eid):
+    eid=int(eid)
+    if eid==0: return {"ok":False,"erro":"A empresa padrao nao pode ser apagada."}
+    lst=[e for e in empresas_get(uid) if int(e.get("id",0))!=eid]; set_blob(uid,"empresas",lst)
+    if _empresa_ativa_raw(uid)==eid: set_blob(uid,"empresa_ativa",0)
+    return {"ok":True,"empresas":lst,"ativa":_empresa_ativa_raw(uid)}
+def empresas_estado(uid):
+    return {"ok":True,"empresas":empresas_get(uid),"ativa":_empresa_ativa_raw(uid)}
+
+# ---- Financeiro (despesas + folha de pagamento) por empresa ----
+def despesas_get(uid): return get_blob(uid,"despesas",[]) or []
+def despesa_salvar(uid,d):
+    ds=despesas_get(uid); did=d.get("id") or int(time.time()*1000)
+    x={"id":did,"desc":(d.get("desc") or "").strip()[:80],"valor":float(d.get("valor") or 0),
+       "categoria":(d.get("categoria") or "geral").strip()[:30],"data":(d.get("data") or datetime.date.today().strftime("%Y-%m-%d"))}
+    ds=[y for y in ds if y.get("id")!=did]; ds.insert(0,x); set_blob(uid,"despesas",ds[:2000]); return {"ok":True,"despesa":x}
+def despesa_apagar(uid,did): set_blob(uid,"despesas",[y for y in despesas_get(uid) if y.get("id")!=did]); return {"ok":True}
+def folha_get(uid): return get_blob(uid,"folha",[]) or []
+def folha_salvar(uid,d):
+    fs=folha_get(uid); fid=d.get("id") or int(time.time()*1000)
+    x={"id":fid,"nome":(d.get("nome") or "").strip()[:60],"cargo":(d.get("cargo") or "").strip()[:40],"salario":float(d.get("salario") or 0)}
+    fs=[y for y in fs if y.get("id")!=fid]; fs.insert(0,x); set_blob(uid,"folha",fs[:500]); return {"ok":True}
+def folha_apagar(uid,fid): set_blob(uid,"folha",[y for y in folha_get(uid) if y.get("id")!=fid]); return {"ok":True}
+def financeiro_resumo(uid):
+    vr=vendas_resumo(uid); desp=sum(float(x.get("valor") or 0) for x in despesas_get(uid))
+    folha=sum(float(x.get("salario") or 0) for x in folha_get(uid)); receita=vr.get("receita",0)
+    return {"ok":True,"receita":receita,"custo_vendas":vr.get("custo",0),"despesas":desp,"folha":folha,
+            "lucro_liquido":receita-vr.get("custo",0)-desp-folha,"vendas":vr.get("total",0),"ticket":vr.get("ticket",0),
+            "despesas_lista":despesas_get(uid),"folha_lista":folha_get(uid)}
+def venda_por_texto(u, texto):
+    """Agente registrador de vendas: extrai {cliente,servico,valor,custo} de uma frase e registra."""
+    pode=uso_pode(u,"msg")
+    if not pode["ok"]: return {"ok":False,"erro":pode["motivo"]}
+    uso_reg(u,"msg")
+    sys=("Extraia os dados da venda da frase do usuario e responda SO um JSON: "
+         '{"cliente":"","servico":"","valor":0,"custo":0}. valor e custo em numero (reais). Sem texto fora do JSON.')
+    out=cloud_chat(sys,[{"role":"user","content":(texto or "")[:400]}],200,u,"rapido")
+    try:
+        m=re.search(r"\{.*\}", out, re.S); d=json.loads(m.group(0)) if m else {}
+    except Exception: d={}
+    if not (d.get("cliente") or d.get("servico")): return {"ok":False,"erro":"Nao entendi a venda. Ex: 'vendi gestao de trafego pra Barbearia X por 700, custo 150'."}
+    return venda_salvar(u["id"], d)
 
 def wa_disparar(u, telefones, mensagem):
     """Disparo em massa pelo WhatsApp Cloud API (so se conectado no servidor). Rate-limitado, gated, confirma no front.
@@ -1108,9 +1187,48 @@ def base_url(handler):
     host = handler.headers.get("Host","localhost")
     proto = handler.headers.get("X-Forwarded-Proto","http")
     return f"{proto}://{host}"
-def mp_token(): return os.environ.get("MP_ACCESS_TOKEN","")
-def pp_creds(): return (os.environ.get("PAYPAL_CLIENT_ID",""), os.environ.get("PAYPAL_SECRET",""), os.environ.get("PAYPAL_MODE","sandbox"))
-def google_creds(): return (os.environ.get("GOOGLE_CLIENT_ID",""), os.environ.get("GOOGLE_CLIENT_SECRET",""))
+# ---- CONFIG GLOBAL DE INTEGRACOES (o DONO linka pela UI; env continua valendo como fallback) ----
+def _gcfg_all():
+    try: return get_blob(1, "integra_global", {}) or {}
+    except Exception: return {}
+def gcfg(key, env_key):
+    v = (_gcfg_all().get(key) or "").strip()
+    return v if v else os.environ.get(env_key, "")
+INTEGRA_ADMIN = [
+  {"id":"llm_key","nome":"Groq (cérebro grátis)","campos":[{"k":"llm_key","env":"LLM_API_KEY","ph":"gsk_... (console.groq.com)","secret":True}]},
+  {"id":"mercadopago","nome":"Mercado Pago","campos":[{"k":"mp_token","env":"MP_ACCESS_TOKEN","ph":"APP_USR-... (Access Token)","secret":True}]},
+  {"id":"paypal","nome":"PayPal","campos":[{"k":"paypal_client_id","env":"PAYPAL_CLIENT_ID","ph":"Client ID"},{"k":"paypal_secret","env":"PAYPAL_SECRET","ph":"Secret","secret":True},{"k":"paypal_mode","env":"PAYPAL_MODE","ph":"sandbox ou live"}]},
+  {"id":"meta","nome":"Meta Ads (Facebook/Instagram App)","campos":[{"k":"meta_app_id","env":"META_APP_ID","ph":"App ID"},{"k":"meta_app_secret","env":"META_APP_SECRET","ph":"App Secret","secret":True}]},
+  {"id":"google","nome":"Login com Google (OAuth)","campos":[{"k":"google_client_id","env":"GOOGLE_CLIENT_ID","ph":"Client ID"},{"k":"google_client_secret","env":"GOOGLE_CLIENT_SECRET","ph":"Client Secret","secret":True}]},
+  {"id":"whatsapp","nome":"WhatsApp Cloud API","campos":[{"k":"whatsapp_token","env":"WHATSAPP_TOKEN","ph":"Token","secret":True},{"k":"whatsapp_phone_id","env":"WHATSAPP_PHONE_ID","ph":"Phone Number ID"},{"k":"whatsapp_verify","env":"WHATSAPP_VERIFY_TOKEN","ph":"Verify token"}]},
+  {"id":"resend","nome":"Resend (e-mail padrão do app)","campos":[{"k":"resend_key","env":"RESEND_API_KEY","ph":"re_...","secret":True},{"k":"resend_from","env":"RESEND_FROM","ph":"contato@seudominio.com"}]},
+  {"id":"push","nome":"Notificações (Web Push / VAPID)","campos":[{"k":"vapid_private","env":"VAPID_PRIVATE","ph":"chave privada VAPID","secret":True}]},
+]
+_INTEGRA_CAMPOS = [(c["k"], c["env"]) for it in INTEGRA_ADMIN for c in it["campos"]]
+def gcfg_salvar(d):
+    g=_gcfg_all()
+    # aceita os campos das integracoes ligadas (precisas) E chaves genericas do catalogo (int_<id>)
+    for k, val in (d or {}).items():
+        if not isinstance(k, str): continue
+        if not (k in dict(_INTEGRA_CAMPOS) or k.startswith("int_")): continue
+        val=str(val or "").strip()
+        if val and val!="********": g[k]=val
+        elif val=="" and k in g: g.pop(k,None)   # limpar
+    set_blob(1, "integra_global", g); return {"ok":True}
+def llm_key(): return gcfg("llm_key","LLM_API_KEY")
+def mp_token(): return gcfg("mp_token","MP_ACCESS_TOKEN")
+def pp_creds(): return (gcfg("paypal_client_id","PAYPAL_CLIENT_ID"), gcfg("paypal_secret","PAYPAL_SECRET"), gcfg("paypal_mode","PAYPAL_MODE") or "sandbox")
+def google_creds(): return (gcfg("google_client_id","GOOGLE_CLIENT_ID"), gcfg("google_client_secret","GOOGLE_CLIENT_SECRET"))
+def integra_admin_status():
+    st = {"llm_key":bool(llm_key()), "mercadopago":bool(mp_token()), "paypal":bool(pp_creds()[0]),
+          "meta":bool(meta_app_creds()[0]), "google":bool(google_creds()[0]), "whatsapp":wa_on(),
+          "resend":bool(gcfg("resend_key","RESEND_API_KEY")), "push":bool(gcfg("vapid_private","VAPID_PRIVATE"))}
+    cat=[]
+    for it in INTEGRA_ADMIN:
+        cat.append({"id":it["id"],"nome":it["nome"],"on":st.get(it["id"],False),
+            "campos":[{"k":c["k"],"ph":c["ph"],"secret":c.get("secret",False),"tem":bool(gcfg(c["k"],c["env"]))} for c in it["campos"]]})
+    g=_gcfg_all(); chaves_set=[k for k,v in g.items() if str(v or "").strip()]
+    return {"ok":True,"integracoes":cat,"chaves_set":chaves_set}
 def checkout(u, plano, provedor, burl):
     plano = (plano or "pro").lower()
     if plano not in PLANOS_PRECO or plano == "free": return {"ok":False,"msg":"Plano invalido."}
@@ -1446,17 +1564,17 @@ def onboarding_salvar(u, respostas):
     return {"ok":True, "salvos":salvos}
 
 # ======================= WHATSAPP (Meta Cloud API) =======================
-WA_TOKEN = os.environ.get("WHATSAPP_TOKEN", "")
-WA_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID", "")
-WA_VERIFY = os.environ.get("WHATSAPP_VERIFY_TOKEN", "orion-wa-verify-2026")
-def wa_on(): return bool(WA_TOKEN and WA_PHONE_ID)
+def wa_token(): return gcfg("whatsapp_token","WHATSAPP_TOKEN")
+def wa_phone(): return gcfg("whatsapp_phone_id","WHATSAPP_PHONE_ID")
+def wa_verify(): return gcfg("whatsapp_verify","WHATSAPP_VERIFY_TOKEN") or "orion-wa-verify-2026"
+def wa_on(): return bool(wa_token() and wa_phone())
 def wa_send(to, texto):
     if not wa_on(): return False
     try:
         body = {"messaging_product":"whatsapp","to":to,"type":"text","text":{"body":(texto or "")[:4000]}}
-        req = urllib.request.Request(f"https://graph.facebook.com/v20.0/{WA_PHONE_ID}/messages",
+        req = urllib.request.Request(f"https://graph.facebook.com/v20.0/{wa_phone()}/messages",
             data=json.dumps(body).encode(),
-            headers={"Authorization":f"Bearer {WA_TOKEN}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
+            headers={"Authorization":f"Bearer {wa_token()}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
         urllib.request.urlopen(req, timeout=15)
         return True
     except Exception as e: print("[wa_send]", e); return False
@@ -1561,7 +1679,7 @@ def mp_webhook(pid, topic=""):
 # Usa pollinations.ai (livre, sem chave, qualidade Flux). Sob a hood: chama com seed + nologo.
 def _melhorar_prompt_imagem(p):
     """Pede pro LLM melhorar o prompt em ingles, pra qualidade fotorrealista. Cai limpo se nao tiver chave."""
-    if not LLM_KEY: return p
+    if not llm_key(): return p
     sys = ("You convert user requests into rich English image prompts for an image AI. "
            "Add lighting, composition, lens, art-style, mood. Photorealistic by default unless user asks otherwise. "
            "Reply ONLY with the prompt (no quotes, no explanation). Keep under 60 words.")
@@ -1584,13 +1702,13 @@ def gerar_imagem(u, prompt, w=1024, h=1024):
 
 # ======================= VISAO (Groq, le grafico/foto) =======================
 def cloud_vision(b64, instr, max_tokens=600):
-    if not LLM_KEY: return ""
+    if not llm_key(): return ""
     model = os.environ.get("LLM_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
     body = {"model":model,"max_tokens":max_tokens,"temperature":0.3,"messages":[{"role":"user","content":[
         {"type":"text","text":instr},{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,"+b64}}]}]}
     try:
         req = urllib.request.Request(LLM_BASE.rstrip("/")+"/chat/completions", data=json.dumps(body).encode(),
-            headers={"Authorization":f"Bearer {LLM_KEY}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
+            headers={"Authorization":f"Bearer {llm_key()}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
         r = json.loads(urllib.request.urlopen(req, timeout=45).read().decode())
         return (r["choices"][0]["message"]["content"] or "").strip()
     except Exception as e:
@@ -1872,7 +1990,7 @@ class H(BaseHTTPRequestHandler):
         elif path == "/wa/webhook":
             qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
             modo=(qs.get("hub.mode") or [""])[0]; tok=(qs.get("hub.verify_token") or [""])[0]; ch=(qs.get("hub.challenge") or [""])[0]
-            if modo=="subscribe" and tok==WA_VERIFY: self._send(ch, 200, "text/plain")
+            if modo=="subscribe" and tok==wa_verify(): self._send(ch, 200, "text/plain")
             else: self._send("forbidden", 403, "text/plain")
         elif path == "/wa/status": self._send(wa_status(u) if u else {"ok":False,"erro":"faca login"})
         elif path == "/tarefas": self._send(tarefa_listar(u) if u else {"ok":False,"erro":"faca login"})
@@ -1880,7 +1998,10 @@ class H(BaseHTTPRequestHandler):
             self._send({"ok":True,"agentes":agentes_get(u["id"])} if u else {"ok":False,"erro":"faca login"})
         elif path == "/binance/conta":
             self._send(binance_conta(u) if u else {"ok":False,"erro":"faca login"})
-        elif path in ("/painel","/crm/leads","/briefings","/meta/resumo","/painel/precos","/painel/vendas"):
+        elif path == "/empresas":
+            if u and plano_de(u) in ("trading","business","adm","trafego"): self._send(empresas_estado(u["id"]))
+            else: self._send({"ok":True,"empresas":[{"id":0,"nome":"Minha empresa"}],"ativa":0,"bloqueado":True})
+        elif path in ("/painel","/crm/leads","/briefings","/meta/resumo","/painel/precos","/painel/vendas","/financeiro"):
             if not (u and plano_de(u) in ("business","adm","trafego")): self._send({"ok":False,"erro":"Painel disponivel no plano Trafego, Business e ADM, senhor.","plano_baixo":True}); return
             if path == "/painel": self._send(painel_resumo(u))
             elif path == "/crm/leads": self._send({"ok":True,"leads":crm_leads(u["id"])})
@@ -1888,6 +2009,7 @@ class H(BaseHTTPRequestHandler):
             elif path == "/meta/resumo": self._send(meta_resumo(u["id"]))
             elif path == "/painel/precos": self._send({"ok":True,"precos":precos_get(u["id"])})
             elif path == "/painel/vendas": self._send({"ok":True,"vendas":vendas_get(u["id"]),"resumo":vendas_resumo(u["id"])})
+            elif path == "/financeiro": self._send(financeiro_resumo(u["id"]))
         elif path == "/admin/conhecimento":
             self._send({"ok":True,"itens":conhecimento_listar()} if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/conversas": self._send(conv_listar(u["id"]) if u else {"ok":False,"erro":"faca login"})
@@ -1897,6 +2019,7 @@ class H(BaseHTTPRequestHandler):
             self._send(conv_abrir(u["id"], cid) if u else {"ok":False,"erro":"faca login"})
         elif path == "/prefs": self._send({"ok":True,"prefs":prefs_get(u["id"]), "onboarding": bool((get_blob(u["id"],"onboarding_ok",{}) or {}).get("feito"))} if u else {"ok":True,"prefs":{}})
         elif path == "/code/hist": self._send(orion_code_hist(u) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/fluxo": self._send({"ok":True,"fluxo":fluxo_get(u["id"])} if u else {"ok":False,"erro":"faca login"})
         elif path == "/tokens":
             if u:
                 pl=plano_de(u); st=tokens_estado(u); st.pop("_w",None)
@@ -1905,6 +2028,7 @@ class H(BaseHTTPRequestHandler):
                 self._send({"ok":True,"saldo":st,"modos":modos,"esforcos":esfs,"pacotes":TOKEN_PACOTES,"plano":pl})
             else: self._send({"ok":False,"erro":"faca login"})
         elif path == "/admin/tokens": self._send(tokens_admin_resumo() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/integra": self._send(integra_admin_status() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/brain/opcoes": self._send({"providers":BRAIN_PROVIDERS, "atual": (get_blob(u["id"],"brain",{}) if u else {})})
         elif path == "/estado":
             self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
@@ -2093,6 +2217,14 @@ class H(BaseHTTPRequestHandler):
             else: self._send({"ok":False,"erro":"so o dono gera chaves"})
         elif path == "/tokens/comprar":
             self._send(checkout_tokens(u, d.get("pacote",""), d.get("provedor"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
+        elif path == "/admin/integra/salvar":
+            self._send(gcfg_salvar(d) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path in ("/empresa/criar","/empresa/trocar","/empresa/apagar"):
+            if not (u and plano_de(u) in ("trading","business","adm","trafego")):
+                self._send({"ok":False,"erro":"Perfis de empresa nos planos Trading, Trafego, Business e ADM, senhor."}); return
+            if path=="/empresa/criar": self._send(empresa_criar(u["id"], d.get("nome","")))
+            elif path=="/empresa/trocar": self._send(empresa_trocar(u["id"], d.get("id",0)))
+            else: self._send(empresa_apagar(u["id"], d.get("id",0)))
         elif path == "/pagamento/checkout":
             self._send(checkout(u, d.get("plano","pro"), d.get("provedor"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
         elif path == "/pagamento/assinar":
@@ -2126,6 +2258,9 @@ class H(BaseHTTPRequestHandler):
             if u and plano_de(u) in ("adm","business","trafego"):
                 self._send(agente_editar(u["id"], d.get("id"), d.get("nome"), d.get("descricao"), d.get("instrucoes")))
             else: self._send({"ok":False,"erro":"Disponivel nos planos Trafego, Business e ADM, senhor."})
+        elif path == "/fluxo/salvar":
+            if u and plano_de(u) in ("adm","business","trafego"): self._send(fluxo_salvar(u["id"], d))
+            else: self._send({"ok":False,"erro":"Disponivel nos planos Trafego, Business e ADM, senhor."})
         elif path == "/agente/run":
             if u and plano_de(u) in ("adm","business","trafego"):
                 self._send(agente_run(u, d.get("id"), d.get("mensagem","")))
@@ -2134,7 +2269,8 @@ class H(BaseHTTPRequestHandler):
             self._send(binance_salvar(u["id"], d.get("key",""), d.get("secret","")) if u else {"ok":False,"erro":"faca login"})
         elif path in ("/crm/lead/salvar","/crm/lead/apagar","/crm/lote","/briefing/salvar","/briefing/apagar","/meta/salvar",
                        "/painel/analise","/painel/copy","/painel/lead_analise","/email/salvar","/email/enviar","/email/status",
-                       "/painel/precos/salvar","/painel/venda/salvar","/painel/venda/apagar","/wa/disparar"):
+                       "/painel/precos/salvar","/painel/venda/salvar","/painel/venda/apagar","/wa/disparar","/cnpj",
+                       "/despesa/salvar","/despesa/apagar","/folha/salvar","/folha/apagar","/painel/venda/texto"):
             if not (u and plano_de(u) in ("business","adm","trafego")): self._send({"ok":False,"erro":"so Trafego/Business/ADM"}); return
             if path == "/crm/lead/salvar": self._send(crm_lead_salvar(u["id"], d))
             elif path == "/crm/lead/apagar": self._send(crm_lead_apagar(u["id"], d.get("id")))
@@ -2145,6 +2281,13 @@ class H(BaseHTTPRequestHandler):
             elif path == "/painel/analise": self._send(painel_analise_metricas(u, d.get("contexto","")))
             elif path == "/painel/copy": self._send(painel_copy_criativo(u, d.get("briefing",""), d.get("imagem")))
             elif path == "/painel/lead_analise": self._send(painel_analisar_lead(u, d))
+            elif path == "/cnpj":
+                e=enriquecer_cnpj(d.get("cnpj","")); self._send({"ok":True,"empresa":e} if e else {"ok":False,"erro":"CNPJ nao encontrado ou invalido."})
+            elif path == "/despesa/salvar": self._send(despesa_salvar(u["id"], d))
+            elif path == "/despesa/apagar": self._send(despesa_apagar(u["id"], d.get("id")))
+            elif path == "/folha/salvar": self._send(folha_salvar(u["id"], d))
+            elif path == "/folha/apagar": self._send(folha_apagar(u["id"], d.get("id")))
+            elif path == "/painel/venda/texto": self._send(venda_por_texto(u, d.get("texto","")))
             elif path == "/email/salvar": self._send(email_salvar(u["id"], d.get("key",""), d.get("from","")))
             elif path == "/email/status": self._send(email_status(u["id"]))
             elif path == "/email/enviar": self._send(enviar_email(u, d.get("to",""), d.get("assunto",""), d.get("corpo","")))

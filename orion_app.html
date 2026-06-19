@@ -251,6 +251,17 @@ button{font-family:inherit;cursor:pointer}
 .rot-item.done span{text-decoration:line-through;color:var(--faint)}
 .apr-licao{margin:0 0 8px 30px}
 .apr-l-in{background:var(--bg);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:10px;padding:14px 16px;font-size:14px;line-height:1.65}
+/* mapa mental de fluxo (n8n-like) */
+.fxwrap{position:relative;width:100%;height:460px;border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:radial-gradient(700px 400px at 40% 30%,rgba(122,162,255,.08),var(--bg2));touch-action:none}
+.fxlines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.fxlines path{pointer-events:stroke;cursor:pointer}
+.fxnode{position:absolute;min-width:120px;background:var(--panel);border:1.5px solid var(--line2);border-radius:12px;padding:9px 12px;cursor:grab;user-select:none;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.fxnode.agente{border-color:var(--accent)} .fxnode.app{border-color:var(--good)}
+.fxnode.connecting{box-shadow:0 0 0 2px var(--accent)}
+.fxnode .t{font-weight:700;font-size:13px;white-space:nowrap} .fxnode .s{font-size:10px;color:var(--faint)}
+.fxnode .port{position:absolute;right:-8px;top:50%;transform:translateY(-50%);width:15px;height:15px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);cursor:crosshair}
+.fxnode .fxdel{position:absolute;top:-8px;right:-6px;background:var(--bad);color:#fff;width:17px;height:17px;border-radius:50%;font-size:12px;line-height:15px;text-align:center;cursor:pointer;display:none}
+.fxnode:hover .fxdel{display:block}
 /* carrossel de novidades (home) */
 .novidades{width:100%;max-width:560px;margin:18px auto 0;position:relative;border:1px solid var(--line2);border-radius:16px;overflow:hidden;background:linear-gradient(120deg,rgba(122,162,255,.14),rgba(155,140,255,.10));min-height:88px;display:none}
 .novidades.on{display:block}
@@ -1973,12 +1984,46 @@ function renderConta(){
     <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn primary" onclick="go('planos')">${plano==='free'?'Fazer upgrade':'Mudar de plano'}</button>${(plano==='pro'||plano==='business')?'<button class="btn ghost" onclick="cancelarAssinatura()">Cancelar assinatura</button>':''}</div>
   </div>
   ${conv?'':'<div class="card"><h3>Tokens do Orion</h3><div class="hint" style="margin-bottom:10px">Os tokens medem o uso da IA. Cada plano tem uma cota mensal. Se acabar, voce pode recarregar avulso (planos pagos) ou usar o modo Rapido (gratis).</div><div id="tokBox">carregando...</div></div>'}
+  ${(u.criador)?'<div class="card"><h3>Admin - Integrações (linkar tudo)</h3><div class="hint" style="margin-bottom:10px">So o dono ve. Cole aqui as chaves de cada integração pra ligar no servidor (vale como alternativa às variáveis de ambiente). Verde = ligado.</div><div id="integraAdmin">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Admin - custo de tokens</h3><div class="hint" style="margin-bottom:10px">Custo real de API por usuario (so o dono ve).</div><div id="tokAdmin">carregando...</div></div>':''}
   ${conv?'':'<div class="card"><h3>WhatsApp</h3><div class="hint" style="margin-bottom:10px">Ligue seu numero pra conversar com o Orion direto no WhatsApp (respostas autonomas).</div><div id="waBox">carregando...</div></div>'}
   ${(u.criador)?'<div class="card" id="adminCard"><h3>Admin - contas e planos</h3><div class="hint" style="margin-bottom:10px">So o dono ve isto. Marque voce e seu socio como Business vitalicio, ou defina o plano de qualquer conta.</div><div id="adminLista">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Conhecimento global do Orion</h3><div class="hint" style="margin-bottom:10px">Fatos GERAIS que o Orion aprendeu (sem dado pessoal, filtrado). So o dono ve/limpa.</div><div id="conhecBox">carregando...</div></div>':''}`;
   carregarUso(); carregarWa(); if(!conv) carregarTokens();
-  if(u.criador){ carregarAdmin(); carregarConhec(); carregarTokAdmin(); }
+  if(u.criador){ carregarAdmin(); carregarConhec(); carregarTokAdmin(); carregarIntegraAdmin(); }
+}
+async function carregarIntegraAdmin(){
+  const box=document.getElementById('integraAdmin'); if(!box) return;
+  let r={integracoes:[]}; try{ r=await (await fetch('/admin/integra')).json(); }catch(e){}
+  if(!r.ok){ box.innerHTML='<div class="hint">Indisponivel.</div>'; return; }
+  const setk=r.chaves_set||[];
+  const wired = (r.integracoes||[]).map(it=>`
+    <div style="border:1px solid var(--line2);border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="dot ${it.on?'ok':''}"></span><b>${esc(it.nome)}</b><span class="mbadge" style="margin-left:6px;color:var(--good)">ativa de verdade</span><span class="hint" style="margin-left:auto">${it.on?'Ligado':'Desligado'}</span></div>
+      ${it.campos.map(c=>`<div class="field" style="margin-bottom:6px"><input id="ig_${c.k}" type="${c.secret?'password':'text'}" placeholder="${esc(c.ph)}${c.tem?' (já configurado)':''}"></div>`).join('')}
+      <button class="btn" onclick="salvarIntegraAdmin([${it.campos.map(c=>`'${c.k}'`).join(',')}])">Salvar ${esc(it.nome)}</button>
+    </div>`).join('');
+  const jaWired=['google','meta','whatsapp'];   // estes ja estao na lista de cima (ativos)
+  let catHtml=''; let secAberta=false;
+  (typeof INTEGRA_CAT!=='undefined'?INTEGRA_CAT:[]).forEach(it=>{
+    if(it.sec){ catHtml+=(secAberta?'</div>':'')+'<div class="sb-sec" style="padding:8px 0 4px">'+esc(it.sec)+'</div><div>'; secAberta=true; return; }
+    if(jaWired.indexOf(it.id)>=0) return;
+    const key='int_'+it.id; const tem=setk.indexOf(key)>=0;
+    catHtml+=`<div style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="dot ${tem?'ok':''}"></span><b style="font-size:13px">${esc(it.nome)}</b><span class="hint" style="margin-left:auto;font-size:11px">${esc(it.desc||'')}</span></div>
+      <div class="tg-order" style="gap:6px"><input id="ig_${key}" type="password" placeholder="chave/token${tem?' (já configurado)':''}" style="flex:1"><button class="btn" onclick="salvarIntegraAdmin(['${key}'])">Linkar</button></div>
+    </div>`;
+  });
+  if(secAberta) catHtml+='</div>';
+  box.innerHTML=wired+'<div class="sb-sec" style="padding:12px 0 4px;font-size:11px">Catálogo completo (cole a chave pra deixar pronto)</div>'+catHtml+'<div id="igMsg" class="hint" style="margin-top:6px"></div>';
+}
+async function salvarIntegraAdmin(keys){
+  const body={}; keys.forEach(k=>{ const el=document.getElementById('ig_'+k); if(el && el.value.trim()) body[k]=el.value.trim(); });
+  const m=document.getElementById('igMsg'); if(m) m.textContent='Salvando...';
+  if(!Object.keys(body).length){ if(m){ m.style.color='var(--warn)'; m.textContent='Preencha pelo menos um campo.'; } return; }
+  try{ const r=await (await fetch('/admin/integra/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+    if(r.ok){ piscarSave('INTEGRACAO'); carregarIntegraAdmin(); } else if(m){ m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui salvar.'; }
+  }catch(e){ if(m) m.textContent='Sem conexao.'; }
 }
 async function carregarTokens(){
   const box=document.getElementById('tokBox'); if(!box) return;
@@ -2285,9 +2330,11 @@ let _PN_TAB='dash', _PN_RESUMO={};
 const _PN_TABS=[
   {id:'dash',  ic:'📊', nome:'Dashboard'},
   {id:'prosp', ic:'🎯', nome:'Prospecção'},
+  {id:'discador',ic:'📞',nome:'Discador'},
   {id:'clientes',ic:'👥',nome:'Clientes'},
   {id:'precos',ic:'🧮', nome:'Precificação'},
   {id:'vendas',ic:'💰', nome:'Vendas'},
+  {id:'financeiro',ic:'💵',nome:'Financeiro'},
   {id:'meta',  ic:'📈', nome:'Meta Ads'},
   {id:'auto',  ic:'🤖', nome:'Automação'},
 ];
@@ -2299,18 +2346,38 @@ async function renderPainel(){
   }
   try{ _PN_RESUMO=await (await fetch('/painel')).json(); }catch(e){ _PN_RESUMO={}; }
   const tabbar=_PN_TABS.map(t=>`<button class="pn-tab${t.id===_PN_TAB?' on':''}" data-pt="${t.id}" onclick="pnTab('${t.id}')">${t.ic} ${t.nome}</button>`).join('');
-  area.innerHTML=`<div class="pn-tabbar">${tabbar}</div><div id="pnBody"></div>`;
-  pnTab(_PN_TAB);
+  area.innerHTML=`<div id="empBar"></div><div class="pn-tabbar">${tabbar}</div><div id="pnBody"></div>`;
+  empRender(); pnTab(_PN_TAB);
 }
+async function empRender(){
+  const bar=document.getElementById('empBar'); if(!bar) return;
+  let r=null; try{ r=await (await fetch('/empresas')).json(); }catch(e){}
+  if(!r||r.bloqueado||!(r.empresas&&r.empresas.length)){ bar.innerHTML=''; return; }
+  const opts=r.empresas.map(e=>`<option value="${e.id}" ${e.id===r.ativa?'selected':''}>${esc(e.nome)}</option>`).join('');
+  bar.innerHTML=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+    <span class="hint">Empresa ativa:</span>
+    <select onchange="empTrocar(this.value)" style="font-size:13px;min-width:160px">${opts}</select>
+    <button class="btn" onclick="empCriar()">+ Nova empresa</button>
+    ${r.ativa?`<button class="btn ghost" onclick="empApagar(${r.ativa})">Apagar esta</button>`:''}
+    <span class="hint" style="font-size:11px">cada empresa tem CRM, vendas e financeiro próprios</span></div>`;
+}
+async function empTrocar(id){ await fetch('/empresa/trocar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:parseInt(id)})}); piscarSave('EMPRESA'); renderPainel(); }
+async function empCriar(){ const nome=prompt('Nome da nova empresa:'); if(!nome) return;
+  await fetch('/empresa/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome})}); renderPainel(); }
+async function empApagar(id){ if(!confirm('Apagar esta empresa? Os dados dela (CRM, vendas, financeiro) somem. A empresa padrão não pode ser apagada.')) return;
+  const r=await (await fetch('/empresa/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})})).json();
+  if(!r.ok) alert(r.erro||'Nao consegui.'); renderPainel(); }
 function pnTab(t){
   _PN_TAB=t;
   document.querySelectorAll('.pn-tab').forEach(b=>b.classList.toggle('on', b.dataset.pt===t));
   const b=document.getElementById('pnBody'); if(!b) return;
   if(t==='dash') pnDash(b);
   else if(t==='prosp') pnProsp(b);
+  else if(t==='discador') pnDiscador(b);
   else if(t==='clientes') pnClientes(b);
   else if(t==='precos') pnPrecos(b);
   else if(t==='vendas') pnVendas(b);
+  else if(t==='financeiro') pnFinanceiro(b);
   else if(t==='meta') pnMeta(b);
   else if(t==='auto') pnAuto(b);
 }
@@ -2522,11 +2589,61 @@ async function psRender(){
 function psWa(id){
   const l=_LEADS.find(x=>x.id===id); if(!l) return;
   const wpp=(l.contato||'').replace(/\D/g,''); if(!wpp) return;
-  const msg=(document.getElementById('psMsg').value||psTemplate()).replace(/\{nome\}/g,l.nome);
+  const _pm=document.getElementById('psMsg'); const msg=((_pm&&_pm.value)||psTemplate()).replace(/\{nome\}/g,l.nome);
   window.open('https://wa.me/'+wpp+'?text='+encodeURIComponent(msg),'_blank');
   if(l.status==='novo'){ ldStatus(id,'contato').then(()=>psRender()); }
 }
 
+// ---------- DISCADOR (estilo Apollo: CNPJ público + lista + clique-pra-ligar) ----------
+const DISC_STATUS={novo:'🆕 Novo',contato:'🔎 Em análise',proposta:'⏳ Falta processo',cliente:'✅ Cliente',perdido:'❌ Descartado'};
+function pnDiscador(b){
+  b.innerHTML=`
+    <div class="card"><h3>📞 Buscar empresa por CNPJ</h3>
+      <div class="hint" style="margin-bottom:10px">Dados públicos da empresa (BrasilAPI/ReceitaWS) — traz o telefone comercial quando há. Sem raspar dados de pessoas (LGPD).</div>
+      <div class="tg-order" style="gap:8px"><input id="dcCnpj" placeholder="CNPJ (só números ou formatado)" style="flex:1;min-width:160px"><button class="btn primary" onclick="dcBuscar()">Buscar</button></div>
+      <div id="dcRes" style="margin-top:10px"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Lista de discagem <span id="dcCount" class="mbadge" style="margin-left:6px">0</span></h3>
+      <div class="hint" style="margin-bottom:8px">Contatos com telefone. Ligue na hora (abre o discador do aparelho), mande WhatsApp e marque o estágio do lead.</div>
+      <div id="dcLista"></div>
+    </div>`;
+  dcRender();
+}
+async function dcBuscar(){
+  const cnpj=(document.getElementById('dcCnpj').value||'').trim(); const box=document.getElementById('dcRes');
+  if(cnpj.replace(/\D/g,'').length!==14){ box.innerHTML='<div class="hint" style="color:var(--warn)">Digite um CNPJ com 14 dígitos.</div>'; return; }
+  box.innerHTML='<div class="hint">Buscando...</div>';
+  try{ const r=await (await fetch('/cnpj',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cnpj})})).json();
+    if(!r.ok){ box.innerHTML='<div class="hint" style="color:var(--warn)">'+esc(r.erro||'Não achei.')+'</div>'; return; }
+    const e=r.empresa||{}; const nome=e.fantasia||e.razao||'Empresa';
+    box.innerHTML=`<div style="border:1px solid var(--line2);border-radius:10px;padding:12px">
+      <b>${esc(nome)}</b><div class="hint">${esc(e.atividade||'')} · ${esc(e.cidade||'')}/${esc(e.uf||'')}</div>
+      <div class="hint" style="margin-top:4px">📞 ${esc(e.telefone||'sem telefone público')}${e.email?(' · ✉️ '+esc(e.email)):''}</div>
+      <button class="btn primary" style="margin-top:8px" onclick='dcAdd(${JSON.stringify({nome:nome,tel:e.telefone||"",nicho:e.atividade||""}).replace(/'/g,"&#39;")})'>Adicionar à lista</button></div>`;
+  }catch(e){ box.innerHTML='<div class="hint">Sem conexão.</div>'; }
+}
+async function dcAdd(d){
+  await fetch('/crm/lead/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:d.nome,contato:d.tel,nicho:d.nicho,origem:'cnpj',status:'novo'})});
+  const box=document.getElementById('dcRes'); if(box) box.innerHTML='<div class="hint" style="color:var(--good)">✓ Adicionado à lista de discagem.</div>';
+  dcRender(); renderPainelKPIs();
+}
+async function dcRender(){
+  const box=document.getElementById('dcLista'); if(!box) return;
+  let r={leads:[]}; try{ r=await (await fetch('/crm/leads')).json(); }catch(e){}
+  _LEADS=r.leads||[];
+  const comTel=_LEADS.filter(l=>(l.contato||'').replace(/\D/g,'').length>=8);
+  const cnt=document.getElementById('dcCount'); if(cnt) cnt.textContent=comTel.length;
+  box.innerHTML=comTel.map(l=>{ const tel=(l.contato||'').replace(/\D/g,'');
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);flex-wrap:wrap">
+      <div style="min-width:0"><b>${esc(l.nome)}</b><div class="hint">📞 ${esc(l.contato||'')}${l.nicho?' · '+esc(l.nicho):''}</div></div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <a class="btn primary" style="padding:5px 10px;font-size:12px;text-decoration:none" href="tel:+55${tel}">📞 Ligar</a>
+        <button class="btn" style="padding:5px 10px;font-size:12px" onclick="psWa(${l.id})">WhatsApp</button>
+        <select onchange="ldStatus(${l.id},this.value);dcRender()" style="font-size:12px">${Object.keys(DISC_STATUS).map(s=>`<option value="${s}" ${l.status===s?'selected':''}>${DISC_STATUS[s]}</option>`).join('')}</select>
+        <button class="btn ghost" onclick="ldApagar(${l.id});setTimeout(dcRender,200)">&#10005;</button>
+      </div></div>`;
+  }).join('')||'<div class="hint">Nenhum contato com telefone ainda. Busque um CNPJ acima ou importe na aba Prospecção.</div>';
+}
 // ---------- PRECIFICAÇÃO ----------
 async function pnPrecos(b){
   let p={}; try{ p=(await (await fetch('/painel/precos')).json()).precos||{}; }catch(e){}
@@ -2613,6 +2730,67 @@ async function vdRender(){
     <div style="display:flex;gap:8px;align-items:center"><b style="color:var(--good)">${_fmtBR(v.valor)}</b><button class="btn ghost" onclick="vdApagar(${v.id})">&#10005;</button></div></div>`).join('')||'<div class="hint">Nenhuma venda registrada ainda.</div>';
 }
 async function vdApagar(id){ await fetch('/painel/venda/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); vdRender(); }
+
+// ---------- FINANCEIRO (faturamento, despesas, folha, lucro líquido) ----------
+async function pnFinanceiro(b){
+  b.innerHTML=`
+    <div id="finResumo" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px"></div>
+    <div class="card"><h3>🧾 Registrar venda falando <span class="mbadge" style="margin-left:6px">agente</span></h3>
+      <div class="hint" style="margin-bottom:8px">Escreva a venda em linguagem natural que o Orion registra. Ex: "vendi gestão de tráfego pra Barbearia X por 700, custo 150".</div>
+      <div class="tg-order" style="gap:8px"><input id="vtTexto" placeholder="vendi ... pra ... por R$ ..." style="flex:1;min-width:200px"><button class="btn primary" onclick="vtRegistrar()">Registrar</button></div>
+      <div id="vtMsg" class="hint" style="margin-top:6px"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>💸 Despesas</h3>
+      <div class="tg-order" style="flex-wrap:wrap;gap:8px">
+        <input id="dpDesc" placeholder="Descrição" style="flex:1;min-width:120px">
+        <input id="dpCat" placeholder="Categoria (ex: anúncio, ferramenta)" style="flex:1;min-width:120px">
+        <input id="dpValor" type="number" placeholder="Valor R$" style="width:110px">
+        <button class="btn primary" onclick="dpSalvar()">Lançar</button>
+      </div>
+      <div id="dpLista" style="margin-top:10px"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>👥 Folha de pagamento</h3>
+      <div class="tg-order" style="flex-wrap:wrap;gap:8px">
+        <input id="flNome" placeholder="Nome" style="flex:1;min-width:120px">
+        <input id="flCargo" placeholder="Cargo" style="flex:1;min-width:120px">
+        <input id="flSal" type="number" placeholder="Salário R$" style="width:120px">
+        <button class="btn primary" onclick="flSalvar()">Adicionar</button>
+      </div>
+      <div id="flLista" style="margin-top:10px"></div>
+    </div>`;
+  finRender();
+}
+async function finRender(){
+  let r=null; try{ r=await (await fetch('/financeiro')).json(); }catch(e){}
+  if(!r||!r.ok) return;
+  const card=(t,v,cor)=>`<div style="flex:1;min-width:120px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:14px"><div class="hint" style="font-size:11px">${t}</div><div style="font-size:20px;font-weight:800;color:${cor||'var(--text)'}">${v}</div></div>`;
+  const box=document.getElementById('finResumo'); if(box) box.innerHTML=
+    card('Receita',_fmtBR(r.receita),'var(--good)')+card('Despesas',_fmtBR(r.despesas),'var(--warn)')+card('Folha',_fmtBR(r.folha),'var(--warn)')+card('Lucro líquido',_fmtBR(r.lucro_liquido),r.lucro_liquido>=0?'var(--accent)':'var(--bad)');
+  const dl=document.getElementById('dpLista'); if(dl) dl.innerHTML=(r.despesas_lista||[]).map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)"><div><b>${esc(x.desc||'(sem descrição)')}</b> <span class="hint">${esc(x.categoria||'')} · ${esc(x.data||'')}</span></div><div style="display:flex;gap:8px;align-items:center"><b style="color:var(--warn)">${_fmtBR(x.valor)}</b><button class="btn ghost" onclick="dpApagar(${x.id})">&#10005;</button></div></div>`).join('')||'<div class="hint">Nenhuma despesa.</div>';
+  const fl=document.getElementById('flLista'); if(fl) fl.innerHTML=(r.folha_lista||[]).map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)"><div><b>${esc(x.nome)}</b> <span class="hint">${esc(x.cargo||'')}</span></div><div style="display:flex;gap:8px;align-items:center"><b>${_fmtBR(x.salario)}</b><button class="btn ghost" onclick="flApagar(${x.id})">&#10005;</button></div></div>`).join('')||'<div class="hint">Ninguém na folha ainda.</div>';
+}
+async function vtRegistrar(){
+  const t=(document.getElementById('vtTexto').value||'').trim(); const m=document.getElementById('vtMsg');
+  if(t.length<6){ m.style.color='var(--warn)'; m.textContent='Descreva a venda.'; return; }
+  m.style.color=''; m.textContent='Registrando...';
+  try{ const r=await (await fetch('/painel/venda/texto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:t})})).json();
+    if(r.ok){ m.style.color='var(--good)'; m.textContent='✓ Venda de '+esc((r.venda&&r.venda.cliente)||'')+' registrada ('+_fmtBR(r.venda&&r.venda.valor)+').'; document.getElementById('vtTexto').value=''; finRender(); }
+    else { m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui.'; }
+  }catch(e){ m.textContent='Sem conexao.'; }
+}
+async function dpSalvar(){
+  const n=id=>parseFloat(document.getElementById(id).value)||0;
+  const desc=document.getElementById('dpDesc').value.trim(); if(!desc&&!n('dpValor')){ return; }
+  await fetch('/despesa/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({desc,categoria:document.getElementById('dpCat').value.trim(),valor:n('dpValor')})});
+  ['dpDesc','dpCat','dpValor'].forEach(id=>document.getElementById(id).value=''); piscarSave('DESPESA'); finRender();
+}
+async function dpApagar(id){ await fetch('/despesa/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); finRender(); }
+async function flSalvar(){
+  const nome=document.getElementById('flNome').value.trim(); if(!nome) return;
+  await fetch('/folha/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,cargo:document.getElementById('flCargo').value.trim(),salario:parseFloat(document.getElementById('flSal').value)||0})});
+  ['flNome','flCargo','flSal'].forEach(id=>document.getElementById(id).value=''); piscarSave('FOLHA'); finRender();
+}
+async function flApagar(id){ await fetch('/folha/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); finRender(); }
 
 // ---------- AUTOMAÇÃO (agentes + mapa mental + whatsapp) ----------
 const AG_TEMPLATES=[
@@ -2918,9 +3096,87 @@ async function renderAgentes(){
     <div class="card" id="agTesteCard" style="margin-top:14px;display:none"><h3 id="agTesteTit">Testar</h3>
       <div id="agChat" style="max-height:300px;overflow:auto;margin-bottom:10px"></div>
       <div class="composer" style="border-radius:12px"><textarea id="agInp" rows="1" placeholder="Fale com o agente..." style="flex:1"></textarea><button class="send" onclick="agEnviar()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
+    </div>
+    <div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <h3 style="margin:0;flex:1">Mapa mental do fluxo <span class="mbadge">conectar agentes a apps</span></h3>
+        <button class="btn" onclick="fxAdd('agente')">+ Agente</button>
+        <button class="btn" onclick="fxAdd('app')">+ App</button>
+        <button class="btn primary" onclick="fxSalvar()">Salvar</button></div>
+      <div class="hint" style="margin-bottom:8px">Arraste os blocos. No agente, clique no ponto laranja e depois num app pra conectar. Clique na linha (ou conexão) pra configurar o que o agente faz e o que pode fazer naquele app.</div>
+      <div id="fxwrap" class="fxwrap"><svg class="fxlines" id="fxlines"></svg></div>
+      <div id="fxCfg"></div>
     </div>`;
-  agRenderLista();
+  agRenderLista(); fxLoad();
 }
+// ---------- MAPA MENTAL DE FLUXO (estilo n8n/make) ----------
+const FX_APPS={
+  whatsapp:{nome:'WhatsApp',emoji:'💬',acoes:['Responder mensagens','Enviar follow-up','Qualificar lead','Agendar reunião','Enviar link de pagamento']},
+  email:{nome:'E-mail',emoji:'📧',acoes:['Responder e-mails','Enviar cold mail','Enviar proposta']},
+  instagram:{nome:'Instagram',emoji:'📸',acoes:['Responder DM','Prospectar perfis','Comentar']},
+  crm:{nome:'CRM',emoji:'🗂️',acoes:['Criar lead','Atualizar status','Registrar nota']},
+  telefone:{nome:'Telefone',emoji:'📞',acoes:['Ligar (com script)','Registrar ligação']},
+  agenda:{nome:'Agenda',emoji:'📅',acoes:['Marcar reunião','Lembrar']},
+};
+let FX={nodes:[],conns:[]}, _fxConnFrom=null, _fxN=0;
+async function fxLoad(){ try{ const r=await (await fetch('/fluxo')).json(); if(r.ok&&r.fluxo&&r.fluxo.nodes) FX=r.fluxo; else FX={nodes:[],conns:[]}; }catch(e){ FX={nodes:[],conns:[]}; } fxRender(); }
+function fxNid(){ return 'fx'+(Date.now()+(_fxN++)).toString(36); }
+function fxAdd(tipo){
+  if(tipo==='agente'){
+    if(!_AGS.length){ alert('Crie um agente primeiro, ali em cima.'); return; }
+    const esc2=_AGS.map((a,i)=>(i+1)+') '+a.nome).join('   ');
+    const v=prompt('Qual agente adicionar?\n'+esc2,'1'); if(!v) return;
+    const a=_AGS[parseInt(v)-1]||_AGS.find(x=>x.nome.toLowerCase()===v.toLowerCase()); if(!a){ alert('Nao achei.'); return; }
+    FX.nodes.push({id:fxNid(),tipo:'agente',ref:a.id,nome:a.nome,x:30,y:30+FX.nodes.length*8});
+  } else {
+    const ks=Object.keys(FX_APPS); const lst=ks.map((k,i)=>(i+1)+') '+FX_APPS[k].nome).join('   ');
+    const v=prompt('Qual app conectar?\n'+lst,'1'); if(!v) return;
+    const k=ks[parseInt(v)-1]||ks.find(x=>FX_APPS[x].nome.toLowerCase()===v.toLowerCase()); if(!k){ alert('Nao achei.'); return; }
+    FX.nodes.push({id:fxNid(),tipo:'app',ref:k,nome:FX_APPS[k].nome,x:320,y:30+FX.nodes.length*8});
+  }
+  fxRender(); fxSalvarDebounce();
+}
+function fxRender(){
+  const wrap=document.getElementById('fxwrap'); if(!wrap) return;
+  [...wrap.querySelectorAll('.fxnode')].forEach(n=>n.remove());
+  FX.nodes.forEach(n=>{
+    const d=document.createElement('div'); d.className='fxnode '+n.tipo; d.style.left=(n.x||20)+'px'; d.style.top=(n.y||20)+'px'; d.dataset.id=n.id;
+    const emoji=n.tipo==='app'?((FX_APPS[n.ref]||{}).emoji||'🔌'):'🤖';
+    d.innerHTML='<div class="t">'+emoji+' '+esc(n.nome)+'</div><div class="s">'+(n.tipo==='agente'?'agente':'app')+'</div>'+
+      (n.tipo==='agente'?'<div class="port" title="conectar a um app"></div>':'')+'<span class="fxdel" title="remover">&times;</span>';
+    wrap.appendChild(d); fxDrag(d,n);
+    d.querySelector('.fxdel').onclick=(e)=>{ e.stopPropagation(); FX.nodes=FX.nodes.filter(x=>x.id!==n.id); FX.conns=FX.conns.filter(c=>c.from!==n.id&&c.to!==n.id); fxRender(); fxSalvarDebounce(); };
+    const port=d.querySelector('.port'); if(port) port.onclick=(e)=>{ e.stopPropagation(); _fxConnFrom=n.id; document.querySelectorAll('.fxnode').forEach(x=>x.classList.remove('connecting')); d.classList.add('connecting'); };
+    if(n.tipo==='app') d.addEventListener('click',()=>{ if(_fxConnFrom){ fxConnect(_fxConnFrom,n.id); _fxConnFrom=null; document.querySelectorAll('.fxnode').forEach(x=>x.classList.remove('connecting')); } });
+  });
+  fxLines();
+}
+function fxConnect(from,to){ if(from===to||FX.conns.find(c=>c.from===from&&c.to===to)) return;
+  FX.conns.push({from,to,cfg:{tarefa:'',pode:[]}}); fxRender(); fxSalvarDebounce(); fxCfgAbrir(FX.conns.length-1); }
+function fxCenter(id){ const el=document.querySelector('.fxnode[data-id="'+id+'"]'); if(!el) return null; return {x:el.offsetLeft+el.offsetWidth/2,y:el.offsetTop+el.offsetHeight/2}; }
+function fxLines(){ const svg=document.getElementById('fxlines'); if(!svg) return;
+  svg.innerHTML=FX.conns.map((c,i)=>{ const a=fxCenter(c.from),b=fxCenter(c.to); if(!a||!b) return ''; const mx=(a.x+b.x)/2;
+    return '<path d="M '+a.x+' '+a.y+' C '+mx+' '+a.y+', '+mx+' '+b.y+', '+b.x+' '+b.y+'" fill="none" stroke="var(--accent)" stroke-width="2.5" onclick="fxCfgAbrir('+i+')"/>'; }).join('');
+}
+function fxDrag(el,n){ let sx,sy,ox,oy,down=false,moved=false;
+  const dn=(e)=>{ if(e.target.classList.contains('port')||e.target.classList.contains('fxdel')) return; down=true;moved=false; const p=e.touches?e.touches[0]:e; sx=p.clientX;sy=p.clientY;ox=n.x||el.offsetLeft;oy=n.y||el.offsetTop; if(e.cancelable)e.preventDefault(); };
+  const mv=(e)=>{ if(!down) return; const p=e.touches?e.touches[0]:e; const dx=p.clientX-sx,dy=p.clientY-sy; if(Math.abs(dx)+Math.abs(dy)>3) moved=true; n.x=Math.max(0,ox+dx); n.y=Math.max(0,oy+dy); el.style.left=n.x+'px'; el.style.top=n.y+'px'; fxLines(); };
+  const up=()=>{ if(down&&moved) fxSalvarDebounce(); down=false; };
+  el.addEventListener('pointerdown',dn); window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
+}
+function fxCfgAbrir(i){ const c=FX.conns[i]; if(!c) return; const to=FX.nodes.find(n=>n.id===c.to); const from=FX.nodes.find(n=>n.id===c.from); if(!to) return;
+  const app=FX_APPS[to.ref]||{acoes:[]}; const box=document.getElementById('fxCfg');
+  box.innerHTML='<div class="card" style="margin-top:12px;border-color:var(--accent)"><h3>'+esc((from&&from.nome)||'Agente')+' → '+esc(to.nome)+'</h3>'+
+    '<div class="field"><label>O que esse agente faz nesse app</label><textarea id="fxTarefa" rows="2" placeholder="ex: responde clientes no WhatsApp, qualifica e agenda reunião">'+esc(c.cfg.tarefa||'')+'</textarea></div>'+
+    '<div class="hint" style="margin-bottom:6px">O que ele PODE fazer:</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+
+    (app.acoes||[]).map(a=>'<label class="mchip" style="cursor:pointer"><input type="checkbox" '+(((c.cfg.pode)||[]).indexOf(a)>=0?'checked':'')+' onchange="fxPode('+i+',this.checked,this.dataset.a)" data-a="'+esc(a)+'" style="width:auto;margin-right:4px">'+esc(a)+'</label>').join('')+'</div>'+
+    '<div class="row" style="margin-top:10px"><button class="btn primary" onclick="fxCfgSalvar('+i+')">Salvar config</button><button class="btn ghost" onclick="fxConnDel('+i+')">Remover conexão</button></div></div>';
+  box.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function fxPode(i,on,acao){ const c=FX.conns[i]; if(!c) return; c.cfg.pode=c.cfg.pode||[]; if(on){ if(c.cfg.pode.indexOf(acao)<0)c.cfg.pode.push(acao); } else c.cfg.pode=c.cfg.pode.filter(x=>x!==acao); }
+function fxCfgSalvar(i){ const c=FX.conns[i]; if(!c) return; const t=document.getElementById('fxTarefa'); if(t)c.cfg.tarefa=(t.value||'').trim(); fxSalvar(); document.getElementById('fxCfg').innerHTML=''; }
+function fxConnDel(i){ FX.conns.splice(i,1); document.getElementById('fxCfg').innerHTML=''; fxRender(); fxSalvarDebounce(); }
+let _fxT=null; function fxSalvarDebounce(){ clearTimeout(_fxT); _fxT=setTimeout(fxSalvar,800); }
+async function fxSalvar(){ try{ await fetch('/fluxo/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nodes:FX.nodes,conns:FX.conns})}); piscarSave('FLUXO'); }catch(e){} }
 function agRenderLista(){
   const box=document.getElementById('agLista'); if(!box) return;
   box.innerHTML=_AGS.map(a=>`<div style="border:1px solid var(--line2);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">
