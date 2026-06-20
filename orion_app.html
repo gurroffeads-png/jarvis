@@ -87,7 +87,12 @@ button{font-family:inherit;cursor:pointer}
 /* ===================== MAIN / VIEWS ===================== */
 .main{position:fixed;top:56px;left:0;right:0;bottom:0;overflow:hidden}
 .view{display:none;height:100%;overflow:auto}
-.view.active{display:block}
+.view.active{display:block;animation:viewIn .32s cubic-bezier(.2,.7,.3,1)}
+@keyframes viewIn{from{opacity:0;transform:translateY(10px) scale(.995)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.view.active{animation:none}}
+/* cards sobem suave ao aparecer */
+.page .card{animation:cardIn .35s ease both}
+@keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .page{max-width:920px;margin:0 auto;padding:32px 24px 60px}
 .page h1{font-size:24px;font-weight:700;margin-bottom:6px}
 .page .sub{color:var(--dim);font-size:14px;margin-bottom:26px}
@@ -371,6 +376,17 @@ button{font-family:inherit;cursor:pointer}
 .comp-house.show{display:flex}
 .comp-house:hover{transform:scale(1.1)}
 @media(max-width:640px){.comp-house{width:42px;height:42px;bottom:78px;right:12px}}
+/* estado pensando (chat + mascote) */
+.bubble.pensando{display:inline-flex;align-items:center;gap:9px;color:var(--dim)}
+.bubble.pensando .pdots{display:inline-flex;gap:4px}
+.bubble.pensando .pdots i{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;animation:pdot 1s infinite ease-in-out}
+.bubble.pensando .pdots i:nth-child(2){animation-delay:.15s}
+.bubble.pensando .pdots i:nth-child(3){animation-delay:.3s}
+@keyframes pdot{0%,80%,100%{transform:scale(.5);opacity:.4}40%{transform:scale(1);opacity:1}}
+.bubble.pensando .pstatus{font-size:13px;opacity:.9}
+.companion.thinking svg{animation:compThink 1.1s infinite ease-in-out!important}
+.companion.thinking{filter:drop-shadow(0 0 18px var(--accent))}
+@keyframes compThink{0%,100%{transform:scale(1)}50%{transform:scale(1.13)}}
 .companion.show{display:block}
 .companion:hover{transform:scale(1.07)}
 .companion svg{width:100%;height:100%;animation:compFloat 3.2s ease-in-out infinite}
@@ -888,12 +904,28 @@ async function enviar(){
   i.value=''; growInp(i);
   // mostra imediatamente a fala do usuario (o poll confirma depois)
   addMsg('user',txt,'local');
+  pensandoMostrar();   // ele NUNCA some: mostra que esta pensando/pesquisando
   try{ const j=await (await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frase:txt, conv_id:CONV_ID, modo:_MODO, esforco:_ESF})})).json();
+    pensandoTirar();
     if(j && j.reply){ addMsg('assistant', j.reply); speakOrion(j.reply); compReage(); funilAtivacao(); }
     if(j && j.conv_id){ CONV_ID=j.conv_id; convAtualizarLista(); }
     tokensCarregar(); }
-  catch(e){ addMsg('assistant','Nao consegui falar com o servidor, senhor.'); }
+  catch(e){ pensandoTirar(); addMsg('assistant','Nao consegui falar com o servidor, senhor.'); }
 }
+function pensandoMostrar(){
+  const wel=document.getElementById('welcome'); if(wel) wel.remove();
+  const inner=document.getElementById('chatInner'); if(!inner) return;
+  const m=document.createElement('div'); m.className='msg assistant'; m.id='pensandoMsg';
+  m.innerHTML='<div class="who">O</div><div class="bubble pensando"><span class="pdots"><i></i><i></i><i></i></span><span class="pstatus">Pensando...</span></div>';
+  inner.appendChild(m); const sc=document.getElementById('chatScroll'); if(sc) sc.scrollTop=sc.scrollHeight;
+  const fases=['Pensando...','Pesquisando na web...','Conferindo as fontes...','Escrevendo a resposta...'];
+  let i=0; const st=m.querySelector('.pstatus');
+  m._t=setInterval(()=>{ i=(i+1)%fases.length; if(st) st.textContent=fases[i]; }, 1500);
+  compPensando(true);
+}
+function pensandoTirar(){ const m=document.getElementById('pensandoMsg'); if(m){ clearInterval(m._t); m.remove(); } compPensando(false); }
+function compPensando(on){ const c=document.getElementById('companion'); if(c) c.classList.toggle('thinking',!!on);
+  if(on){ try{ compFala('Trabalhando nisso, '+compNome()+'...', 9000); }catch(e){} } }
 // ===== VOZ NO NAVEGADOR (celular/web): Orion fala as respostas + ditado por voz =====
 let VOZ_ON = (localStorage.getItem('orion_voz')==='1');
 let _vozBR = null;
@@ -1189,12 +1221,12 @@ const SKINS={
   coach:{nome:'Coach',free:false,stops:['#fff7cc','#eab308','#713f12'],glow:'#eab308',hat:'cap',roupa:'#5b3410'},
   // animais + especiais (com roupinha tambem)
   estrela:{nome:'Estrela',free:true,stops:['#fff7c2','#ffd54a','#b8860b'],glow:'#ffd54a',emoji:'⭐',roupa:'#8a6d00'},
-  gato:{nome:'Gato',free:false,stops:['#ffe9d6','#ff9d5c','#9a4a1c'],glow:'#ff9d5c',emoji:'🐱',roupa:'#9a4a1c'},
-  cachorro:{nome:'Cachorro',free:false,stops:['#efe2cf','#c79a63','#6b4a23'],glow:'#c79a63',emoji:'🐶',roupa:'#6b4a23'},
-  coruja:{nome:'Coruja',free:false,stops:['#e7e2ff','#9b8cff','#4c3a9e'],glow:'#9b8cff',emoji:'🦉',roupa:'#4c3a9e'},
-  raposa:{nome:'Raposa',free:false,stops:['#ffe0cf','#ff7a3c','#a83a10'],glow:'#ff7a3c',emoji:'🦊',roupa:'#a83a10'},
-  leao:{nome:'Leão',free:false,stops:['#fff0c7','#f0a93c','#8a5a12'],glow:'#f0a93c',emoji:'🦁',roupa:'#8a5a12'},
-  panda:{nome:'Panda',free:false,stops:['#f3f3f3','#cfd3da','#5a5f6a'],glow:'#cfd3da',emoji:'🐼',roupa:'#2b2f36'},
+  gato:{nome:'Gato',free:false,stops:['#ffe9d6','#ff9d5c','#9a4a1c'],glow:'#ff9d5c',animal:'gato',roupa:'#9a4a1c'},
+  cachorro:{nome:'Cachorro',free:false,stops:['#efe2cf','#c79a63','#6b4a23'],glow:'#c79a63',animal:'cachorro',roupa:'#6b4a23'},
+  coruja:{nome:'Coruja',free:false,stops:['#e7e2ff','#9b8cff','#4c3a9e'],glow:'#9b8cff',animal:'coruja',roupa:'#4c3a9e'},
+  raposa:{nome:'Raposa',free:false,stops:['#ffe0cf','#ff7a3c','#a83a10'],glow:'#ff7a3c',animal:'raposa',roupa:'#a83a10'},
+  leao:{nome:'Leão',free:false,stops:['#fff0c7','#f0a93c','#8a5a12'],glow:'#f0a93c',animal:'leao',roupa:'#8a5a12'},
+  panda:{nome:'Panda',free:false,stops:['#f6f6f6','#e3e6ea','#9aa0aa'],glow:'#e3e6ea',animal:'panda',roupa:'#2b2f36'},
   // VIP / plano personalizado
   coroa:{nome:'Realeza',vip:true,stops:['#fff3c0','#ffd24a','#a87b00'],glow:'#ffd24a',hat:'crown',roupa:'#6b1f9e',tie:true},
   diamante:{nome:'Diamante',vip:true,stops:['#d6f7ff','#5ee0ff','#0a7fa3'],glow:'#5ee0ff',emoji:'💎',roupa:'#0a7fa3'},
@@ -1207,14 +1239,43 @@ function _hatSVG(t){
   if(t==='crown') return '<g><path d="M34 22 L34 12 L42 18 L50 8 L58 18 L66 12 L66 22 Z" fill="#ffd24a" stroke="#b8860b" stroke-width="1"/><circle cx="50" cy="8" r="2" fill="#ff5a6e"/><circle cx="34" cy="12" r="1.6" fill="#5ee0ff"/><circle cx="66" cy="12" r="1.6" fill="#5ee0ff"/><rect x="34" y="22" width="32" height="3" fill="#e7b800"/></g>';
   return '';
 }
+function _animalParts(s){
+  const t=s.animal; if(!t) return {back:'',mid:'',top:''};
+  const C=s.stops[1], D=s.stops[2];
+  if(t==='gato') return {
+    back:`<polygon points="29,24 24,5 47,18" fill="${C}"/><polygon points="71,24 76,5 53,18" fill="${C}"/>`, mid:'',
+    top:`<polygon points="31,21 30,11 42,18" fill="#ffd2de"/><polygon points="69,21 70,11 58,18" fill="#ffd2de"/><path d="M47 57 l3 3 l3 -3 z" fill="#ff7a9c"/>`+
+        `<g stroke="#0a0c11" stroke-width="0.9" opacity=".5"><line x1="17" y1="55" x2="33" y2="56"/><line x1="17" y1="60" x2="33" y2="59"/><line x1="83" y1="55" x2="67" y2="56"/><line x1="83" y1="60" x2="67" y2="59"/></g>`};
+  if(t==='cachorro') return {
+    back:`<ellipse cx="22" cy="45" rx="9" ry="17" fill="${D}"/><ellipse cx="78" cy="45" rx="9" ry="17" fill="${D}"/>`,
+    mid:`<ellipse cx="50" cy="61" rx="13" ry="9" fill="#fff" opacity=".22"/>`, top:`<ellipse cx="50" cy="58" rx="4.5" ry="3.4" fill="#2a1d14"/>`};
+  if(t==='coruja') return {
+    back:`<polygon points="31,22 26,4 43,17" fill="${D}"/><polygon points="69,22 74,4 57,17" fill="${D}"/>`,
+    mid:`<circle cx="43" cy="49" r="9" fill="#fff" opacity=".5"/><circle cx="57" cy="49" r="9" fill="#fff" opacity=".5"/>`, top:`<polygon points="47,55 53,55 50,61" fill="#f0a93c"/>`};
+  if(t==='raposa') return {
+    back:`<polygon points="28,24 22,4 47,18" fill="${C}"/><polygon points="72,24 78,4 53,18" fill="${C}"/>`,
+    mid:`<path d="M30 56 Q50 73 70 56 Q50 65 30 56 Z" fill="#fff" opacity=".4"/>`,
+    top:`<polygon points="31,20 28,9 42,17" fill="#fff"/><polygon points="69,20 72,9 58,17" fill="#fff"/><path d="M47 58 l3 3 l3 -3 z" fill="#1a1a1a"/>`};
+  if(t==='leao') return {
+    back:`<g fill="${D}">`+Array.from({length:13}).map((_,i)=>{const a=i/13*6.2832;return `<circle cx="${(50+34*Math.cos(a)).toFixed(1)}" cy="${(50+34*Math.sin(a)).toFixed(1)}" r="7.5"/>`;}).join('')+`</g>`,
+    mid:'', top:`<ellipse cx="50" cy="58" rx="4" ry="3" fill="#3a2410"/><path d="M44 62 q6 4 12 0" fill="none" stroke="#3a2410" stroke-width="1.4"/>`};
+  if(t==='panda') return {
+    back:`<circle cx="30" cy="22" r="9" fill="#1c1c1c"/><circle cx="70" cy="22" r="9" fill="#1c1c1c"/>`,
+    mid:`<ellipse cx="42" cy="50" rx="6.5" ry="8.5" fill="#1c1c1c" transform="rotate(-15 42 50)"/><ellipse cx="58" cy="50" rx="6.5" ry="8.5" fill="#1c1c1c" transform="rotate(15 58 50)"/>`,
+    top:`<circle cx="42" cy="50" r="2.6" fill="#fff"/><circle cx="58" cy="50" r="2.6" fill="#fff"/><circle cx="42" cy="50" r="1.3" fill="#0a0c11"/><circle cx="58" cy="50" r="1.3" fill="#0a0c11"/><ellipse cx="50" cy="58" rx="3.4" ry="2.4" fill="#1c1c1c"/>`};
+  return {back:'',mid:'',top:''};
+}
 function _mascInner(s,gid){
   const roupa=s.roupa?('<path d="M22 97 Q22 75 50 75 Q78 75 78 97 Z" fill="'+s.roupa+'" stroke="rgba(0,0,0,.18)" stroke-width="0.8"/>'+(s.tie?'<polygon points="50,78 45.5,92 54.5,92" fill="#c0392b"/><rect x="47.5" y="76" width="5" height="4" fill="#c0392b"/>':'<path d="M44 78 L50 85 L56 78" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.4"/>')):'';
   const defs='<defs><radialGradient id="'+gid+'" cx="50%" cy="34%" r="72%"><stop offset="0%" stop-color="'+s.stops[0]+'"/><stop offset="46%" stop-color="'+s.stops[1]+'"/><stop offset="100%" stop-color="'+s.stops[2]+'"/></radialGradient></defs>';
   const orb='<circle cx="50" cy="50" r="38" fill="'+s.glow+'" opacity=".18"/><circle cx="50" cy="50" r="30" fill="url(#'+gid+')"/><ellipse cx="50" cy="40" rx="12" ry="6" fill="#fff" fill-opacity=".18"/>';
-  const face='<circle cx="43" cy="50" r="3.4" fill="#0a0c11"/><circle cx="57" cy="50" r="3.4" fill="#0a0c11"/><circle cx="44.2" cy="48.6" r="1" fill="#fff"/><circle cx="58.2" cy="48.6" r="1" fill="#fff"/><path d="M43 57 q7 5 14 0" fill="none" stroke="#0a0c11" stroke-width="2.2" stroke-linecap="round"/>';
+  // panda usa olhos proprios (no top); os outros usam os olhos padrao
+  const face=(s.animal==='panda')?'<path d="M44 58 q6 4 12 0" fill="none" stroke="#0a0c11" stroke-width="1.6" stroke-linecap="round" opacity="0"/>'
+    :'<circle cx="43" cy="50" r="3.4" fill="#0a0c11"/><circle cx="57" cy="50" r="3.4" fill="#0a0c11"/><circle cx="44.2" cy="48.6" r="1" fill="#fff"/><circle cx="58.2" cy="48.6" r="1" fill="#fff"/><path d="M43 57 q7 5 14 0" fill="none" stroke="#0a0c11" stroke-width="2.2" stroke-linecap="round"/>';
+  const ap=_animalParts(s);
   const hat=_hatSVG(s.hat);
-  const badge=(!s.hat&&s.emoji)?'<circle cx="77" cy="38" r="11" fill="#0a0c11" opacity=".5"/><text x="77" y="43" font-size="13" text-anchor="middle">'+s.emoji+'</text>':'';
-  return defs+roupa+orb+face+hat+badge;
+  const badge=(!s.hat&&!s.animal&&s.emoji)?'<circle cx="77" cy="38" r="11" fill="#0a0c11" opacity=".5"/><text x="77" y="43" font-size="13" text-anchor="middle">'+s.emoji+'</text>':'';
+  return defs+roupa+ap.back+orb+ap.mid+face+ap.top+hat+badge;
 }
 let _PREFS={skin:'cosmo',tema:'espaco',wakeword:''};
 function planoLib(){ return (USER&&USER.plano)||'free'; }
@@ -1448,7 +1509,7 @@ async function renderConfig(){
     <div id="payTest" class="hint" style="margin-top:8px"></div>
   </div>`:''}
   <div class="card"><h3>Sobre</h3>
-    <div class="hint">Orion v1.4 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
+    <div class="hint">Orion v1.5 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
   </div>
   <div class="row"><button class="btn primary" onclick="salvarConfig()">Salvar configuracoes</button></div>`;
   if(CFG.cerebro) document.getElementById('cfgCerebro').value=CFG.cerebro;

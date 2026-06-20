@@ -214,7 +214,8 @@ def session_uid(tok):
 # ======================= CEREBRO NA NUVEM (OpenAI-compativel) =======================
 PERSONA = ("Voce e o Orion, um assistente pessoal de IA em portugues do Brasil. "
            "Educado, direto, prestativo, com leve tom de mordomo (trata por 'senhor' as vezes). "
-           "Nunca use o caractere travessao. Respostas curtas e uteis. Seu nome e sempre Orion.")
+           "Nunca use o caractere travessao. Respostas curtas e uteis. Seu nome e sempre Orion. "
+           "NUNCA invente informacao: se nao tiver certeza de um fato/numero/data, pesquise (buscar_web) ou diga que nao sabe. Honestidade acima de tudo.")
 # base/modelo do cerebro: env -> gcfg (admin) -> default Gemini. Da pra trocar sem redeploy.
 def llm_base():  return (gcfg("llm_base","LLM_BASE_URL") or LLM_BASE).rstrip("/")
 def llm_model(): return gcfg("llm_model","LLM_MODEL") or LLM_MODEL
@@ -2325,16 +2326,15 @@ class H(BaseHTTPRequestHandler):
                 extra = (" MANCHETES REAIS DE HOJE (resuma a partir DESTAS, NAO diga que nao achou): "
                          + " || ".join(f"[{c}] {t}" for c,t in _NOTICIAS[:10]) + ".")
             sysp = (PERSONA + f" Hoje e {hoje}." + (f" Trate o usuario como '{trat}'." if trat else "") + memoria_contexto(u["id"]) + conhecimento_contexto() + extra
-                    + " Seja capaz, util e direto. Para fatos atuais, precos, eventos ou o que nao souber, USE a ferramenta buscar_web e cite a fonte. Nunca invente numeros. Se houver manchetes acima, resuma a partir delas.")
+                    + " REGRA ABSOLUTA: e PROIBIDO inventar qualquer informacao (nomes, numeros, precos, datas, fatos, links). Se a pergunta pede um dado factual, atual ou que voce nao tem CERTEZA, use a ferramenta buscar_web ANTES de responder e cite a fonte (com o link). Se a busca nao trouxer o dado, diga claramente que nao encontrou em vez de chutar. Conversa casual pode responder direto, mas nada de fabricar fato.")
             conv_atual = next((c for c in _convs_get(u["id"]) if c["id"]==conv_id), None)
             hist = (conv_atual or {}).get("msgs",[])[-12:-1]   # historico sem a ultima msg (que ja vai abaixo)
             modo = d.get("modo") or "avancado"; esforco = d.get("esforco") or "normal"
             aviso = ""
             if not tokens_tem_saldo(u):   # tokens acabaram: cai pro modo rapido e avisa (paid pode recarregar)
                 modo = "rapido"; aviso = "\n\n_Seus tokens do mês acabaram, senhor. Respondendo no modo Rápido. Recarregue em Conta para liberar os modos avançados._"
-            usar_web = precisa_web(frase) or _esforco_ok(u, esforco)=="profundo"
-            if usar_web: reply = cloud_chat_web(sysp, hist + [{"role":"user","content":frase}], 700, u, modo, esforco)
-            else: reply = cloud_chat(sysp, hist + [{"role":"user","content":frase}], 700, u, modo)
+            # SEMPRE pelo caminho com busca (o modelo decide quando pesquisar) pra nunca inventar fato.
+            reply = cloud_chat_web(sysp, hist + [{"role":"user","content":frase}], 700, u, modo, esforco)
             if aviso: reply = reply + aviso
             conv_anexar(u["id"], conv_id, {"role":"assistant","content":reply})
             threading.Thread(target=aprender_bg, args=(u["id"], frase), daemon=True).start()   # 1 chamada: memoria + conhecimento
