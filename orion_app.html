@@ -96,7 +96,9 @@ button{font-family:inherit;cursor:pointer}
 .page{max-width:920px;margin:0 auto;padding:32px 24px 60px}
 .page h1{font-size:24px;font-weight:700;margin-bottom:6px}
 .page .sub{color:var(--dim);font-size:14px;margin-bottom:26px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin-bottom:16px}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0) 40%),var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin-bottom:16px;
+  box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 10px 30px -12px rgba(0,0,0,.55);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.card:hover{transform:translateY(-2px);box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 18px 40px -14px rgba(0,0,0,.65);border-color:var(--line2)}
 .card h3{font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .field{margin-bottom:16px}
 .field label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;font-weight:600;letter-spacing:.3px}
@@ -105,11 +107,12 @@ button{font-family:inherit;cursor:pointer}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
 .field .hint{font-size:11.5px;color:var(--faint);margin-top:6px;line-height:1.5}
 .btn{padding:10px 18px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);color:var(--text);
-  font-size:13.5px;font-weight:600;transition:.15s}
-.btn:hover{background:var(--panel3);border-color:var(--accent)}
-.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#0a0c11}
-.btn.primary:hover{filter:brightness(1.08)}
-.btn.ghost{background:none}
+  font-size:13.5px;font-weight:600;transition:transform .12s ease,filter .15s ease,background .15s ease,border-color .15s ease,box-shadow .15s ease}
+.btn:hover{background:var(--panel3);border-color:var(--accent);transform:translateY(-1px)}
+.btn:active{transform:translateY(1px) scale(.98)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#0a0c11;box-shadow:0 6px 16px -6px var(--accent)}
+.btn.primary:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 10px 22px -8px var(--accent)}
+.btn.ghost{background:none;box-shadow:none}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .range-row{display:flex;align-items:center;gap:12px}
 .range-row input[type=range]{flex:1;accent-color:var(--accent)}
@@ -127,7 +130,7 @@ button{font-family:inherit;cursor:pointer}
 .chat-inner{max-width:780px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 .welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
   gap:18px;margin:auto;padding:30px 10px}
-.orb-wrap{width:150px;height:150px;position:relative}
+.orb-wrap{width:150px;height:150px;position:relative;transition:transform .25s ease-out;transform-style:preserve-3d;will-change:transform}
 #orb{width:100%;height:100%}
 .welcome h2{font-size:26px;font-weight:700}
 .welcome p{color:var(--dim);font-size:14.5px;max-width:440px;line-height:1.6}
@@ -1120,6 +1123,10 @@ function stars(){
 }
 let _starsRz=null;
 addEventListener('resize',()=>{ clearTimeout(_starsRz); _starsRz=setTimeout(initStars,200); });
+// parallax 3D no orb da home (segue o cursor de leve)
+addEventListener('mousemove',(e)=>{ if(VIEW!=='home') return; const ow=document.querySelector('.orb-wrap'); if(!ow) return;
+  const rx=((e.clientY-innerHeight/2)/(innerHeight/2))*-7, ry=((e.clientX-innerWidth/2)/(innerWidth/2))*7;
+  ow.style.transform='perspective(620px) rotateX('+rx.toFixed(1)+'deg) rotateY('+ry.toFixed(1)+'deg)'; });
 
 // ===================== CONFIG =====================
 const VOZ_LABEL={'pt-PT-DuarteNeural':'Duarte (PT, mordomo)','pt-PT-RaquelNeural':'Raquel (PT)',
@@ -1509,7 +1516,7 @@ async function renderConfig(){
     <div id="payTest" class="hint" style="margin-top:8px"></div>
   </div>`:''}
   <div class="card"><h3>Sobre</h3>
-    <div class="hint">Orion v1.5 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
+    <div class="hint">Orion v1.6 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
   </div>
   <div class="row"><button class="btn primary" onclick="salvarConfig()">Salvar configuracoes</button></div>`;
   if(CFG.cerebro) document.getElementById('cfgCerebro').value=CFG.cerebro;
