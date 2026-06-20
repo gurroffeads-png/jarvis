@@ -134,9 +134,11 @@ def _hash(s):
     return hashlib.sha256(("orion_"+s).encode()).hexdigest()
 def _pub(u):
     plano = "adm" if u["criador"] else ("business" if u["socio"] else (u["plano"] or "free"))
+    vipd = get_blob(u["id"], "vip", {}) or {}
     return {"id":u["id"],"nome":u["nome"],"nome_real":u["nome_real"] or "","tratamento":u["tratamento"] or "",
             "email":u["email"] or "","foto":u["foto"] or "","plano":plano,
-            "socio":bool(u["socio"]),"criador":bool(u["criador"]),"origem":u["origem"] or "local","convidado":False}
+            "socio":bool(u["socio"]),"criador":bool(u["criador"]),"origem":u["origem"] or "local","convidado":False,
+            "vip":bool(vipd.get("vip")), "custom":bool(vipd.get("plano_id")), "plano_nome":vipd.get("nome","")}
 def get_user(uid):
     with _db() as c:
         r = c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
@@ -177,6 +179,16 @@ def set_blob(uid, k, obj):
     with _db() as c:
         c.execute("INSERT OR REPLACE INTO kv(user_id,k,v) VALUES(?,?,?)", (uid,k,json.dumps(obj,ensure_ascii=False)))
         c.commit()
+
+# ---- rate limit simples por IP (anti brute-force no login) ----
+_RATE = {}
+def _rate_ok(ip, chave="login", lim=15, win=300):
+    import time as _t; agora=_t.time(); k=(ip or "?")+":"+chave
+    arr=[t for t in _RATE.get(k,[]) if agora-t < win]
+    if len(arr) >= lim: _RATE[k]=arr; return False
+    arr.append(agora); _RATE[k]=arr
+    if len(_RATE) > 5000: _RATE.clear()   # nao deixa crescer infinito
+    return True
 
 # ======================= SESSAO (cookie assinado) =======================
 def _sign(data):
@@ -1166,6 +1178,23 @@ def lic_registrar(plano):
     except Exception as e:
         print("[lic_registrar]", e)
     return chave
+def lic_validar_publico(chave):
+    """Validacao de licenca pra o DESKTOP (sem login). A NUVEM e a autoridade: o segredo so mora aqui.
+    Consome a chave de venda (uso unico). Master continua ilimitada."""
+    chave = (chave or "").strip().upper().replace(" ", "")
+    pl = lic_check(chave)
+    if not pl: return {"ok":False,"erro":"Chave invalida."}
+    if _is_master(chave): return {"ok":True,"plano":pl,"master":True}
+    try:
+        with _db() as c:
+            row = c.execute("SELECT * FROM licencas WHERE chave=?", (chave,)).fetchone()
+            if not row: return {"ok":False,"erro":"Chave nao encontrada. Gere pelo painel/keygen."}
+            if row["usada"]: return {"ok":False,"erro":"Essa chave ja foi usada."}
+            c.execute("UPDATE licencas SET usada=1, usada_em=? WHERE chave=?",
+                      (datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), chave)); c.commit()
+        return {"ok":True,"plano":pl}
+    except Exception as e:
+        print("[lic_validar]", e); return {"ok":False,"erro":"Erro ao validar."}
 def lic_ativar(u, chave):
     chave = (chave or "").strip().upper().replace(" ", "")
     pl = lic_check(chave)
@@ -1309,6 +1338,54 @@ def _set_plano(uid, plano):
         return True
     except Exception as e:
         print("[set_plano]", e); return False
+
+# ---- PLANOS PERSONALIZADOS (VIP): o dono monta planos sob medida e atribui a clientes ----
+def _user_por_ident(ident):
+    ident=(ident or "").strip()
+    with _db() as c:
+        if ident.isdigit():
+            r=c.execute("SELECT * FROM users WHERE id=?", (int(ident),)).fetchone()
+            if r: return r
+        return c.execute("SELECT * FROM users WHERE email=?", (ident.lower(),)).fetchone()
+def planos_custom_get(): return get_blob(1, "planos_custom", []) or []
+def plano_custom_salvar(d):
+    lst=planos_custom_get(); pid=d.get("id") or int(time.time()*1000)
+    base=d.get("base") if d.get("base") in ("pro","trading","trafego","business") else "business"
+    p={"id":pid,"nome":(d.get("nome") or "").strip()[:60] or "Plano VIP","preco":float(d.get("preco") or 0),
+       "base":base,"tokens":int(d.get("tokens") or 0),"notas":(d.get("notas") or "").strip()[:400]}
+    lst=[x for x in lst if x.get("id")!=pid]; lst.insert(0,p); set_blob(1,"planos_custom",lst)
+    return {"ok":True,"plano":p,"planos":lst}
+def plano_custom_apagar(pid):
+    set_blob(1,"planos_custom",[x for x in planos_custom_get() if x.get("id")!=pid]); return {"ok":True,"planos":planos_custom_get()}
+def vip_atribuir(d):
+    alvo=_user_por_ident(d.get("alvo",""))
+    if not alvo: return {"ok":False,"erro":"Nao achei esse cliente (use e-mail ou ID), senhor."}
+    p=next((x for x in planos_custom_get() if x.get("id")==d.get("plano_id")), None)
+    if not p: return {"ok":False,"erro":"Plano personalizado nao encontrado."}
+    _set_plano(alvo["id"], p["base"])
+    set_blob(alvo["id"],"vip",{"vip":True,"plano_id":p["id"],"nome":p["nome"],"notas":(d.get("notas") or "").strip()[:400],
+                               "contato":(d.get("contato") or "").strip()[:80],"desde":time.time()})
+    if p.get("tokens"):
+        try: tokens_add({"id":alvo["id"],"plano":p["base"],"criador":False,"socio":False}, p["tokens"])
+        except Exception as e: print("[vip tokens]", e)
+    return {"ok":True,"cliente":alvo["nome"],"plano":p["nome"]}
+def vip_remover(d):
+    alvo=_user_por_ident(d.get("alvo",""))
+    if not alvo: return {"ok":False,"erro":"Nao achei."}
+    set_blob(alvo["id"],"vip",{}); return {"ok":True}
+def vips_listar():
+    out=[]
+    with _db() as c:
+        rows=c.execute("SELECT user_id, v FROM kv WHERE k='vip'").fetchall()
+        for r in rows:
+            try:
+                vd=json.loads(r["v"]) if isinstance(r["v"],str) else r["v"]
+                if not vd.get("vip"): continue
+                u=c.execute("SELECT nome,email,plano FROM users WHERE id=?", (r["user_id"],)).fetchone()
+                out.append({"id":r["user_id"],"nome":(u["nome"] if u else "?"),"email":(u["email"] if u else ""),
+                            "plano_nome":vd.get("nome",""),"base":(u["plano"] if u else ""),"notas":vd.get("notas",""),"contato":vd.get("contato","")})
+            except Exception: pass
+    return {"ok":True,"vips":out,"planos":planos_custom_get()}
 
 def _pp_token(cid, sec, mode):
     base = "https://api-m.paypal.com" if mode=="live" else "https://api-m.sandbox.paypal.com"
@@ -1863,8 +1940,16 @@ class H(BaseHTTPRequestHandler):
         if isinstance(body,str): body = body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", ctype if "charset" in ctype else ctype+"; charset=utf-8")
+        # cabecalhos de seguranca (blindagem contra clickjacking / sniffing / vazamento de referer)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        self.send_header("Permissions-Policy", "geolocation=(), microphone=(self), camera=(self)")
+        https = self.headers.get("X-Forwarded-Proto","").lower()=="https"
+        if https: self.send_header("Strict-Transport-Security", "max-age=15552000")
         if cookie is not None:
-            self.send_header("Set-Cookie", f"orion_sess={cookie}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000")
+            sec = "; Secure" if https else ""
+            self.send_header("Set-Cookie", f"orion_sess={cookie}; Path=/; HttpOnly; SameSite=Lax{sec}; Max-Age=2592000")
         self.end_headers(); self.wfile.write(body)
     def _file(self, path, ctype):
         try: self._send(open(path,"rb").read(), 200, ctype)
@@ -1872,6 +1957,10 @@ class H(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length",0) or 0)
+            if n > 16*1024*1024:   # teto de 16MB: barra payload gigante (anti-abuso/DoS)
+                try: self.rfile.read(min(n, 1024))
+                except Exception: pass
+                return {}
             return json.loads(self.rfile.read(n).decode()) if n else {}
         except Exception: return {}
     def _user(self):
@@ -2029,6 +2118,7 @@ class H(BaseHTTPRequestHandler):
             else: self._send({"ok":False,"erro":"faca login"})
         elif path == "/admin/tokens": self._send(tokens_admin_resumo() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/integra": self._send(integra_admin_status() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/vips": self._send(vips_listar() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/brain/opcoes": self._send({"providers":BRAIN_PROVIDERS, "atual": (get_blob(u["id"],"brain",{}) if u else {})})
         elif path == "/estado":
             self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
@@ -2092,6 +2182,8 @@ class H(BaseHTTPRequestHandler):
             except INTEGRITY_ERRORS:
                 self._send({"ok":False,"erro":"Ja existe conta com esse e-mail."})
         elif path == "/usuario/login":
+            _ip = (self.headers.get("X-Forwarded-For","").split(",")[0].strip() or (self.client_address[0] if self.client_address else "?"))
+            if not _rate_ok(_ip, "login"): self._send({"ok":False,"erro":"Muitas tentativas. Espere uns minutos, senhor."}); return
             ident = (d.get("login") or d.get("nome") or "").strip()
             with _db() as c:
                 if "@" in ident:
@@ -2211,6 +2303,10 @@ class H(BaseHTTPRequestHandler):
         # ---- licenca / pagamento / admin ----
         elif path == "/licenca/ativar":
             self._send(lic_ativar(u, d.get("chave")) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/licenca/validar":   # publico (desktop valida sem ter o segredo)
+            _ip=(self.headers.get("X-Forwarded-For","").split(",")[0].strip() or (self.client_address[0] if self.client_address else "?"))
+            if not _rate_ok(_ip,"lic",30,600): self._send({"ok":False,"erro":"Muitas tentativas. Espere uns minutos."}); return
+            self._send(lic_validar_publico(d.get("chave")))
         elif path == "/licenca/gerar":
             if u and u["criador"] and (d.get("plano") in ("pro","trading","trafego","business","adm")):
                 self._send({"ok":True,"plano":d["plano"],"chave":lic_registrar(d["plano"])})
@@ -2219,6 +2315,12 @@ class H(BaseHTTPRequestHandler):
             self._send(checkout_tokens(u, d.get("pacote",""), d.get("provedor"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
         elif path == "/admin/integra/salvar":
             self._send(gcfg_salvar(d) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path in ("/admin/plano/salvar","/admin/plano/apagar","/admin/vip/atribuir","/admin/vip/remover"):
+            if not (u and u["criador"]): self._send({"ok":False,"erro":"so o dono"}); return
+            if path=="/admin/plano/salvar": self._send(plano_custom_salvar(d))
+            elif path=="/admin/plano/apagar": self._send(plano_custom_apagar(d.get("id")))
+            elif path=="/admin/vip/atribuir": self._send(vip_atribuir(d))
+            else: self._send(vip_remover(d))
         elif path in ("/empresa/criar","/empresa/trocar","/empresa/apagar"):
             if not (u and plano_de(u) in ("trading","business","adm","trafego")):
                 self._send({"ok":False,"erro":"Perfis de empresa nos planos Trading, Trafego, Business e ADM, senhor."}); return

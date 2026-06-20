@@ -363,6 +363,14 @@ button{font-family:inherit;cursor:pointer}
 .companion{position:fixed;right:18px;bottom:84px;z-index:140;width:60px;height:60px;cursor:grab;
   display:none;filter:drop-shadow(0 6px 18px rgba(91,140,255,.45));transition:transform .2s;touch-action:none;user-select:none}
 .companion:active{cursor:grabbing}
+.companion .comp-x{position:absolute;top:-6px;left:-6px;width:20px;height:20px;border-radius:50%;background:var(--panel2);border:1px solid var(--line2);color:var(--dim);font-size:12px;line-height:16px;text-align:center;cursor:pointer;display:none;padding:0;z-index:2}
+.companion:hover .comp-x{display:block}
+.companion.pop svg{animation:compPopOut .55s cubic-bezier(.2,1.4,.4,1)}
+@keyframes compPopOut{0%{transform:scale(.2) translateY(20px);opacity:0}60%{transform:scale(1.12) translateY(-4px)}100%{transform:scale(1) translateY(0);opacity:1}}
+.comp-house{position:fixed;right:18px;bottom:84px;z-index:140;width:46px;height:46px;border-radius:14px;background:var(--panel);border:1px solid var(--line2);display:none;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35);transition:transform .15s}
+.comp-house.show{display:flex}
+.comp-house:hover{transform:scale(1.1)}
+@media(max-width:640px){.comp-house{width:42px;height:42px;bottom:78px;right:12px}}
 .companion.show{display:block}
 .companion:hover{transform:scale(1.07)}
 .companion svg{width:100%;height:100%;animation:compFloat 3.2s ease-in-out infinite}
@@ -724,6 +732,7 @@ button{font-family:inherit;cursor:pointer}
     <circle cx="44.2" cy="48.6" r="1" fill="#fff"/><circle cx="58.2" cy="48.6" r="1" fill="#fff"/>
     <path d="M43 57 q7 5 14 0" fill="none" stroke="#0a0c11" stroke-width="2.2" stroke-linecap="round"/></svg>
 </div>
+<div id="compHouse" class="comp-house" onclick="compSair()" title="Trazer o Orion de volta">🏠</div>
 
 <script>
 // ===================== ESTADO =====================
@@ -1138,6 +1147,10 @@ const TEMAS={
   vinho:{nome:'Vinho',free:false,vars:{'--accent':'#b06bff','--accent2':'#7c3aed'}},
   matrix:{nome:'Matrix',free:false,vars:{'--accent':'#33ff99','--accent2':'#10b981'}},
   carbon:{nome:'Carbono',free:true,vars:{'--accent':'#e7eaf0','--accent2':'#9aa6bf'}},
+  // temas por vertical
+  trading:{nome:'Trading',free:false,vars:{'--accent':'#16c784','--accent2':'#0e9f6e'}},
+  trafego:{nome:'Tráfego',free:false,vars:{'--accent':'#ff7a18','--accent2':'#e8590c'}},
+  corporate:{nome:'Business',free:false,vars:{'--accent':'#3b82f6','--accent2':'#1e40af'}},
 };
 const SKINS={
   // elementais
@@ -1158,12 +1171,24 @@ const SKINS={
   chef:{nome:'Chef',free:false,stops:['#fee2e2','#ef4444','#7f1d1d'],glow:'#ef4444',hat:'toque',roupa:'#f3f4f6'},
   designer:{nome:'Designer',free:false,stops:['#fae8ff','#d946ef','#701a75'],glow:'#d946ef',emoji:'🎨',roupa:'#701a75'},
   coach:{nome:'Coach',free:false,stops:['#fff7cc','#eab308','#713f12'],glow:'#eab308',hat:'cap',roupa:'#5b3410'},
+  // animais + especiais
+  estrela:{nome:'Estrela',free:true,stops:['#fff7c2','#ffd54a','#b8860b'],glow:'#ffd54a',emoji:'⭐'},
+  gato:{nome:'Gato',free:false,stops:['#ffe9d6','#ff9d5c','#9a4a1c'],glow:'#ff9d5c',emoji:'🐱'},
+  cachorro:{nome:'Cachorro',free:false,stops:['#efe2cf','#c79a63','#6b4a23'],glow:'#c79a63',emoji:'🐶'},
+  coruja:{nome:'Coruja',free:false,stops:['#e7e2ff','#9b8cff','#4c3a9e'],glow:'#9b8cff',emoji:'🦉'},
+  raposa:{nome:'Raposa',free:false,stops:['#ffe0cf','#ff7a3c','#a83a10'],glow:'#ff7a3c',emoji:'🦊'},
+  leao:{nome:'Leão',free:false,stops:['#fff0c7','#f0a93c','#8a5a12'],glow:'#f0a93c',emoji:'🦁'},
+  panda:{nome:'Panda',free:false,stops:['#f3f3f3','#cfd3da','#5a5f6a'],glow:'#cfd3da',emoji:'🐼'},
+  // VIP / plano personalizado
+  coroa:{nome:'Realeza',vip:true,stops:['#fff3c0','#ffd24a','#a87b00'],glow:'#ffd24a',hat:'crown'},
+  diamante:{nome:'Diamante',vip:true,stops:['#d6f7ff','#5ee0ff','#0a7fa3'],glow:'#5ee0ff',emoji:'💎'},
 };
 let _gidN=0;
 function _hatSVG(t){
   if(t==='mortar') return '<g><rect x="36" y="15" width="28" height="5" rx="1.5" fill="#1b2230"/><polygon points="50,5 72,14 50,23 28,14" fill="#0f1626"/><line x1="70" y1="14" x2="70" y2="27" stroke="#fbbf24" stroke-width="1.6"/><circle cx="70" cy="28" r="2.2" fill="#fbbf24"/></g>';
   if(t==='toque') return '<g><rect x="40" y="16" width="20" height="9" rx="2" fill="#fff" stroke="#dfe3ea" stroke-width="0.6"/><circle cx="43" cy="13" r="7" fill="#fff"/><circle cx="57" cy="13" r="7" fill="#fff"/><circle cx="50" cy="9" r="8" fill="#fff"/></g>';
   if(t==='cap') return '<g><path d="M33 21 Q50 5 67 21 Z" fill="#1f2937"/><path d="M31 21 q-4 1 -2 4 q6 -1 9 -2 Z" fill="#111827"/><circle cx="50" cy="10" r="2" fill="#4b5563"/></g>';
+  if(t==='crown') return '<g><path d="M34 22 L34 12 L42 18 L50 8 L58 18 L66 12 L66 22 Z" fill="#ffd24a" stroke="#b8860b" stroke-width="1"/><circle cx="50" cy="8" r="2" fill="#ff5a6e"/><circle cx="34" cy="12" r="1.6" fill="#5ee0ff"/><circle cx="66" cy="12" r="1.6" fill="#5ee0ff"/><rect x="34" y="22" width="32" height="3" fill="#e7b800"/></g>';
   return '';
 }
 function _mascInner(s,gid){
@@ -1177,12 +1202,12 @@ function _mascInner(s,gid){
 }
 let _PREFS={skin:'cosmo',tema:'espaco',wakeword:''};
 function planoLib(){ return (USER&&USER.plano)||'free'; }
-function podeUsar(it){ return it.free || planoLib()!=='free'; }
+function podeUsar(it){ if(it.vip) return planoLib()==='adm' || !!(USER&&(USER.vip||USER.custom)); return it.free || planoLib()!=='free'; }
 function aplicaTema(id){ const t=TEMAS[id]||TEMAS.espaco; const r=document.documentElement;
   ['--accent','--accent2'].forEach(k=>r.style.removeProperty(k));
   Object.entries(t.vars||{}).forEach(([k,v])=>r.style.setProperty(k,v)); }
 function mascoteSVG(skin){ const s=SKINS[skin]||SKINS.cosmo; return '<svg viewBox="0 0 100 100">'+_mascInner(s,'cg'+(_gidN++))+'</svg>'; }
-function aplicaMascote(skin){ const c=document.getElementById('companion'); if(c) c.innerHTML=mascoteSVG(skin); }
+function aplicaMascote(skin){ const c=document.getElementById('companion'); if(c) c.innerHTML=mascoteSVG(skin)+'<button class="comp-x" onclick="event.stopPropagation();compEsconder()" title="Esconder">&#10005;</button>'; }
 function aplicaAparencia(){ aplicaTema(_PREFS.tema); aplicaMascote(_PREFS.skin); }
 async function carregaPrefs(){
   try{ const lp=JSON.parse(localStorage.getItem('orion_prefs')||'{}'); _PREFS=Object.assign(_PREFS,lp); }catch(e){}
@@ -1985,13 +2010,63 @@ function renderConta(){
   </div>
   ${conv?'':'<div class="card"><h3>Tokens do Orion</h3><div class="hint" style="margin-bottom:10px">Os tokens medem o uso da IA. Cada plano tem uma cota mensal. Se acabar, voce pode recarregar avulso (planos pagos) ou usar o modo Rapido (gratis).</div><div id="tokBox">carregando...</div></div>'}
   ${(u.criador)?'<div class="card"><h3>Admin - Integrações (linkar tudo)</h3><div class="hint" style="margin-bottom:10px">So o dono ve. Cole aqui as chaves de cada integração pra ligar no servidor (vale como alternativa às variáveis de ambiente). Verde = ligado.</div><div id="integraAdmin">carregando...</div></div>':''}
+  ${(u.criador)?'<div class="card"><h3>Admin - Planos personalizados (VIP)</h3><div class="hint" style="margin-bottom:10px">Monte planos sob medida pro cliente (base + tokens extras) e atribua. Os VIPs ganham as skins de Realeza/Diamante.</div><div id="vipAdmin">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Admin - custo de tokens</h3><div class="hint" style="margin-bottom:10px">Custo real de API por usuario (so o dono ve).</div><div id="tokAdmin">carregando...</div></div>':''}
   ${conv?'':'<div class="card"><h3>WhatsApp</h3><div class="hint" style="margin-bottom:10px">Ligue seu numero pra conversar com o Orion direto no WhatsApp (respostas autonomas).</div><div id="waBox">carregando...</div></div>'}
   ${(u.criador)?'<div class="card" id="adminCard"><h3>Admin - contas e planos</h3><div class="hint" style="margin-bottom:10px">So o dono ve isto. Marque voce e seu socio como Business vitalicio, ou defina o plano de qualquer conta.</div><div id="adminLista">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Conhecimento global do Orion</h3><div class="hint" style="margin-bottom:10px">Fatos GERAIS que o Orion aprendeu (sem dado pessoal, filtrado). So o dono ve/limpa.</div><div id="conhecBox">carregando...</div></div>':''}`;
   carregarUso(); carregarWa(); if(!conv) carregarTokens();
-  if(u.criador){ carregarAdmin(); carregarConhec(); carregarTokAdmin(); carregarIntegraAdmin(); }
+  if(u.criador){ carregarAdmin(); carregarConhec(); carregarTokAdmin(); carregarIntegraAdmin(); carregarVipAdmin(); }
 }
+let _PLANOS_CUSTOM=[];
+async function carregarVipAdmin(){
+  const box=document.getElementById('vipAdmin'); if(!box) return;
+  let r={vips:[],planos:[]}; try{ r=await (await fetch('/admin/vips')).json(); }catch(e){}
+  if(!r.ok){ box.innerHTML='<div class="hint">Indisponivel.</div>'; return; }
+  _PLANOS_CUSTOM=r.planos||[];
+  const planos=(r.planos||[]).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><div><b>${esc(p.nome)}</b> <span class="hint">base ${esc(p.base)} · R$ ${(p.preco||0).toFixed(2)} · ${(p.tokens||0).toLocaleString('pt-BR')} tokens extra</span></div><button class="btn ghost" onclick="planoCustomApagar(${p.id})">&#10005;</button></div>`).join('')||'<div class="hint">Nenhum plano personalizado ainda.</div>';
+  const opt=(r.planos||[]).map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('');
+  const vips=(r.vips||[]).map(v=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><div><b>${esc(v.nome)}</b> <span class="hint">${esc(v.email||'')} · ${esc(v.plano_nome)} (base ${esc(v.base)})</span>${v.notas?('<div class="hint">'+esc(v.notas)+'</div>'):''}</div><button class="btn ghost" onclick="vipRemover('${esc(v.email||v.id)}')">remover</button></div>`).join('')||'<div class="hint">Nenhum cliente VIP ainda.</div>';
+  box.innerHTML=`
+    <div style="font-weight:600;margin-bottom:6px">Criar plano sob medida</div>
+    <div class="tg-order" style="flex-wrap:wrap;gap:6px">
+      <input id="pcNome" placeholder="Nome (ex: VIP Agência)" style="flex:1;min-width:130px">
+      <input id="pcPreco" type="number" placeholder="Preço R$" style="width:100px">
+      <select id="pcBase"><option value="business">base Business</option><option value="trafego">base Tráfego</option><option value="trading">base Trading</option><option value="pro">base Pro</option></select>
+      <input id="pcTokens" type="number" placeholder="Tokens extra" style="width:120px">
+      <button class="btn primary" onclick="planoCustomSalvar()">Criar</button>
+    </div>
+    <input id="pcNotas" placeholder="Observações do plano (opcional)" style="width:100%;margin-top:6px">
+    <div style="margin-top:12px;font-weight:600;margin-bottom:6px">Planos personalizados</div>${planos}
+    <div style="margin-top:14px;font-weight:600;margin-bottom:6px">Atribuir a um cliente</div>
+    <div class="tg-order" style="flex-wrap:wrap;gap:6px">
+      <input id="vipAlvo" placeholder="E-mail ou ID do cliente" style="flex:1;min-width:150px">
+      <select id="vipPlano">${opt||'<option>crie um plano primeiro</option>'}</select>
+      <input id="vipContato" placeholder="Contato (opcional)" style="flex:1;min-width:120px">
+      <button class="btn primary" onclick="vipAtribuir()">Atribuir</button>
+    </div>
+    <input id="vipNotas" placeholder="Notas do cliente VIP (opcional)" style="width:100%;margin-top:6px">
+    <div id="vipMsg" class="hint" style="margin-top:6px"></div>
+    <div style="margin-top:14px;font-weight:600;margin-bottom:6px">Clientes VIP</div>${vips}`;
+}
+async function planoCustomSalvar(){
+  const n=id=>parseFloat(document.getElementById(id).value)||0;
+  const nome=document.getElementById('pcNome').value.trim(); if(!nome){ return; }
+  await fetch('/admin/plano/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,preco:n('pcPreco'),base:document.getElementById('pcBase').value,tokens:n('pcTokens'),notas:document.getElementById('pcNotas').value.trim()})});
+  piscarSave('PLANO VIP'); carregarVipAdmin();
+}
+async function planoCustomApagar(id){ await fetch('/admin/plano/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); carregarVipAdmin(); }
+async function vipAtribuir(){
+  const m=document.getElementById('vipMsg'); const alvo=document.getElementById('vipAlvo').value.trim();
+  const plano_id=parseInt(document.getElementById('vipPlano').value); if(!alvo||!plano_id){ m.style.color='var(--warn)'; m.textContent='Informe o cliente e o plano.'; return; }
+  m.textContent='Atribuindo...';
+  try{ const r=await (await fetch('/admin/vip/atribuir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({alvo,plano_id,contato:document.getElementById('vipContato').value.trim(),notas:document.getElementById('vipNotas').value.trim()})})).json();
+    if(r.ok){ m.style.color='var(--good)'; m.textContent='✓ '+esc(r.cliente)+' agora é '+esc(r.plano)+'.'; carregarVipAdmin(); }
+    else { m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui.'; }
+  }catch(e){ m.textContent='Sem conexao.'; }
+}
+async function vipRemover(alvo){ if(!confirm('Remover o status VIP deste cliente?')) return;
+  await fetch('/admin/vip/remover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({alvo})}); carregarVipAdmin(); }
 async function carregarIntegraAdmin(){
   const box=document.getElementById('integraAdmin'); if(!box) return;
   let r={integracoes:[]}; try{ r=await (await fetch('/admin/integra')).json(); }catch(e){}
@@ -3530,6 +3605,7 @@ let _compTimer=null, _compIdle=null;
 function compNome(){ return (USER && (USER.tratamento || USER.nome)) || 'senhor'; }
 function compAtivar(){
   if(!USER || USER.convidado) return;
+  if(localStorage.getItem('orion_comp_hidden')==='1'){ const h=document.getElementById('compHouse'); if(h) h.classList.add('show'); return; }
   const c=document.getElementById('companion'); if(c) c.classList.add('show');
   compDragInit();
   clearTimeout(_compIdle);
@@ -3564,6 +3640,18 @@ function compFala(txt, ms){
   clearTimeout(b._t); b._t=setTimeout(()=>b.classList.remove('show'), ms||5000);
 }
 function compFecha(){ const b=document.getElementById('compBubble'); if(b) b.classList.remove('show'); }
+function compEsconder(){
+  localStorage.setItem('orion_comp_hidden','1'); compFecha();
+  const c=document.getElementById('companion'); if(c) c.classList.remove('show');
+  const h=document.getElementById('compHouse'); if(h) h.classList.add('show');
+}
+function compSair(){   // tira da casinha com animacao
+  localStorage.setItem('orion_comp_hidden','0');
+  const h=document.getElementById('compHouse'); if(h) h.classList.remove('show');
+  const c=document.getElementById('companion'); if(!c) return;
+  c.classList.add('show','pop'); setTimeout(()=>c.classList.remove('pop'),600);
+  compFala('Voltei, '+compNome()+'! 🚀', 3500);
+}
 let _compDragged=false;
 function compDragInit(){
   const c=document.getElementById('companion'); if(!c||c._dragInit) return; c._dragInit=true;
