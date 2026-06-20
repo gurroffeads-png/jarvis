@@ -101,6 +101,16 @@ footer .col h5{font-size:13px;color:var(--faint);text-transform:uppercase;letter
 footer .col a{display:block;color:var(--dim);font-size:14px;margin-bottom:8px}
 footer .col a:hover{color:var(--text)}
 footer .bottom{text-align:center;color:var(--faint);font-size:13px;margin-top:40px;border-top:1px solid var(--line);padding-top:24px}
+.menu-btn{background:none;border:1px solid var(--line);color:var(--text);font-size:18px;width:40px;height:40px;border-radius:10px;margin-left:10px;cursor:pointer}
+.site-scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:59;opacity:0;pointer-events:none;transition:.2s}
+.site-scrim.on{opacity:1;pointer-events:auto}
+.site-side{position:fixed;top:0;right:-320px;width:300px;max-width:85vw;height:100%;z-index:60;background:var(--b1,#12131a);border-left:1px solid var(--line);transition:right .25s;display:flex;flex-direction:column;padding:14px 12px;overflow:auto}
+.site-side.on{right:0}
+.site-side .ss-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.site-side .ss-x{background:none;border:none;color:var(--dim);font-size:24px;cursor:pointer}
+.site-side .ss-sec{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint,#5b6478);margin:14px 6px 4px}
+.site-side a{display:block;padding:10px 12px;border-radius:9px;color:var(--text);font-size:15px;text-decoration:none}
+.site-side a:hover{background:rgba(255,255,255,.06)}
 </style>
 </head>
 <body>
@@ -116,7 +126,25 @@ footer .bottom{text-align:center;color:var(--faint);font-size:13px;margin-top:40
   <div class="sp"></div>
   <a class="btn" href="/" style="padding:9px 18px;font-size:14px">Entrar</a>
   <a class="btn primary" href="/" style="padding:9px 18px;font-size:14px">Comecar gratis</a>
+  <button class="menu-btn" onclick="siteMenu(true)" aria-label="Menu">&#9776;</button>
 </div></nav>
+<div class="site-scrim" id="siteScrim" onclick="siteMenu(false)"></div>
+<aside class="site-side" id="siteSide">
+  <div class="ss-head"><span class="logo"><img src="/logo" alt="Orion">Orion</span><button class="ss-x" onclick="siteMenu(false)">&times;</button></div>
+  <div class="ss-sec">Conta</div>
+  <a href="/">Entrar</a>
+  <a href="/">Criar conta</a>
+  <a href="#" onclick="abrirApp('conta');return false">Gerenciar contas</a>
+  <div class="ss-sec">App</div>
+  <a href="#baixar" onclick="siteMenu(false)">Baixar / Instalar</a>
+  <a href="#precos" onclick="siteMenu(false)">Planos</a>
+  <div class="ss-sec">Ajuda</div>
+  <a href="#suporte" onclick="siteMenu(false)">Suporte</a>
+  <a href="#contato" onclick="siteMenu(false)">Contato</a>
+  <div class="ss-sec">Legal</div>
+  <a href="#" onclick="abrirApp('termos');return false">Termos de Uso</a>
+  <a href="#" onclick="abrirApp('privacidade');return false">Politica de Uso e Privacidade</a>
+</aside>
 
 <header class="hero" id="top">
   <canvas id="stars"></canvas>
@@ -126,9 +154,10 @@ footer .bottom{text-align:center;color:var(--faint);font-size:13px;margin-top:40
     <p>Converse por voz ou texto. O Orion escreve seus documentos, organiza sua rotina, lembra do que importa e conecta seus apps. Tudo em um lugar.</p>
     <div class="cta">
       <a class="btn primary lg" href="/">Comecar de graca</a>
+      <a class="btn lg" href="/">📲 Instalar o app</a>
       <a class="btn lg" href="#precos">Ver planos</a>
     </div>
-    <div class="note">Gratis pra sempre no plano Start. Sem cartao pra comecar.</div>
+    <div class="note">Gratis pra sempre no plano Free. Instala direto pelo navegador (sem loja, sem cartao).</div>
   </div>
 </header>
 
@@ -255,6 +284,36 @@ footer .bottom{text-align:center;color:var(--faint);font-size:13px;margin-top:40
   </div>
 </section>
 
+<section class="section" id="baixar">
+  <div class="wrap" style="text-align:center">
+    <div class="kicker">Baixar</div>
+    <h2>Leve o Orion pro seu celular</h2>
+    <p class="lead">De graca, sem loja de apps. Aponte a camera do celular pro QR, ou abra o link e escolha "Instalar app".</p>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:24px">
+      <img id="qrDl" alt="QR pra baixar o Orion" style="width:200px;height:200px;border-radius:14px;background:#fff;padding:10px">
+      <div style="text-align:left;max-width:340px;font-size:14px;color:var(--dim);line-height:1.7">
+        <b style="color:var(--t0,#fff)">Android:</b> abra no Chrome e toque em "Instalar app".<br>
+        <b style="color:var(--t0,#fff)">iPhone:</b> abra no Safari → Compartilhar → "Adicionar a Tela de Inicio".<br>
+        <b style="color:var(--t0,#fff)">Computador:</b> aparece um icone de instalar na barra de endereco.<br>
+        <a class="btn primary" href="/" style="margin-top:14px;display:inline-block">Abrir o Orion</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="suporte">
+  <div class="wrap">
+    <div class="kicker">Ajuda</div>
+    <h2>Suporte e contato</h2>
+    <div class="plans" style="grid-template-columns:1fr 1fr;margin-top:30px">
+      <div class="plan"><div class="pn">Suporte</div><p class="pdesc">Duvida, problema ou sugestao? A gente responde rapido.</p>
+        <a class="btn" href="mailto:gurroffeads@gmail.com?subject=Suporte%20Orion">Falar com o suporte</a></div>
+      <div class="plan" id="contato"><div class="pn">Contato</div><p class="pdesc">Parcerias, vendas e assuntos comerciais.</p>
+        <a class="btn" href="mailto:gurroffeads@gmail.com?subject=Contato%20Orion">gurroffeads@gmail.com</a></div>
+    </div>
+  </div>
+</section>
+
 <section class="section">
   <div class="wrap">
     <div class="kicker">Duvidas</div>
@@ -299,7 +358,11 @@ footer .bottom{text-align:center;color:var(--faint);font-size:13px;margin-top:40
 const APP_URL = "https://orion-l89a.onrender.com";
 // ===================================================================
 function appHref(){ return APP_URL || "#lista"; }   // sem app no ar -> manda pra lista de espera
-function abrirApp(){ location.href = appHref(); }
+function abrirApp(v){ const base=(APP_URL||"").replace(/\/$/,""); location.href = base ? (base+(v?("/?ir="+v):"")) : "#precos"; }
+function siteMenu(open){ var s=document.getElementById('siteSide'), sc=document.getElementById('siteScrim');
+  if(s) s.classList.toggle('on', !!open); if(sc) sc.classList.toggle('on', !!open); }
+document.addEventListener('DOMContentLoaded', ()=>{ var q=document.getElementById('qrDl');
+  if(q) q.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data='+encodeURIComponent(appHref()); });
 // liga todos os botoes "do app" (Entrar, Comecar, Assinar) ao APP_URL
 document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('a').forEach(a=>{
@@ -311,7 +374,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
   // botoes de plano: vao direto pra tela de Planos do app (se ja tiver app no ar)
   document.querySelectorAll('.js-plano').forEach(a=>{
-    a.setAttribute('href', APP_URL ? (APP_URL.replace(/\\/$/,'') + '/?ir=planos') : '#lista');
+    a.setAttribute('href', APP_URL ? (APP_URL.replace(/\/$/,'') + '/?ir=planos') : '#lista');
     if(APP_URL) a.setAttribute('target','_blank');
   });
 });
