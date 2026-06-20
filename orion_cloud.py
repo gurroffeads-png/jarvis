@@ -31,8 +31,10 @@ SECRET = os.environ.get("ORION_SECRET", "orion-cloud-dev-troque-em-producao")
 DB_PATH = os.environ.get("ORION_DB", os.path.join(PASTA, "orion_cloud.db"))
 
 LLM_KEY = os.environ.get("LLM_API_KEY", "")
-LLM_BASE = os.environ.get("LLM_BASE_URL", "https://api.groq.com/openai/v1")
-LLM_MODEL = os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile")
+# DEFAULT do cerebro base = Gemini Flash (gratis, sem cartao, melhor em pt-BR que o Groq).
+# O endpoint do Gemini e OpenAI-compativel. Da pra trocar tudo pelo Admin Integracoes (gcfg) sem redeploy.
+LLM_BASE = os.environ.get("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+LLM_MODEL = os.environ.get("LLM_MODEL", "gemini-2.0-flash")
 
 HTML_FILE = os.path.join(PASTA, "orion_app.html")
 SITE_FILE = os.path.join(PASTA, "orion_site.html")
@@ -213,12 +215,16 @@ def session_uid(tok):
 PERSONA = ("Voce e o Orion, um assistente pessoal de IA em portugues do Brasil. "
            "Educado, direto, prestativo, com leve tom de mordomo (trata por 'senhor' as vezes). "
            "Nunca use o caractere travessao. Respostas curtas e uteis. Seu nome e sempre Orion.")
+# base/modelo do cerebro: env -> gcfg (admin) -> default Gemini. Da pra trocar sem redeploy.
+def llm_base():  return (gcfg("llm_base","LLM_BASE_URL") or LLM_BASE).rstrip("/")
+def llm_model(): return gcfg("llm_model","LLM_MODEL") or LLM_MODEL
 # ---- MODOS (modelos) + ESFORCO: o usuario escolhe; planos liberam os melhores ----
-# Todos os modelos sao GRATIS (Groq). Modelos pagos so via BYOK (chave do proprio cliente).
+# DEFAULT = Gemini Flash (gratis, melhor em pt-BR). model=None usa o cerebro base (llm_model()).
+# Modelos de outros provedores entram via BYOK (chave do proprio cliente).
 MODOS = {
-  "rapido":    {"nome":"Rápido",     "model":"llama-3.1-8b-instant",          "pago":False, "emoji":"⚡"},
-  "avancado":  {"nome":"Avançado",   "model":"llama-3.3-70b-versatile",       "pago":False, "emoji":"✨"},
-  "raciocinio":{"nome":"Raciocínio", "model":"deepseek-r1-distill-llama-70b", "pago":True,  "emoji":"🧠"},
+  "rapido":    {"nome":"Rápido",     "model":"gemini-2.0-flash-lite", "pago":False, "emoji":"⚡"},
+  "avancado":  {"nome":"Avançado",   "model":None,                    "pago":False, "emoji":"✨"},
+  "raciocinio":{"nome":"Raciocínio", "model":None,                    "pago":True,  "emoji":"🧠"},
 }
 ESFORCOS = {"normal":{"nome":"Normal","pago":False},"profundo":{"nome":"Profundo","pago":True}}
 def _modo_ok(u, modo):
@@ -233,13 +239,22 @@ def _llm_resolve(u, modo=None):
     """Decide (key, base, model, fonte). BYOK (chave do cliente) tem prioridade e nao consome token nosso."""
     pref = (get_blob(u["id"], "brain", {}) or {}) if u else {}
     if pref.get("key"):
-        return (pref["key"], (pref.get("base") or LLM_BASE).rstrip("/"), pref.get("model") or LLM_MODEL, "byok")
+        return (pref["key"], (pref.get("base") or llm_base()).rstrip("/"), pref.get("model") or llm_model(), "byok")
     mm = MODOS.get(_modo_ok(u, modo) if u else (modo or "avancado"), MODOS["avancado"])
-    return (llm_key(), LLM_BASE.rstrip("/"), mm["model"], "managed")
+    return (llm_key(), llm_base(), (mm.get("model") or llm_model()), "managed")
 def _llm_post(base, key, body, timeout=45):
-    req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(),
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
-    return json.loads(urllib.request.urlopen(req, timeout=timeout).read().decode())
+    """POST OpenAI-compativel. Retry/backoff no 429 (rate limit do free tier do Gemini) pra nao quebrar o chat."""
+    last = None
+    for i in range(3):
+        try:
+            req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(),
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
+            return json.loads(urllib.request.urlopen(req, timeout=timeout).read().decode())
+        except urllib.error.HTTPError as e:
+            last = e
+            if e.code == 429 and i < 2: time.sleep(1.2*(i+1)); continue   # espera e tenta de novo
+            raise
+    if last: raise last
 
 def cloud_chat(system, messages, max_tokens=700, u=None, modo=None):
     key, base, model, fonte = _llm_resolve(u, modo)
@@ -296,6 +311,7 @@ def _user_brain(u):
     pref = get_blob(u["id"], "brain", {}) or {}
     return (pref.get("key") or llm_key(), (pref.get("base") or LLM_BASE).rstrip("/"), pref.get("model") or LLM_MODEL)
 BRAIN_PROVIDERS = [
+    {"id":"gemini","nome":"Gemini Flash (Google) - gratis, melhor que Groq","base":"https://generativelanguage.googleapis.com/v1beta/openai/","modelo":"gemini-2.0-flash","como":"aistudio.google.com -> API key (gratis, sem cartao)"},
     {"id":"groq","nome":"Groq (Llama 3.3 70B) - gratis","base":"https://api.groq.com/openai/v1","modelo":"llama-3.3-70b-versatile","como":"console.groq.com -> API Keys (gratis, rapido)"},
     {"id":"openai","nome":"OpenAI (GPT-4o-mini)","base":"https://api.openai.com/v1","modelo":"gpt-4o-mini","como":"platform.openai.com (pago)"},
     {"id":"together","nome":"Together AI (Llama)","base":"https://api.together.xyz/v1","modelo":"meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo","como":"api.together.ai (US$1 free)"},
@@ -381,6 +397,30 @@ def tokens_admin_resumo():
     linhas=sorted(g.values(), key=lambda x:-x.get("custo",0))
     return {"ok":True, "usuarios":linhas[:100], "custo_total":round(sum(x.get("custo",0) for x in g.values()),4),
             "tokens_total":sum(x.get("tin",0)+x.get("tout",0) for x in g.values())}
+
+# ======================= FUNIL + ATRIBUICAO DE ANUNCIO (UTM) =======================
+_FUNIL_EVENTOS = ("visita","signup","ativacao","paywall","pagou")
+def funil_registrar(evento, utm=None, uid=None):
+    evento=(evento or "").strip()
+    if evento not in _FUNIL_EVENTOS: return
+    try:
+        utm=utm or {}; g=get_blob(1,"funil",[]) or []
+        g.append({"ts":time.time(),"evento":evento,"uid":uid,
+                  "source":(str(utm.get("source") or "")[:60]),"medium":(str(utm.get("medium") or "")[:60]),"campaign":(str(utm.get("campaign") or "")[:80])})
+        set_blob(1,"funil",g[-8000:])
+    except Exception as e: print("[funil]", e)
+def funil_pagou(uid):
+    funil_registrar("pagou", get_blob(uid,"utm",{}) or {}, uid)
+def funil_resumo():
+    g=get_blob(1,"funil",[]) or []
+    por_evento={e:0 for e in _FUNIL_EVENTOS}; por_fonte={}
+    for e in g:
+        por_evento[e["evento"]]=por_evento.get(e["evento"],0)+1
+        s=e.get("source") or "(direto)"
+        d=por_fonte.setdefault(s, {"visita":0,"signup":0,"ativacao":0,"paywall":0,"pagou":0})
+        if e["evento"] in d: d[e["evento"]]+=1
+    fontes=sorted([dict(fonte=k, **v) for k,v in por_fonte.items()], key=lambda x:(-x["pagou"], -x["signup"]))[:50]
+    return {"ok":True,"por_evento":por_evento,"fontes":fontes,"total":len(g)}
 
 _FEEDS=[("MERCADO","https://www.infomoney.com.br/feed/"),
         ("BRASIL","https://g1.globo.com/rss/g1/economia/"),
@@ -1224,7 +1264,10 @@ def gcfg(key, env_key):
     v = (_gcfg_all().get(key) or "").strip()
     return v if v else os.environ.get(env_key, "")
 INTEGRA_ADMIN = [
-  {"id":"llm_key","nome":"Groq (cérebro grátis)","campos":[{"k":"llm_key","env":"LLM_API_KEY","ph":"gsk_... (console.groq.com)","secret":True}]},
+  {"id":"llm_key","nome":"Cérebro de IA (Gemini Flash grátis — padrão)","campos":[
+      {"k":"llm_key","env":"LLM_API_KEY","ph":"chave do Google AI Studio (aistudio.google.com, grátis)","secret":True},
+      {"k":"llm_base","env":"LLM_BASE_URL","ph":"base URL (vazio = Gemini)"},
+      {"k":"llm_model","env":"LLM_MODEL","ph":"modelo (vazio = gemini-2.0-flash)"}]},
   {"id":"mercadopago","nome":"Mercado Pago","campos":[{"k":"mp_token","env":"MP_ACCESS_TOKEN","ph":"APP_USR-... (Access Token)","secret":True}]},
   {"id":"paypal","nome":"PayPal","campos":[{"k":"paypal_client_id","env":"PAYPAL_CLIENT_ID","ph":"Client ID"},{"k":"paypal_secret","env":"PAYPAL_SECRET","ph":"Secret","secret":True},{"k":"paypal_mode","env":"PAYPAL_MODE","ph":"sandbox ou live"}]},
   {"id":"meta","nome":"Meta Ads (Facebook/Instagram App)","campos":[{"k":"meta_app_id","env":"META_APP_ID","ph":"App ID"},{"k":"meta_app_secret","env":"META_APP_SECRET","ph":"App Secret","secret":True}]},
@@ -1261,7 +1304,10 @@ def integra_admin_status():
 def checkout(u, plano, provedor, burl):
     plano = (plano or "pro").lower()
     if plano not in PLANOS_PRECO or plano == "free": return {"ok":False,"msg":"Plano invalido."}
-    if not provedor: provedor = "mp" if mp_token() else ("paypal" if pp_creds()[0] else None)
+    # PayPal so entra se estiver LIVE (sandbox nunca cobra de cliente real)
+    _pp_ok = bool(pp_creds()[0]) and pp_creds()[2]=="live"
+    if provedor=="paypal" and not _pp_ok: provedor = "mp" if mp_token() else None
+    if not provedor: provedor = "mp" if mp_token() else ("paypal" if _pp_ok else None)
     if provedor == "mp" and mp_token():
         try:
             body = {"items":[{"title":PLANOS_NOME[plano],"quantity":1,"unit_price":PLANOS_PRECO[plano],"currency_id":"BRL"}],
@@ -1295,7 +1341,10 @@ def checkout_tokens(u, pacote_id, provedor, burl):
     if plano_de(u)=="free": return {"ok":False,"msg":"A recarga de tokens e pros planos pagos, senhor. Veja os planos."}
     pac = next((p for p in TOKEN_PACOTES if p["id"]==pacote_id), None)
     if not pac: return {"ok":False,"msg":"Pacote invalido."}
-    if not provedor: provedor = "mp" if mp_token() else ("paypal" if pp_creds()[0] else None)
+    # PayPal so entra se estiver LIVE (sandbox nunca cobra de cliente real)
+    _pp_ok = bool(pp_creds()[0]) and pp_creds()[2]=="live"
+    if provedor=="paypal" and not _pp_ok: provedor = "mp" if mp_token() else None
+    if not provedor: provedor = "mp" if mp_token() else ("paypal" if _pp_ok else None)
     ref = f"tk:{pac['id']}:{u['id']}"
     if provedor == "mp" and mp_token():
         try:
@@ -1414,7 +1463,10 @@ def confirmar_pagamento(pid, provedor):
                 cr=_creditar_tokens_ref(cust);  return cr if cr else {"ok":False,"erro":"Falha ao creditar."}
             if r.get("status") == "COMPLETED" and ":" in cust:
                 plano,uid = cust.split(":",1)
-                if _set_plano(uid, plano): return {"ok":True,"plano":plano,"user":_pub(get_user(int(uid)))}
+                if _set_plano(uid, plano):
+                    try: funil_pagou(int(uid))
+                    except Exception: pass
+                    return {"ok":True,"plano":plano,"user":_pub(get_user(int(uid)))}
             return {"ok":False,"erro":f"Pagamento PayPal nao confirmado ({r.get('status')})."}
         else:  # mercado pago
             if not mp_token(): return {"ok":False,"erro":"Mercado Pago nao configurado."}
@@ -1425,7 +1477,10 @@ def confirmar_pagamento(pid, provedor):
                 cr=_creditar_tokens_ref(ext);  return cr if cr else {"ok":False,"erro":"Falha ao creditar."}
             if r.get("status") == "approved" and ":" in ext:
                 plano,uid = ext.split(":",1)
-                if _set_plano(uid, plano): return {"ok":True,"plano":plano,"user":_pub(get_user(int(uid)))}
+                if _set_plano(uid, plano):
+                    try: funil_pagou(int(uid))
+                    except Exception: pass
+                    return {"ok":True,"plano":plano,"user":_pub(get_user(int(uid)))}
             return {"ok":False,"erro":f"Pagamento ainda nao aprovado ({r.get('status')})."}
     except urllib.error.HTTPError as e:
         print("[confirmar]", e.code); return {"ok":False,"erro":f"Erro ao confirmar ({e.code})."}
@@ -1746,6 +1801,8 @@ def mp_webhook(pid, topic=""):
             if parts[0] == "sub" and len(parts) >= 3:
                 plano, uid = parts[1], parts[2]
                 if _set_plano(uid, plano):
+                    try: funil_pagou(int(uid))
+                    except Exception: pass
                     notificar(int(uid), "Pagamento confirmado", f"Plano {PLANOS_NOME.get(plano,plano).upper()} ativo, senhor.")
             elif len(parts) >= 2:
                 plano, uid = parts[0], parts[1]; _set_plano(uid, plano)
@@ -1780,13 +1837,12 @@ def gerar_imagem(u, prompt, w=1024, h=1024):
 # ======================= VISAO (Groq, le grafico/foto) =======================
 def cloud_vision(b64, instr, max_tokens=600):
     if not llm_key(): return ""
-    model = os.environ.get("LLM_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+    # default de visao = o proprio modelo base (Gemini Flash le imagem). Da pra forçar outro via env.
+    model = os.environ.get("LLM_VISION_MODEL", "") or llm_model()
     body = {"model":model,"max_tokens":max_tokens,"temperature":0.3,"messages":[{"role":"user","content":[
         {"type":"text","text":instr},{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,"+b64}}]}]}
     try:
-        req = urllib.request.Request(LLM_BASE.rstrip("/")+"/chat/completions", data=json.dumps(body).encode(),
-            headers={"Authorization":f"Bearer {llm_key()}","Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
-        r = json.loads(urllib.request.urlopen(req, timeout=45).read().decode())
+        r = _llm_post(llm_base(), llm_key(), body, timeout=45)
         return (r["choices"][0]["message"]["content"] or "").strip()
     except Exception as e:
         print("[cloud vision]", e); return ""
@@ -2118,6 +2174,7 @@ class H(BaseHTTPRequestHandler):
             else: self._send({"ok":False,"erro":"faca login"})
         elif path == "/admin/tokens": self._send(tokens_admin_resumo() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/integra": self._send(integra_admin_status() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/funil": self._send(funil_resumo() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/vips": self._send(vips_listar() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/brain/opcoes": self._send({"providers":BRAIN_PROVIDERS, "atual": (get_blob(u["id"],"brain",{}) if u else {})})
         elif path == "/estado":
@@ -2178,9 +2235,16 @@ class H(BaseHTTPRequestHandler):
                          (d.get("nome_real") or "").strip(), (d.get("tratamento") or "").strip(), d.get("foto") or "",
                          "free", 1 if n_users==0 else 0, "local", datetime.datetime.now().strftime("%d/%m/%Y %H:%M")))
                     c.commit(); uid = cur.lastrowid
+                utm = d.get("utm") or {}
+                try: set_blob(uid, "utm", utm); funil_registrar("signup", utm, uid)   # atribuicao de anuncio
+                except Exception: pass
                 self._send({"ok":True,"user":_pub(get_user(uid))}, cookie=make_session(uid))
             except INTEGRITY_ERRORS:
                 self._send({"ok":False,"erro":"Ja existe conta com esse e-mail."})
+        elif path == "/funil":   # evento de funil (visita/ativacao/paywall) - publico, leve
+            _ip=(self.headers.get("X-Forwarded-For","").split(",")[0].strip() or (self.client_address[0] if self.client_address else "?"))
+            if _rate_ok(_ip,"funil",120,300): funil_registrar(d.get("evento"), d.get("utm"), (u["id"] if u else None))
+            self._send({"ok":True})
         elif path == "/usuario/login":
             _ip = (self.headers.get("X-Forwarded-For","").split(",")[0].strip() or (self.client_address[0] if self.client_address else "?"))
             if not _rate_ok(_ip, "login"): self._send({"ok":False,"erro":"Muitas tentativas. Espere uns minutos, senhor."}); return

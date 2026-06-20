@@ -836,7 +836,7 @@ function go(id){
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.id===id));
   if(id==='config') renderConfig();
   if(id==='conta') renderConta();
-  if(id==='planos') renderPlanos();
+  if(id==='planos'){ renderPlanos(); funil('paywall'); }
   if(id==='integracoes') renderIntegra();
   if(id==='documentos') renderDocs();
   if(id==='rotina') renderRotina();
@@ -889,7 +889,7 @@ async function enviar(){
   // mostra imediatamente a fala do usuario (o poll confirma depois)
   addMsg('user',txt,'local');
   try{ const j=await (await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frase:txt, conv_id:CONV_ID, modo:_MODO, esforco:_ESF})})).json();
-    if(j && j.reply){ addMsg('assistant', j.reply); speakOrion(j.reply); compReage(); }
+    if(j && j.reply){ addMsg('assistant', j.reply); speakOrion(j.reply); compReage(); funilAtivacao(); }
     if(j && j.conv_id){ CONV_ID=j.conv_id; convAtualizarLista(); }
     tokensCarregar(); }
   catch(e){ addMsg('assistant','Nao consegui falar com o servidor, senhor.'); }
@@ -1094,6 +1094,14 @@ const VOZ_LABEL={'pt-PT-DuarteNeural':'Duarte (PT, mordomo)','pt-PT-RaquelNeural
   'pt-BR-AntonioNeural':'Antonio (BR)','pt-BR-FranciscaNeural':'Francisca (BR)',
   'pt-BR-ThalitaMultilingualNeural':'Thalita (BR, multilingue)'};
 function vozLabel(v){ return VOZ_LABEL[v]||v; }
+// ===================== FUNIL + UTM (atribuicao de anuncio) =====================
+const _UTM=(()=>{ try{ const q=new URLSearchParams(location.search);
+  let u=null; try{ u=JSON.parse(localStorage.getItem('orion_utm')||'null'); }catch(e){}
+  if(q.get('utm_source')){ u={source:q.get('utm_source'),medium:q.get('utm_medium')||'',campaign:q.get('utm_campaign')||''}; localStorage.setItem('orion_utm',JSON.stringify(u)); }
+  return u||{}; }catch(e){ return {}; } })();
+function funil(ev){ try{ fetch('/funil',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({evento:ev,utm:_UTM})}); }catch(e){} }
+funil('visita');
+function funilAtivacao(){ try{ if(localStorage.getItem('orion_ativou')==='1') return; localStorage.setItem('orion_ativou','1'); funil('ativacao'); }catch(e){} }
 // ===================== MODOS + TOKENS =====================
 let _MODO=localStorage.getItem('orion_modo')||'avancado', _ESF=localStorage.getItem('orion_esf')||'normal', _TOKENS=null;
 function fmtTok(n){ n=Number(n||0); if(n>=1e6) return (n/1e6).toFixed(n>=1e7?0:1)+'M'; if(n>=1e3) return Math.round(n/1e3)+'k'; return ''+n; }
@@ -1428,7 +1436,7 @@ async function renderConfig(){
     <div id="payTest" class="hint" style="margin-top:8px"></div>
   </div>`:''}
   <div class="card"><h3>Sobre</h3>
-    <div class="hint">Orion v1.0. <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
+    <div class="hint">Orion v1.3 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
   </div>
   <div class="row"><button class="btn primary" onclick="salvarConfig()">Salvar configuracoes</button></div>`;
   if(CFG.cerebro) document.getElementById('cfgCerebro').value=CFG.cerebro;
@@ -2012,12 +2020,22 @@ function renderConta(){
   ${conv?'':'<div class="card"><h3>Tokens do Orion</h3><div class="hint" style="margin-bottom:10px">Os tokens medem o uso da IA. Cada plano tem uma cota mensal. Se acabar, voce pode recarregar avulso (planos pagos) ou usar o modo Rapido (gratis).</div><div id="tokBox">carregando...</div></div>'}
   ${(u.criador)?'<div class="card"><h3>Admin - Integrações (linkar tudo)</h3><div class="hint" style="margin-bottom:10px">So o dono ve. Cole aqui as chaves de cada integração pra ligar no servidor (vale como alternativa às variáveis de ambiente). Verde = ligado.</div><div id="integraAdmin">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Admin - Planos personalizados (VIP)</h3><div class="hint" style="margin-bottom:10px">Monte planos sob medida pro cliente (base + tokens extras) e atribua. Os VIPs ganham as skins de Realeza/Diamante.</div><div id="vipAdmin">carregando...</div></div>':''}
+  ${(u.criador)?'<div class="card"><h3>Admin - Funil & anúncios</h3><div class="hint" style="margin-bottom:10px">Visita → cadastro → ativação → paywall → pagou, e quem pagou por fonte/campanha (UTM). So o dono ve.</div><div id="funilAdmin">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Admin - custo de tokens</h3><div class="hint" style="margin-bottom:10px">Custo real de API por usuario (so o dono ve).</div><div id="tokAdmin">carregando...</div></div>':''}
   ${conv?'':'<div class="card"><h3>WhatsApp</h3><div class="hint" style="margin-bottom:10px">Ligue seu numero pra conversar com o Orion direto no WhatsApp (respostas autonomas).</div><div id="waBox">carregando...</div></div>'}
   ${(u.criador)?'<div class="card" id="adminCard"><h3>Admin - contas e planos</h3><div class="hint" style="margin-bottom:10px">So o dono ve isto. Marque voce e seu socio como Business vitalicio, ou defina o plano de qualquer conta.</div><div id="adminLista">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Conhecimento global do Orion</h3><div class="hint" style="margin-bottom:10px">Fatos GERAIS que o Orion aprendeu (sem dado pessoal, filtrado). So o dono ve/limpa.</div><div id="conhecBox">carregando...</div></div>':''}`;
   carregarUso(); carregarWa(); if(!conv) carregarTokens();
-  if(u.criador){ carregarAdmin(); carregarConhec(); carregarTokAdmin(); carregarIntegraAdmin(); carregarVipAdmin(); }
+  if(u.criador){ carregarAdmin(); carregarConhec(); carregarTokAdmin(); carregarIntegraAdmin(); carregarVipAdmin(); carregarFunil(); }
+}
+async function carregarFunil(){
+  const box=document.getElementById('funilAdmin'); if(!box) return;
+  let r=null; try{ r=await (await fetch('/admin/funil')).json(); }catch(e){}
+  if(!r||!r.ok){ box.innerHTML='<div class="hint">Indisponivel.</div>'; return; }
+  const pe=r.por_evento||{}; const et=(k,l)=>`<div style="flex:1;min-width:84px;text-align:center;background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:10px"><div style="font-size:20px;font-weight:800;color:var(--accent)">${pe[k]||0}</div><div class="hint" style="font-size:11px">${l}</div></div>`;
+  const fontes=(r.fontes||[]).map(f=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>${esc(f.fonte)}</span><span class="hint">${f.visita} visitas · ${f.signup} cadastros · <b style="color:var(--good)">${f.pagou} pagaram</b></span></div>`).join('')||'<div class="hint">Sem dados de fonte ainda. Use links com ?utm_source=...</div>';
+  box.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+et('visita','Visitas')+et('signup','Cadastros')+et('ativacao','Ativações')+et('paywall','Paywall')+et('pagou','Pagaram')+'</div>'+
+    '<div style="font-weight:600;margin-bottom:6px">Por fonte / campanha</div>'+fontes;
 }
 let _PLANOS_CUSTOM=[];
 async function carregarVipAdmin(){
@@ -3545,7 +3563,7 @@ async function authCriar(){ const nome=document.getElementById('authNome').value
   const senha=document.getElementById('authNovaSenha').value;
   if((senha||'').length<8){err.textContent='A senha precisa de pelo menos 8 caracteres.';return;}
   if(!document.getElementById('authTermos').checked){err.textContent='Aceite os Termos e a Privacidade pra continuar.';return;}
-  const r=await (await fetch('/usuario/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,tratamento:document.getElementById('authTrat').value.trim(),senha,email:document.getElementById('authEmail').value.trim(),aceitou_termos:true})})).json();
+  const r=await (await fetch('/usuario/criar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,tratamento:document.getElementById('authTrat').value.trim(),senha,email:document.getElementById('authEmail').value.trim(),aceitou_termos:true,utm:_UTM})})).json();
   if(r.ok) entrou(r.user); else err.textContent=r.erro||'erro';
 }
 async function authConvidado(){ const r=await (await fetch('/usuario/convidado',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:'Convidado'})})).json();
@@ -3603,10 +3621,23 @@ function pwaBtnShow(){ const b=document.getElementById('installBtn'); if(!b) ret
 window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); _pwaPrompt=e; pwaBtnShow(); });
 window.addEventListener('appinstalled', ()=>{ _pwaPrompt=null; pwaBtnShow(); piscarSave('APP INSTALADO'); });
 async function instalarApp(){
+  // celular com suporte nativo: instala na hora
   if(_pwaPrompt){ _pwaPrompt.prompt(); try{ await _pwaPrompt.userChoice; }catch(e){} _pwaPrompt=null; pwaBtnShow(); return; }
+  // senao (ex: no PC): mostra um QR pra abrir/instalar no celular + instrucoes
+  const url=location.origin || (location.protocol+'//'+location.host);
   const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
-  if(ios){ alert('No iPhone/iPad: toque no botão Compartilhar (□↑) do Safari e escolha "Adicionar à Tela de Início". O Orion vira um app, de graça.'); return; }
-  alert('Pra instalar: no Chrome do celular, toque no menu (⋮) → "Instalar app" / "Adicionar à tela inicial". No computador, aparece um ícone de instalar na barra de endereço. É grátis, sem loja.');
+  const passo = ios ? 'No iPhone: Safari → Compartilhar (□↑) → "Adicionar à Tela de Início".'
+                    : 'No Android: Chrome → menu (⋮) → "Instalar app". No PC: ícone de instalar na barra de endereço.';
+  let m=document.getElementById('instModal');
+  if(!m){ m=document.createElement('div'); m.id='instModal';
+    m.style.cssText='position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(6,8,14,.78);backdrop-filter:blur(6px);padding:18px';
+    m.onclick=(e)=>{ if(e.target===m) m.remove(); }; document.body.appendChild(m); }
+  m.innerHTML='<div style="max-width:360px;width:100%;background:var(--panel);border:1px solid var(--line2);border-radius:18px;padding:22px;text-align:center">'+
+    '<h2 style="font-size:19px;margin-bottom:4px">Instalar o Orion</h2>'+
+    '<div class="hint" style="margin-bottom:14px">Aponte a câmera do celular pro QR pra abrir e instalar lá. É grátis, sem loja.</div>'+
+    '<img alt="QR" style="width:200px;height:200px;border-radius:12px;background:#fff;padding:8px" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data='+encodeURIComponent(url)+'">'+
+    '<div class="hint" style="margin-top:12px">'+passo+'</div>'+
+    '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" onclick="document.getElementById(\'instModal\').remove()">Fechar</button></div></div>';
 }
 setTimeout(pwaBtnShow, 1200);
 // modo nuvem: usa a VOZ DO NAVEGADOR (funciona no celular) - ditado no mic e leitura nas respostas
