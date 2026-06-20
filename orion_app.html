@@ -504,6 +504,7 @@ button{font-family:inherit;cursor:pointer}
   <div class="sb-foot">
     <div class="sb-plan" id="sbPlan">Plano Free</div>
     <button class="sb-upgrade" onclick="go('planos')">Ver planos</button>
+    <button id="installBtn" class="sb-upgrade" style="display:none;margin-top:8px;background:var(--panel2);color:var(--text);border:1px solid var(--line2)" onclick="instalarApp()">📲 Instalar o app</button>
     <div style="display:flex;gap:10px;justify-content:center;margin-top:12px;font-size:11px">
       <a href="#" onclick="go('termos');toggleSidebar(false);return false" style="color:var(--faint)">Termos</a>
       <span style="color:var(--line2)">|</span>
@@ -3593,6 +3594,21 @@ document.addEventListener('paste', (e)=>{
 
 // ===================== PWA =====================
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }catch(e){} }
+// ----- INSTALAR O APP (grátis, sem Play Store): PWA install -----
+let _pwaPrompt=null;
+function _instInstalado(){ return window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true; }
+function pwaBtnShow(){ const b=document.getElementById('installBtn'); if(!b) return;
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  b.style.display=(_instInstalado()? 'none' : ((_pwaPrompt||ios)?'block':'none')); }
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); _pwaPrompt=e; pwaBtnShow(); });
+window.addEventListener('appinstalled', ()=>{ _pwaPrompt=null; pwaBtnShow(); piscarSave('APP INSTALADO'); });
+async function instalarApp(){
+  if(_pwaPrompt){ _pwaPrompt.prompt(); try{ await _pwaPrompt.userChoice; }catch(e){} _pwaPrompt=null; pwaBtnShow(); return; }
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  if(ios){ alert('No iPhone/iPad: toque no botão Compartilhar (□↑) do Safari e escolha "Adicionar à Tela de Início". O Orion vira um app, de graça.'); return; }
+  alert('Pra instalar: no Chrome do celular, toque no menu (⋮) → "Instalar app" / "Adicionar à tela inicial". No computador, aparece um ícone de instalar na barra de endereço. É grátis, sem loja.');
+}
+setTimeout(pwaBtnShow, 1200);
 // modo nuvem: usa a VOZ DO NAVEGADOR (funciona no celular) - ditado no mic e leitura nas respostas
 if(window.ORION_CLOUD){
   try{ var _mb=document.getElementById('micBtn'); if(_mb){ _mb.onclick=toggleEscuta; _mb.title='Falar (ditar mensagem)'; } }catch(e){}
