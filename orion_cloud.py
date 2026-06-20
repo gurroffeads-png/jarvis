@@ -2197,8 +2197,13 @@ class H(BaseHTTPRequestHandler):
         elif path == "/trading": self._send(cl_trading_estado(u["id"]) if u else {"posicoes":[],"watch":[],"historico":[]})
         elif path == "/memoria/grafo": self._send(grafo_tree(u["id"]) if u else {"id":"root","name":"Orion","filhos":[]})
         elif path == "/integra/status":
-            self._send({"google":False,"clickup":False,"apollo":False,"meta":False,"whatsapp":wa_on(),
-                        "mercadopago":bool(mp_token()),"paypal":bool(pp_creds()[0]),"paypal_mode":pp_creds()[2]})
+            _g=_gcfg_all(); _linked=[k[4:] for k in _g if k.startswith("int_") and str(_g.get(k) or "").strip()]
+            if meta_app_creds()[0]: _linked.append("meta")
+            if wa_on(): _linked.append("whatsapp")
+            if google_creds()[0]: _linked += ["google","gdrive","gcontacts","analytics"]
+            self._send({"google":bool(google_creds()[0]),"meta":bool(meta_app_creds()[0]),"whatsapp":wa_on(),
+                        "mercadopago":bool(mp_token()),"paypal":bool(pp_creds()[0]),"paypal_mode":pp_creds()[2],
+                        "linked":sorted(set(_linked))})
         elif path == "/admin/usuarios":
             if not (u and u["criador"]): self._send({"ok":False,"erro":"so o dono"}); return
             with _db() as c:

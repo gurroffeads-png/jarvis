@@ -1156,10 +1156,17 @@ const TEMAS={
   vinho:{nome:'Vinho',free:false,vars:{'--accent':'#b06bff','--accent2':'#7c3aed'}},
   matrix:{nome:'Matrix',free:false,vars:{'--accent':'#33ff99','--accent2':'#10b981'}},
   carbon:{nome:'Carbono',free:true,vars:{'--accent':'#e7eaf0','--accent2':'#9aa6bf'}},
-  // temas por vertical
-  trading:{nome:'Trading',free:false,vars:{'--accent':'#16c784','--accent2':'#0e9f6e'}},
-  trafego:{nome:'Tráfego',free:false,vars:{'--accent':'#ff7a18','--accent2':'#e8590c'}},
-  corporate:{nome:'Business',free:false,vars:{'--accent':'#3b82f6','--accent2':'#1e40af'}},
+  // temas por vertical (com fundo detalhado)
+  trading:{nome:'Trading',free:false,vars:{'--accent':'#16c784','--accent2':'#0e9f6e'},
+    bg:'radial-gradient(900px 500px at 80% -10%,rgba(22,199,132,.16),transparent 60%),repeating-linear-gradient(90deg,rgba(22,199,132,.05) 0 1px,transparent 1px 46px),repeating-linear-gradient(0deg,rgba(22,199,132,.05) 0 1px,transparent 1px 46px),linear-gradient(180deg,#06140f,#04100c)'},
+  trafego:{nome:'Tráfego',free:false,vars:{'--accent':'#ff7a18','--accent2':'#e8590c'},
+    bg:'radial-gradient(800px 500px at 15% -10%,rgba(255,122,24,.20),transparent 60%),radial-gradient(700px 500px at 95% 110%,rgba(232,89,12,.14),transparent 60%),linear-gradient(180deg,#170d06,#100805)'},
+  corporate:{nome:'Business',free:false,vars:{'--accent':'#3b82f6','--accent2':'#1e40af'},
+    bg:'radial-gradient(900px 520px at 50% -12%,rgba(59,130,246,.16),transparent 62%),linear-gradient(180deg,#0a1020,#070b15)'},
+  diamante:{nome:'Diamante',vip:true,vars:{'--accent':'#5ee0ff','--accent2':'#22a8d6'},
+    bg:'radial-gradient(700px 460px at 25% -8%,rgba(94,224,255,.20),transparent 60%),repeating-linear-gradient(135deg,rgba(255,255,255,.04) 0 2px,transparent 2px 28px),repeating-linear-gradient(45deg,rgba(94,224,255,.05) 0 2px,transparent 2px 28px),linear-gradient(180deg,#08141b,#050e13)'},
+  king:{nome:'King',vip:true,vars:{'--accent':'#ffd24a','--accent2':'#b06bff'},
+    bg:'radial-gradient(760px 480px at 50% -10%,rgba(255,210,74,.18),transparent 60%),radial-gradient(620px 460px at 90% 110%,rgba(176,107,255,.16),transparent 60%),repeating-linear-gradient(60deg,rgba(255,210,74,.05) 0 2px,transparent 2px 32px),linear-gradient(180deg,#130f1f,#0b0814)'},
 };
 const SKINS={
   // elementais
@@ -1180,17 +1187,17 @@ const SKINS={
   chef:{nome:'Chef',free:false,stops:['#fee2e2','#ef4444','#7f1d1d'],glow:'#ef4444',hat:'toque',roupa:'#f3f4f6'},
   designer:{nome:'Designer',free:false,stops:['#fae8ff','#d946ef','#701a75'],glow:'#d946ef',emoji:'🎨',roupa:'#701a75'},
   coach:{nome:'Coach',free:false,stops:['#fff7cc','#eab308','#713f12'],glow:'#eab308',hat:'cap',roupa:'#5b3410'},
-  // animais + especiais
-  estrela:{nome:'Estrela',free:true,stops:['#fff7c2','#ffd54a','#b8860b'],glow:'#ffd54a',emoji:'⭐'},
-  gato:{nome:'Gato',free:false,stops:['#ffe9d6','#ff9d5c','#9a4a1c'],glow:'#ff9d5c',emoji:'🐱'},
-  cachorro:{nome:'Cachorro',free:false,stops:['#efe2cf','#c79a63','#6b4a23'],glow:'#c79a63',emoji:'🐶'},
-  coruja:{nome:'Coruja',free:false,stops:['#e7e2ff','#9b8cff','#4c3a9e'],glow:'#9b8cff',emoji:'🦉'},
-  raposa:{nome:'Raposa',free:false,stops:['#ffe0cf','#ff7a3c','#a83a10'],glow:'#ff7a3c',emoji:'🦊'},
-  leao:{nome:'Leão',free:false,stops:['#fff0c7','#f0a93c','#8a5a12'],glow:'#f0a93c',emoji:'🦁'},
-  panda:{nome:'Panda',free:false,stops:['#f3f3f3','#cfd3da','#5a5f6a'],glow:'#cfd3da',emoji:'🐼'},
+  // animais + especiais (com roupinha tambem)
+  estrela:{nome:'Estrela',free:true,stops:['#fff7c2','#ffd54a','#b8860b'],glow:'#ffd54a',emoji:'⭐',roupa:'#8a6d00'},
+  gato:{nome:'Gato',free:false,stops:['#ffe9d6','#ff9d5c','#9a4a1c'],glow:'#ff9d5c',emoji:'🐱',roupa:'#9a4a1c'},
+  cachorro:{nome:'Cachorro',free:false,stops:['#efe2cf','#c79a63','#6b4a23'],glow:'#c79a63',emoji:'🐶',roupa:'#6b4a23'},
+  coruja:{nome:'Coruja',free:false,stops:['#e7e2ff','#9b8cff','#4c3a9e'],glow:'#9b8cff',emoji:'🦉',roupa:'#4c3a9e'},
+  raposa:{nome:'Raposa',free:false,stops:['#ffe0cf','#ff7a3c','#a83a10'],glow:'#ff7a3c',emoji:'🦊',roupa:'#a83a10'},
+  leao:{nome:'Leão',free:false,stops:['#fff0c7','#f0a93c','#8a5a12'],glow:'#f0a93c',emoji:'🦁',roupa:'#8a5a12'},
+  panda:{nome:'Panda',free:false,stops:['#f3f3f3','#cfd3da','#5a5f6a'],glow:'#cfd3da',emoji:'🐼',roupa:'#2b2f36'},
   // VIP / plano personalizado
-  coroa:{nome:'Realeza',vip:true,stops:['#fff3c0','#ffd24a','#a87b00'],glow:'#ffd24a',hat:'crown'},
-  diamante:{nome:'Diamante',vip:true,stops:['#d6f7ff','#5ee0ff','#0a7fa3'],glow:'#5ee0ff',emoji:'💎'},
+  coroa:{nome:'Realeza',vip:true,stops:['#fff3c0','#ffd24a','#a87b00'],glow:'#ffd24a',hat:'crown',roupa:'#6b1f9e',tie:true},
+  diamante:{nome:'Diamante',vip:true,stops:['#d6f7ff','#5ee0ff','#0a7fa3'],glow:'#5ee0ff',emoji:'💎',roupa:'#0a7fa3'},
 };
 let _gidN=0;
 function _hatSVG(t){
@@ -1214,7 +1221,12 @@ function planoLib(){ return (USER&&USER.plano)||'free'; }
 function podeUsar(it){ if(it.vip) return planoLib()==='adm' || !!(USER&&(USER.vip||USER.custom)); return it.free || planoLib()!=='free'; }
 function aplicaTema(id){ const t=TEMAS[id]||TEMAS.espaco; const r=document.documentElement;
   ['--accent','--accent2'].forEach(k=>r.style.removeProperty(k));
-  Object.entries(t.vars||{}).forEach(([k,v])=>r.style.setProperty(k,v)); }
+  Object.entries(t.vars||{}).forEach(([k,v])=>r.style.setProperty(k,v));
+  // fundo detalhado por tema (Trading/Trafego/Business/Diamante/King); senao limpa
+  let bg=document.getElementById('temaBg');
+  if(!bg){ bg=document.createElement('div'); bg.id='temaBg';
+    bg.style.cssText='position:fixed;inset:0;z-index:-1;pointer-events:none;transition:opacity .4s'; document.body.appendChild(bg); }
+  bg.style.background=t.bg||''; bg.style.opacity=t.bg?'1':'0'; }
 function mascoteSVG(skin){ const s=SKINS[skin]||SKINS.cosmo; return '<svg viewBox="0 0 100 100">'+_mascInner(s,'cg'+(_gidN++))+'</svg>'; }
 function aplicaMascote(skin){ const c=document.getElementById('companion'); if(c) c.innerHTML=mascoteSVG(skin)+'<button class="comp-x" onclick="event.stopPropagation();compEsconder()" title="Esconder">&#10005;</button>'; }
 function aplicaAparencia(){ aplicaTema(_PREFS.tema); aplicaMascote(_PREFS.skin); }
@@ -1436,7 +1448,7 @@ async function renderConfig(){
     <div id="payTest" class="hint" style="margin-top:8px"></div>
   </div>`:''}
   <div class="card"><h3>Sobre</h3>
-    <div class="hint">Orion v1.3 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
+    <div class="hint">Orion v1.4 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
   </div>
   <div class="row"><button class="btn primary" onclick="salvarConfig()">Salvar configuracoes</button></div>`;
   if(CFG.cerebro) document.getElementById('cfgCerebro').value=CFG.cerebro;
@@ -1580,15 +1592,16 @@ const INTEGRA_CAT=[
 ];
 async function renderIntegra(){
   let s={}; try{ s=await (await fetch('/integra/status')).json(); }catch(e){}
-  const conectado=(it)=>({google:s.google,clickup:s.clickup,apollo:s.apollo,meta:s.meta})[it.id]||false;
+  const _linked=s.linked||[];
+  const conectado=(it)=>!!(s[it.id] || _linked.indexOf(it.id)>=0);
   const card=(it)=>{ const ok=conectado(it);
-    const btn = it.acao==='google'?'<button class="btn primary" style="width:100%;margin-top:10px" onclick="conectarGoogle()">Conectar</button>'
+    const btn = it.acao==='google'?'<button class="btn primary" style="width:100%;margin-top:10px" onclick="conectarGoogle()">'+(ok?'Reconectar':'Conectar')+'</button>'
       : ok?'<button class="btn" style="width:100%;margin-top:10px" disabled>Conectado</button>'
       : '<button class="btn" style="width:100%;margin-top:10px" onclick="pedirIntegra(\''+it.nome.replace(/'/g,"")+'\')">Conectar</button>';
     return `<div class="card" style="margin:0;padding:16px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <span class="dot ${ok?'ok':''}"></span><b style="font-size:14px">${it.nome}</b>
-        ${ok?'':'<span class="plan-badge plan-free" style="margin-left:auto">'+(it.pronto?'Pronto':'Em breve')+'</span>'}
+        <span class="plan-badge ${ok?'plan-business':'plan-free'}" style="margin-left:auto">${ok?'Ativo':(it.pronto?'Pronto':'Disponível')}</span>
       </div><div class="hint">${it.desc}</div>${btn}</div>`; };
   let html='<div class="card" style="background:linear-gradient(135deg,rgba(122,162,255,.1),rgba(155,140,255,.06))"><h3>Conecte o Orion ao seu mundo</h3><div class="hint" style="margin-top:-6px">Quanto mais voce conecta, mais o Orion resolve por voz ou texto. Novas integracoes entram toda semana.</div></div>';
   let grid=null;
@@ -3251,12 +3264,29 @@ function fxLines(){ const svg=document.getElementById('fxlines'); if(!svg) retur
   svg.innerHTML=FX.conns.map((c,i)=>{ const a=fxCenter(c.from),b=fxCenter(c.to); if(!a||!b) return ''; const mx=(a.x+b.x)/2;
     return '<path d="M '+a.x+' '+a.y+' C '+mx+' '+a.y+', '+mx+' '+b.y+', '+b.x+' '+b.y+'" fill="none" stroke="var(--accent)" stroke-width="2.5" onclick="fxCfgAbrir('+i+')"/>'; }).join('');
 }
-function fxDrag(el,n){ let sx,sy,ox,oy,down=false,moved=false;
-  const dn=(e)=>{ if(e.target.classList.contains('port')||e.target.classList.contains('fxdel')) return; down=true;moved=false; const p=e.touches?e.touches[0]:e; sx=p.clientX;sy=p.clientY;ox=n.x||el.offsetLeft;oy=n.y||el.offsetTop; if(e.cancelable)e.preventDefault(); };
-  const mv=(e)=>{ if(!down) return; const p=e.touches?e.touches[0]:e; const dx=p.clientX-sx,dy=p.clientY-sy; if(Math.abs(dx)+Math.abs(dy)>3) moved=true; n.x=Math.max(0,ox+dx); n.y=Math.max(0,oy+dy); el.style.left=n.x+'px'; el.style.top=n.y+'px'; fxLines(); };
-  const up=()=>{ if(down&&moved) fxSalvarDebounce(); down=false; };
-  el.addEventListener('pointerdown',dn); window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
+// arrasto robusto: estado global unico + pointer capture (relativo ao canvas, sem acumular listeners)
+let _fxNode=null, _fxEl=null, _fxDX=0, _fxDY=0, _fxMoved=false;
+function fxDrag(el,n){
+  el.addEventListener('pointerdown', (e)=>{
+    if(e.target.classList.contains('port')||e.target.classList.contains('fxdel')) return;
+    _fxNode=n; _fxEl=el; _fxMoved=false;
+    const r=el.getBoundingClientRect(); _fxDX=e.clientX-r.left; _fxDY=e.clientY-r.top;
+    try{ el.setPointerCapture(e.pointerId); }catch(_){}
+    el.style.cursor='grabbing'; e.preventDefault();
+  });
 }
+function _fxMove(e){
+  if(!_fxNode||!_fxEl) return;
+  const wrap=document.getElementById('fxwrap'); if(!wrap) return;
+  const wr=wrap.getBoundingClientRect();
+  let nx=e.clientX-wr.left-_fxDX, ny=e.clientY-wr.top-_fxDY;
+  nx=Math.max(0,Math.min(wrap.clientWidth-_fxEl.offsetWidth, nx));
+  ny=Math.max(0,Math.min(wrap.clientHeight-_fxEl.offsetHeight, ny));
+  _fxNode.x=nx; _fxNode.y=ny; _fxEl.style.left=nx+'px'; _fxEl.style.top=ny+'px'; _fxMoved=true; fxLines();
+}
+function _fxUp(){ if(_fxEl) _fxEl.style.cursor='grab'; if(_fxNode&&_fxMoved) fxSalvarDebounce(); _fxNode=null; _fxEl=null; }
+document.addEventListener('pointermove', _fxMove);
+document.addEventListener('pointerup', _fxUp);
 function fxCfgAbrir(i){ const c=FX.conns[i]; if(!c) return; const to=FX.nodes.find(n=>n.id===c.to); const from=FX.nodes.find(n=>n.id===c.from); if(!to) return;
   const app=FX_APPS[to.ref]||{acoes:[]}; const box=document.getElementById('fxCfg');
   box.innerHTML='<div class="card" style="margin-top:12px;border-color:var(--accent)"><h3>'+esc((from&&from.nome)||'Agente')+' → '+esc(to.nome)+'</h3>'+
