@@ -182,6 +182,93 @@ def set_blob(uid, k, obj):
         c.execute("INSERT OR REPLACE INTO kv(user_id,k,v) VALUES(?,?,?)", (uid,k,json.dumps(obj,ensure_ascii=False)))
         c.commit()
 
+# ======================= MODERACAO: banir/desbanir usuarios, dispositivos e e-mails =======================
+# Controlado pelo OrionAdmin.exe (centro de controle do dono). Guardado no banco (blob do usuario 1).
+# Cache em memoria (TTL curto) pra checar ban em cada request sem martelar o banco.
+ADMIN_UID = 1
+_BANS_CACHE = {"t": 0.0, "v": None}
+def _bans_norm(b):
+    b = b or {}
+    for k in ("users", "devices", "emails"): b.setdefault(k, {})
+    return b
+def bans_get(force=False):
+    now = time.time()
+    if force or not _BANS_CACHE["v"] or now - _BANS_CACHE["t"] > 20:
+        _BANS_CACHE["v"] = _bans_norm(get_blob(ADMIN_UID, "bans", {})); _BANS_CACHE["t"] = now
+    return _BANS_CACHE["v"]
+def bans_save(b):
+    b = _bans_norm(b); set_blob(ADMIN_UID, "bans", b)
+    _BANS_CACHE["v"] = b; _BANS_CACHE["t"] = time.time()
+def banido_motivo(uid=None, email=None, did=None):
+    """Retorna o motivo do ban (str) se usuario/email/dispositivo estiver banido; senao None."""
+    b = bans_get()
+    if uid and str(uid) in b["users"]:            return b["users"][str(uid)].get("motivo") or "Conta suspensa"
+    if email and email.lower() in b["emails"]:    return b["emails"][email.lower()].get("motivo") or "Conta suspensa"
+    if did and did in b["devices"]:               return b["devices"][did].get("motivo") or "Dispositivo bloqueado"
+    return None
+_BAN_TIPOS = {"user":"users","usuario":"users","users":"users","device":"devices","dispositivo":"devices",
+              "devices":"devices","email":"emails","emails":"emails"}
+def banir(tipo, valor, motivo=""):
+    tipo = _BAN_TIPOS.get(tipo)
+    if not tipo: return {"ok":False,"erro":"tipo invalido (use user, device ou email)"}
+    valor = str(valor or "").strip()
+    if tipo == "emails": valor = valor.lower()
+    if not valor: return {"ok":False,"erro":"valor vazio"}
+    if tipo == "users" and str(valor) == str(ADMIN_UID): return {"ok":False,"erro":"nao da pra banir o dono"}
+    b = bans_get(force=True); b[tipo][valor] = {"motivo":(motivo or "").strip(), "em":time.time()}
+    bans_save(b); return {"ok":True,"tipo":tipo,"valor":valor}
+def desbanir(tipo, valor):
+    tipo = _BAN_TIPOS.get(tipo)
+    if not tipo: return {"ok":False,"erro":"tipo invalido"}
+    valor = str(valor or "").strip()
+    if tipo == "emails": valor = valor.lower()
+    b = bans_get(force=True); b.get(tipo, {}).pop(valor, None); bans_save(b); return {"ok":True}
+
+# ---- registro de dispositivos (device -> ultimo usuario) pra dar visibilidade e permitir banir aparelho ----
+def _dispos_raw(): return get_blob(ADMIN_UID, "devices_seen", {}) or {}
+def dispositivo_registrar(did, uid=None, nome="", ip="", ua=""):
+    """Atualiza o registro de um dispositivo. Chamado em momentos esparsos (page load, login), nao em cada API."""
+    if not did: return
+    try:
+        d = _dispos_raw(); cur = d.get(did, {})
+        cur.setdefault("criado_em", time.time()); cur["visto_em"] = time.time()
+        if uid: cur["uid"] = uid; cur["nome"] = nome or cur.get("nome", "")
+        if ip:  cur["ip"]  = ip
+        if ua:  cur["ua"]  = ua[:200]
+        d[did] = cur
+        if len(d) > 5000:   # nao deixa crescer infinito: mantem os 3000 mais recentes
+            d = dict(sorted(d.items(), key=lambda x: x[1].get("visto_em",0), reverse=True)[:3000])
+        set_blob(ADMIN_UID, "devices_seen", d)
+    except Exception as e: print("[dispositivo_registrar]", e)
+def dispositivos_listar(limite=500):
+    d = _dispos_raw(); b = bans_get(); out = []
+    for did, info in sorted(d.items(), key=lambda x: x[1].get("visto_em",0), reverse=True)[:limite]:
+        out.append({"id":did, "uid":info.get("uid"), "nome":info.get("nome",""), "ip":info.get("ip",""),
+                    "ua":info.get("ua",""), "visto_em":info.get("visto_em"), "banido":(did in b["devices"]),
+                    "motivo":b["devices"].get(did,{}).get("motivo","")})
+    return out
+def novo_device_id(): return os.urandom(12).hex()
+def moderacao_resumo():
+    """Tudo que o OrionAdmin.exe precisa: usuarios (com status de ban), dispositivos e a lista de bans."""
+    b = bans_get(force=True)
+    with _db() as c:
+        usuarios = [{"id":x["id"], "nome":x["nome"], "email":x["email"] or "",
+                     "plano":("adm" if x["criador"] else ("business" if x["socio"] else (x["plano"] or "free"))),
+                     "criador":bool(x["criador"]), "criado":x["criado"] or "",
+                     "banido":(str(x["id"]) in b["users"] or ((x["email"] or "").lower() in b["emails"])),
+                     "motivo":(b["users"].get(str(x["id"]),{}).get("motivo") or b["emails"].get((x["email"] or "").lower(),{}).get("motivo") or "")}
+                    for x in c.execute("SELECT * FROM users ORDER BY id").fetchall()]
+    return {"ok":True, "usuarios":usuarios, "dispositivos":dispositivos_listar(), "bans":b}
+def aprendizado_de(uid):
+    """O que o Orion aprendeu: fatos pessoais (memoria/grafo do usuario) + conhecimento global. So o dono ve (no exe)."""
+    fatos = []
+    try:
+        g = grafo(int(uid)) if uid else {"nodes":{}}
+        fatos = [{"id":nid, "fato":(x.get("data") or ""), "grupo":x.get("parent","")}
+                 for nid,x in g.get("nodes",{}).items() if (x.get("data") or "").strip() and x.get("parent") not in (None,"root")]
+    except Exception as e: print("[aprendizado_de]", e)
+    return {"ok":True, "uid":uid, "memoria":fatos, "conhecimento":conhecimento_listar(300)}
+
 # ---- rate limit simples por IP (anti brute-force no login) ----
 _RATE = {}
 def _rate_ok(ip, chave="login", lim=15, win=300):
@@ -217,8 +304,47 @@ PERSONA = ("Voce e o Orion, um assistente pessoal de IA em portugues do Brasil. 
            "Nunca use o caractere travessao. Respostas curtas e uteis. Seu nome e sempre Orion. "
            "NUNCA invente informacao: se nao tiver certeza de um fato/numero/data, pesquise (buscar_web) ou diga que nao sabe. Honestidade acima de tudo.")
 # base/modelo do cerebro: env -> gcfg (admin) -> default Gemini. Da pra trocar sem redeploy.
-def llm_base():  return (gcfg("llm_base","LLM_BASE_URL") or LLM_BASE).rstrip("/")
-def llm_model(): return gcfg("llm_model","LLM_MODEL") or LLM_MODEL
+def _provider_auto(key):
+    """Detecta o provedor pela cara da chave -> (base, model). Evita o classico 404/401
+    de colar uma chave de um provedor com base/modelo de outro (causa #1 de chat quebrado)."""
+    k = (key or "").strip()
+    if k.startswith("gsk_"):   return ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile")
+    if k.startswith("AIza"):   return ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-2.0-flash")
+    if k.startswith("sk-or-"): return ("https://openrouter.ai/api/v1", "openai/gpt-4o-mini")
+    if k.startswith("sk-ant"): return ("https://api.anthropic.com/v1", "claude-3-5-sonnet-latest")
+    if k.startswith("sk-"):    return ("https://api.openai.com/v1", "gpt-4o-mini")
+    return (None, None)
+def _model_ok_base(base, model):
+    """O modelo combina com a base? Pega o erro de modelo de um provedor rodando na base de outro."""
+    b=(base or "").lower(); m=(model or "").lower()
+    if not m: return False
+    if "groq" in b:                                  return any(x in m for x in ("llama","mixtral","gemma","qwen","deepseek"))
+    if "google" in b or "generativelanguage" in b:   return m.startswith("gemini")
+    if "openai.com" in b:                            return m.startswith(("gpt","o1","o3","o4"))
+    return True  # provedores desconhecidos/compativeis: confia no que veio
+def _brain_norm(key, base, model):
+    """Normaliza (chave, base, modelo) pra SEMPRE bater. Chaves inequivocas (AIza/gsk_/sk-or-/sk-ant)
+    mandam na base, porque o prefixo da chave nao mente sobre o provedor. Isso auto-cura o classico
+    404/401 de chave de um provedor com base/modelo de outro (ex: LLM_MODEL antigo do Groq + chave Gemini)."""
+    key=(key or "").strip()
+    ab, am = _provider_auto(key)
+    inequivoca = key[:4] in ("AIza","gsk_") or key.startswith(("sk-or-","sk-ant"))
+    if inequivoca and ab:                 # a chave decide o provedor
+        base = ab
+        if not _model_ok_base(base, model): model = am
+    else:                                 # chave generica (sk-) ou custom: completa o que faltar
+        base  = (base or ab or LLM_BASE).rstrip("/")
+        model = model or am or LLM_MODEL
+        if not _model_ok_base(base, model):
+            probe = ("AIza" if ("google" in base or "generativelanguage" in base) else
+                     "gsk_" if "groq" in base else
+                     "sk-or-" if "openrouter" in base else
+                     "sk-" if "openai.com" in base else "")
+            _, fix = _provider_auto(probe)
+            if fix: model = fix
+    return key, base.rstrip("/"), (model or LLM_MODEL)
+def llm_base():  return (gcfg("llm_base","LLM_BASE_URL") or "").rstrip("/")
+def llm_model(): return gcfg("llm_model","LLM_MODEL") or ""
 # ---- MODOS (modelos) + ESFORCO: o usuario escolhe; planos liberam os melhores ----
 # DEFAULT = Gemini Flash (gratis, melhor em pt-BR). model=None usa o cerebro base (llm_model()).
 # Modelos de outros provedores entram via BYOK (chave do proprio cliente).
@@ -237,12 +363,15 @@ def _esforco_ok(u, esf):
     if e["pago"] and plano_de(u)=="free": return "normal"
     return esf if esf in ESFORCOS else "normal"
 def _llm_resolve(u, modo=None):
-    """Decide (key, base, model, fonte). BYOK (chave do cliente) tem prioridade e nao consome token nosso."""
+    """Decide (key, base, model, fonte). BYOK (chave do cliente) tem prioridade e nao consome token nosso.
+    Tudo passa por _brain_norm pra NUNCA mandar modelo/base que nao casa com a chave (auto-cura o 404/401)."""
     pref = (get_blob(u["id"], "brain", {}) or {}) if u else {}
     if pref.get("key"):
-        return (pref["key"], (pref.get("base") or llm_base()).rstrip("/"), pref.get("model") or llm_model(), "byok")
+        k, b, m = _brain_norm(pref["key"], pref.get("base") or llm_base(), pref.get("model") or llm_model())
+        return (k, b, m, "byok")
     mm = MODOS.get(_modo_ok(u, modo) if u else (modo or "avancado"), MODOS["avancado"])
-    return (llm_key(), llm_base(), (mm.get("model") or llm_model()), "managed")
+    k, b, m = _brain_norm(llm_key(), llm_base(), mm.get("model") or llm_model())
+    return (k, b, m, "managed")
 def _llm_post(base, key, body, timeout=45):
     """POST OpenAI-compativel. Retry/backoff no 429 (rate limit do free tier do Gemini) pra nao quebrar o chat."""
     last = None
@@ -270,6 +399,12 @@ def cloud_chat(system, messages, max_tokens=700, u=None, modo=None):
     except urllib.error.HTTPError as e:
         corpo = e.read()[:300].decode("utf-8", "ignore")
         print("[llm]", e.code, corpo)
+        if e.code in (401, 403):
+            return "O cerebro nao aceitou a chave, senhor. Confira a chave de IA em Conta > Admin > Cerebro (ou em Config > Cerebro se for a sua chave)."
+        if e.code == 404:
+            return "O modelo do cerebro nao foi encontrado, senhor. Veja a chave/modelo em Conta > Admin > Cerebro: a chave e o modelo precisam ser do mesmo provedor."
+        if e.code == 429:
+            return "O cerebro esta sobrecarregado agora (limite do plano gratis). Espere alguns segundos e tente de novo, senhor."
         return f"Tive um problema pra pensar agora ({e.code}). Tente de novo, senhor."
     except Exception as e:
         print("[llm]", e)
@@ -307,10 +442,9 @@ def web_search(q):
     except Exception: return None, fontes
 
 def _user_brain(u):
-    """Preferencia de cerebro do user. Cai pro padrao (Groq) se nao houver."""
-    if not u: return (llm_key(), LLM_BASE, LLM_MODEL)
-    pref = get_blob(u["id"], "brain", {}) or {}
-    return (pref.get("key") or llm_key(), (pref.get("base") or LLM_BASE).rstrip("/"), pref.get("model") or LLM_MODEL)
+    """Preferencia de cerebro do user, normalizada pra chave/base/modelo sempre baterem."""
+    pref = (get_blob(u["id"], "brain", {}) or {}) if u else {}
+    return _brain_norm(pref.get("key") or llm_key(), pref.get("base") or llm_base(), pref.get("model") or llm_model())
 BRAIN_PROVIDERS = [
     {"id":"gemini","nome":"Gemini Flash (Google) - gratis, melhor que Groq","base":"https://generativelanguage.googleapis.com/v1beta/openai/","modelo":"gemini-2.0-flash","como":"aistudio.google.com -> API key (gratis, sem cartao)"},
     {"id":"groq","nome":"Groq (Llama 3.3 70B) - gratis","base":"https://api.groq.com/openai/v1","modelo":"llama-3.3-70b-versatile","como":"console.groq.com -> API Keys (gratis, rapido)"},
@@ -1992,7 +2126,7 @@ def _asset(*names):
 
 class H(BaseHTTPRequestHandler):
     def log_message(self,*a): pass
-    def _send(self, body, code=200, ctype="application/json", cookie=None):
+    def _send(self, body, code=200, ctype="application/json", cookie=None, dev_cookie=None):
         if isinstance(body,(dict,list)): body = json.dumps(body,ensure_ascii=False)
         if isinstance(body,str): body = body.encode("utf-8")
         self.send_response(code)
@@ -2007,6 +2141,9 @@ class H(BaseHTTPRequestHandler):
         if cookie is not None:
             sec = "; Secure" if https else ""
             self.send_header("Set-Cookie", f"orion_sess={cookie}; Path=/; HttpOnly; SameSite=Lax{sec}; Max-Age=2592000")
+        if dev_cookie is not None:
+            sec = "; Secure" if https else ""
+            self.send_header("Set-Cookie", f"orion_dev={dev_cookie}; Path=/; HttpOnly; SameSite=Lax{sec}; Max-Age=31536000")
         self.end_headers(); self.wfile.write(body)
     def _file(self, path, ctype):
         try: self._send(open(path,"rb").read(), 200, ctype)
@@ -2025,6 +2162,15 @@ class H(BaseHTTPRequestHandler):
         tok = ck["orion_sess"].value if "orion_sess" in ck else ""
         uid = session_uid(tok)
         return get_user(uid) if uid else None
+    def _device(self):
+        ck = SimpleCookie(self.headers.get("Cookie",""))
+        return ck["orion_dev"].value if "orion_dev" in ck else ""
+    def _client_ip(self):
+        return (self.headers.get("X-Forwarded-For","").split(",")[0].strip()
+                or (self.client_address[0] if self.client_address else "?"))
+    def _ban_motivo(self, u):
+        return banido_motivo(uid=(u["id"] if u else None),
+                             email=((u["email"] if u else "") or ""), did=self._device())
 
     def _redir(self, location, cookie=None):
         self.send_response(302)
@@ -2093,15 +2239,24 @@ class H(BaseHTTPRequestHandler):
             print("[GET]", self.path, repr(e))
             try: self._send({"erro":f"erro interno: {e}"}, 500)
             except Exception: pass
+    _GET_PUBLICO = ("/","/index.html","/site","/logo","/icon","/favicon.ico","/manifest.webmanifest","/sw.js",".well-known")
     def _get(self):
         path = self.path.split("?",1)[0]
         u = self._user()
+        # GUARDA DE BAN: usuario/dispositivo banido so consegue carregar o app estatico (que mostra "suspenso")
+        mot = self._ban_motivo(u)
+        if mot and not (path in self._GET_PUBLICO or path.startswith("/.well-known")):
+            self._send({"ok":False,"banido":True,"motivo":mot}, 403); return
         if path in ("/","/index.html"):
+            did = self._device(); novo = ""
+            if not did: did = novo = novo_device_id()
+            try: dispositivo_registrar(did, (u["id"] if u else None), (u["nome"] if u else ""), self._client_ip(), self.headers.get("User-Agent",""))
+            except Exception: pass
             try:
                 html = open(HTML_FILE,encoding="utf-8").read()
                 html = html.replace("<head>", "<head>\n<script>window.ORION_CLOUD=true;</script>",1)
-                self._send(html,200,"text/html")
-            except Exception: self._send(b"<h1>orion_app.html nao encontrado</h1>",200,"text/html")
+                self._send(html,200,"text/html", dev_cookie=(novo or None))
+            except Exception: self._send(b"<h1>orion_app.html nao encontrado</h1>",200,"text/html", dev_cookie=(novo or None))
         elif path == "/site": self._file(SITE_FILE,"text/html") if os.path.exists(SITE_FILE) else self._send(b"",404)
         elif path == "/logo": p=_asset("orion_logo.png","orion_icon.png"); self._file(p,"image/png") if p else self._send(b"",404)
         elif path == "/icon": p=_asset("orion_icon.png"); self._file(p,"image/png") if p else self._send(b"",404)
@@ -2177,6 +2332,11 @@ class H(BaseHTTPRequestHandler):
         elif path == "/admin/integra": self._send(integra_admin_status() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/funil": self._send(funil_resumo() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/vips": self._send(vips_listar() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/moderacao": self._send(moderacao_resumo() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/aprendizado":
+            if not (u and u["criador"]): self._send({"ok":False,"erro":"so o dono"}); return
+            qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
+            self._send(aprendizado_de((qs.get("uid") or [None])[0]))
         elif path == "/brain/opcoes": self._send({"providers":BRAIN_PROVIDERS, "atual": (get_blob(u["id"],"brain",{}) if u else {})})
         elif path == "/estado":
             self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
@@ -2227,6 +2387,10 @@ class H(BaseHTTPRequestHandler):
         path = self.path
         d = self._body()
         u = self._user()
+        # GUARDA DE BAN: bloqueia qualquer acao de usuario/dispositivo banido (so deixa deslogar)
+        if path != "/usuario/logout":
+            mot = self._ban_motivo(u)
+            if mot: self._send({"ok":False,"banido":True,"motivo":mot}, 403); return
         # ---- contas / sessao ----
         if path == "/usuario/criar":
             nome = (d.get("nome") or "").strip()
@@ -2263,9 +2427,13 @@ class H(BaseHTTPRequestHandler):
                     if not r and ident:  # tenta por email tambem (caso a pessoa digite email sem @)
                         r = c.execute("SELECT * FROM users WHERE lower(email)=lower(?)", (ident,)).fetchone()
             if not r: self._send({"ok":False,"erro":"Nao achei essa conta. Confira o e-mail/nome."}); return
+            mot = banido_motivo(uid=r["id"], email=(r["email"] or ""))   # bloqueia login em conta banida (de qualquer aparelho)
+            if mot: self._send({"ok":False,"banido":True,"erro":"Conta suspensa: "+mot}); return
             if r["senha_hash"]:
                 if not d.get("senha"): self._send({"ok":False,"precisa_senha":True}); return
                 if _hash(d.get("senha")) != r["senha_hash"]: self._send({"ok":False,"erro":"Senha errada, senhor."}); return
+            try: dispositivo_registrar(self._device(), r["id"], r["nome"], self._client_ip(), self.headers.get("User-Agent",""))
+            except Exception: pass
             self._send({"ok":True,"user":_pub(r)}, cookie=make_session(r["id"]))
         elif path == "/usuario/convidado":
             # convidado de nuvem: sessao efemera id negativo nao persiste dados
@@ -2384,6 +2552,13 @@ class H(BaseHTTPRequestHandler):
             self._send(checkout_tokens(u, d.get("pacote",""), d.get("provedor"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
         elif path == "/admin/integra/salvar":
             self._send(gcfg_salvar(d) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/banir":
+            self._send(banir(d.get("tipo"), d.get("valor"), d.get("motivo","")) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/desbanir":
+            self._send(desbanir(d.get("tipo"), d.get("valor")) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/aprendizado/limpar":
+            if not (u and u["criador"]): self._send({"ok":False,"erro":"so o dono"}); return
+            self._send({"ok":conhecimento_limpar()})
         elif path in ("/admin/plano/salvar","/admin/plano/apagar","/admin/vip/atribuir","/admin/vip/remover"):
             if not (u and u["criador"]): self._send({"ok":False,"erro":"so o dono"}); return
             if path=="/admin/plano/salvar": self._send(plano_custom_salvar(d))
