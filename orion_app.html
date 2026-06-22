@@ -69,7 +69,24 @@ button{font-family:inherit;cursor:pointer}
 .sb-new{margin:0 4px 12px;padding:10px 12px;border-radius:11px;border:1px solid var(--line2);background:var(--panel);
   display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:var(--text);width:calc(100% - 8px)}
 .sb-new:hover{background:var(--panel2)}
-.sb-nav{display:flex;flex-direction:column;gap:2px;overflow:auto;flex:1}
+.sb-search{margin:0 4px 12px;padding:9px 12px;border-radius:11px;border:1px solid var(--line);background:var(--panel2);
+  display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);width:calc(100% - 8px);cursor:pointer;transition:border-color .15s,color .15s}
+.sb-search:hover{border-color:var(--line2);color:var(--text)}
+.sb-search kbd{margin-left:auto;font:600 10px ui-monospace,monospace;background:var(--panel);border:1px solid var(--line2);border-radius:5px;padding:2px 6px;color:var(--faint)}
+/* paleta de comando (Ctrl+K) */
+.cmdk-back{position:fixed;inset:0;z-index:300;background:rgba(5,7,12,.55);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;animation:cmdkIn .14s ease}
+@keyframes cmdkIn{from{opacity:0}to{opacity:1}}
+.cmdk{width:min(580px,92vw);background:var(--panel);border:1px solid var(--line2);border-radius:16px;overflow:hidden;
+  box-shadow:0 24px 60px -16px rgba(0,0,0,.7),0 1px 0 rgba(255,255,255,.05) inset;animation:cmdkPop .18s cubic-bezier(.2,.9,.3,1.3)}
+@keyframes cmdkPop{from{transform:translateY(-10px) scale(.98);opacity:.6}to{transform:none;opacity:1}}
+.cmdk input{width:100%;box-sizing:border-box;background:none;border:none;border-bottom:1px solid var(--line);
+  color:var(--text);font-size:16px;padding:16px 18px;outline:none}
+.cmdk-list{max-height:46vh;overflow:auto;padding:6px}
+.cmdk-it{display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:9px;cursor:pointer;color:var(--text);font-size:14px}
+.cmdk-it .ic{width:26px;height:26px;display:grid;place-items:center;border-radius:7px;background:var(--panel2);font-size:14px;flex:none}
+.cmdk-it .gp{margin-left:auto;font-size:11px;color:var(--faint)}
+.cmdk-it.sel,.cmdk-it:hover{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 22%,transparent),transparent);outline:1px solid var(--line2)}
+.cmdk-empty{padding:22px;text-align:center;color:var(--faint);font-size:13px}
 .sb-sec{font-size:10px;letter-spacing:1.2px;color:var(--faint);text-transform:uppercase;padding:14px 12px 6px;font-weight:700}
 .nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;color:var(--dim);
   font-size:13.5px;font-weight:500;transition:.12s;border:none;background:none;width:100%;text-align:left}
@@ -519,6 +536,10 @@ button{font-family:inherit;cursor:pointer}
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
     Nova conversa
   </button>
+  <button class="sb-search" onclick="cmdkOpen()" title="Buscar e ir pra qualquer lugar (Ctrl+K)">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+    <span>Buscar</span><kbd>Ctrl K</kbd>
+  </button>
   <nav class="sb-nav" id="sbNav"></nav>
   <div class="sb-foot">
     <div class="sb-plan" id="sbPlan">Plano Free</div>
@@ -872,6 +893,81 @@ function go(id){
   if(id==='privacidade') renderPriv();
   document.querySelector('.main').scrollTop=0;
 }
+
+// ===================== EXPORTAR CSV (dados do negocio) =====================
+function exportarCSV(nome, linhas){
+  if(!linhas || !linhas.length){ if(typeof msg==='function') msg('Nada pra exportar ainda, senhor.','var(--warn)'); else alert('Nada pra exportar ainda.'); return; }
+  const cols=[...new Set(linhas.flatMap(o=>Object.keys(o||{})))];
+  const esc=v=>{ v=(v==null?'':String(typeof v==='object'?JSON.stringify(v):v)); return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const csv=[cols.join(';')].concat(linhas.map(o=>cols.map(c=>esc((o||{})[c])).join(';'))).join('\r\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
+  a.download=nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  if(typeof msg==='function') msg('Exportei '+linhas.length+' linha(s) pra '+nome+'.','var(--ok)');
+}
+async function exportarLeadsCSV(){ let l=(typeof _LEADS!=='undefined'&&_LEADS&&_LEADS.length)?_LEADS:null;
+  if(!l){ try{ l=(await (await fetch('/crm/leads')).json()).leads||[]; }catch(e){ l=[]; } }
+  exportarCSV('leads_orion.csv', l); }
+async function exportarVendasCSV(){ let v=[]; try{ v=(await (await fetch('/painel/vendas')).json()).vendas||[]; }catch(e){}
+  exportarCSV('vendas_orion.csv', v.map(x=>({cliente:x.cliente,servico:x.servico,data:x.data,valor:x.valor,custo:x.custo,lucro:(x.valor||0)-(x.custo||0)}))); }
+async function exportarFinanceiroCSV(){ let r=null; try{ r=await (await fetch('/financeiro')).json(); }catch(e){}
+  if(!r||!r.ok){ exportarCSV('financeiro_orion.csv', []); return; }
+  const rows=(r.despesas_lista||[]).map(x=>({tipo:'despesa',item:x.desc||'',categoria:x.categoria||'',data:x.data||'',valor:x.valor}))
+    .concat((r.folha_lista||[]).map(x=>({tipo:'folha',item:x.nome||'',categoria:x.cargo||'',data:'',valor:x.salario})));
+  rows.push({tipo:'RESUMO',item:'receita',valor:r.receita},{tipo:'RESUMO',item:'despesas',valor:r.despesas},
+            {tipo:'RESUMO',item:'folha',valor:r.folha},{tipo:'RESUMO',item:'lucro_liquido',valor:r.lucro_liquido});
+  exportarCSV('financeiro_orion.csv', rows); }
+
+// ===================== PALETA DE COMANDO (Ctrl+K) =====================
+let _CMDK_SEL=0, _CMDK_HITS=[];
+function _cmdkCmds(){
+  const nav=(id,nome,ic,gp)=>({nome,ic,gp,run:()=>go(id)});
+  const c=[
+    nav('home','Início / chat','💬','Ir'), nav('painel','Painel de negócios','📊','Ir'),
+    nav('trading','Trading','📈','Ir'), nav('agentes','Agentes de IA','🤖','Ir'),
+    nav('code','Orion Code','⌨️','Ir'), nav('documentos','Documentos','📄','Ir'),
+    nav('rotina','Rotina & progresso','✅','Ir'), nav('tarefas','Tarefas','🗂️','Ir'),
+    nav('memoria','Memória do Orion','🧠','Ir'), nav('aprender','Aprender','🎓','Ir'),
+    nav('integracoes','Integrações','🔌','Ir'), nav('person','Personalização (temas e skins)','🎨','Ir'),
+    nav('conta','Conta & plano','👤','Ir'), nav('planos','Ver planos','💎','Ir'),
+    nav('config','Configurações','⚙️','Ir'),
+    {nome:'Nova conversa',ic:'✨',gp:'Ação',run:()=>{ if(typeof novaConversa==='function') novaConversa(); }},
+    {nome:'Exportar leads (CSV)',ic:'⬇️',gp:'Ação',run:exportarLeadsCSV},
+    {nome:'Exportar vendas (CSV)',ic:'⬇️',gp:'Ação',run:exportarVendasCSV},
+    {nome:'Exportar financeiro (CSV)',ic:'⬇️',gp:'Ação',run:exportarFinanceiroCSV},
+    {nome:'Instalar o app',ic:'📲',gp:'Ação',run:()=>{ if(typeof instalarApp==='function') instalarApp(); }},
+  ];
+  return c;
+}
+function cmdkOpen(){
+  let b=document.getElementById('cmdkBack');
+  if(!b){ b=document.createElement('div'); b.id='cmdkBack'; b.className='cmdk-back';
+    b.innerHTML='<div class="cmdk" role="dialog"><input id="cmdkInp" placeholder="Buscar páginas e ações..." autocomplete="off"><div class="cmdk-list" id="cmdkList"></div></div>';
+    document.body.appendChild(b);
+    b.addEventListener('click',e=>{ if(e.target===b) cmdkClose(); });
+    b.querySelector('#cmdkInp').addEventListener('input',cmdkFiltra);
+    b.querySelector('#cmdkInp').addEventListener('keydown',cmdkTecla);
+  }
+  b.style.display='flex'; const inp=b.querySelector('#cmdkInp'); inp.value=''; _CMDK_SEL=0; cmdkFiltra(); inp.focus();
+}
+function cmdkClose(){ const b=document.getElementById('cmdkBack'); if(b) b.style.display='none'; }
+function cmdkFiltra(){
+  const q=(document.getElementById('cmdkInp').value||'').toLowerCase().trim();
+  _CMDK_HITS=_cmdkCmds().filter(c=>!q || c.nome.toLowerCase().includes(q));
+  if(_CMDK_SEL>=_CMDK_HITS.length) _CMDK_SEL=0;
+  const L=document.getElementById('cmdkList');
+  L.innerHTML=_CMDK_HITS.length? _CMDK_HITS.map((c,i)=>`<div class="cmdk-it ${i===_CMDK_SEL?'sel':''}" data-i="${i}"><span class="ic">${c.ic}</span><span>${c.nome}</span><span class="gp">${c.gp}</span></div>`).join('')
+    : '<div class="cmdk-empty">Nada encontrado.</div>';
+  [...L.querySelectorAll('.cmdk-it')].forEach(el=>{ el.onclick=()=>cmdkExec(+el.dataset.i); });
+}
+function cmdkExec(i){ const c=_CMDK_HITS[i]; cmdkClose(); if(c&&c.run){ try{ c.run(); }catch(e){ console.error(e); } } }
+function cmdkTecla(e){
+  if(e.key==='Escape'){ cmdkClose(); return; }
+  if(e.key==='ArrowDown'){ e.preventDefault(); _CMDK_SEL=Math.min(_CMDK_HITS.length-1,_CMDK_SEL+1); cmdkFiltra(); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); _CMDK_SEL=Math.max(0,_CMDK_SEL-1); cmdkFiltra(); }
+  else if(e.key==='Enter'){ e.preventDefault(); cmdkExec(_CMDK_SEL); }
+}
+addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault();
+  const b=document.getElementById('cmdkBack'); (b&&b.style.display==='flex')?cmdkClose():cmdkOpen(); }});
 
 // ===================== CHAT =====================
 function growInp(t){t.style.height='auto';t.style.height=Math.min(120,t.scrollHeight)+'px';
@@ -1582,7 +1678,7 @@ async function renderConfig(){
     <div id="payTest" class="hint" style="margin-top:8px"></div>
   </div>`:''}
   <div class="card"><h3>Sobre</h3>
-    <div class="hint">Orion v1.8 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
+    <div class="hint">Orion v2.0 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
   </div>
   <div class="row"><button class="btn primary" onclick="salvarConfig()">Salvar configuracoes</button></div>`;
   if(CFG.cerebro) document.getElementById('cfgCerebro').value=CFG.cerebro;
@@ -2946,7 +3042,7 @@ async function pnVendas(b){
       <div id="vdMsg" class="hint" style="margin-top:6px"></div>
     </div>
     <div id="vdResumo" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px"></div>
-    <div class="card" style="margin-top:14px"><h3>Histórico de vendas</h3><div id="vdLista" style="margin-top:8px"></div></div>`;
+    <div class="card" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Histórico de vendas</h3><button id="vdExport" class="btn ghost" style="display:none;padding:5px 10px;font-size:12px" onclick="exportarVendasCSV()">⬇️ Exportar CSV</button></div><div id="vdLista" style="margin-top:8px"></div></div>`;
   document.getElementById('vdData').value=new Date().toISOString().slice(0,10);
   vdRender();
 }
@@ -2966,6 +3062,7 @@ async function vdRender(){
   const box=document.getElementById('vdResumo'); if(box) box.innerHTML=
     card('Receita',_fmtBR(rs.receita),'var(--good)')+card('Lucro',_fmtBR(rs.lucro),'var(--accent)')+card('Vendas',rs.total||0)+card('Ticket médio',_fmtBR(rs.ticket))+card('Margem',(Number(rs.margem||0)).toFixed(0)+'%');
   const lst=r.vendas||[]; const l=document.getElementById('vdLista'); if(!l) return;
+  const eb=document.getElementById('vdExport'); if(eb) eb.style.display=lst.length?'inline-flex':'none';
   l.innerHTML=lst.map(v=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)">
     <div><b>${esc(v.cliente)}</b> <span class="hint">${esc(v.servico||'')}</span><div class="hint">${esc(v.data||'')} · lucro ${_fmtBR((v.valor||0)-(v.custo||0))}</div></div>
     <div style="display:flex;gap:8px;align-items:center"><b style="color:var(--good)">${_fmtBR(v.valor)}</b><button class="btn ghost" onclick="vdApagar(${v.id})">&#10005;</button></div></div>`).join('')||'<div class="hint">Nenhuma venda registrada ainda.</div>';
@@ -2975,6 +3072,7 @@ async function vdApagar(id){ await fetch('/painel/venda/apagar',{method:'POST',h
 // ---------- FINANCEIRO (faturamento, despesas, folha, lucro líquido) ----------
 async function pnFinanceiro(b){
   b.innerHTML=`
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="exportarFinanceiroCSV()">⬇️ Exportar financeiro (CSV)</button></div>
     <div id="finResumo" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px"></div>
     <div class="card"><h3>🧾 Registrar venda falando <span class="mbadge" style="margin-left:6px">agente</span></h3>
       <div class="hint" style="margin-bottom:8px">Escreva a venda em linguagem natural que o Orion registra. Ex: "vendi gestão de tráfego pra Barbearia X por 700, custo 150".</div>

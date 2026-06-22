@@ -268,6 +268,63 @@ def aprendizado_de(uid):
                  for nid,x in g.get("nodes",{}).items() if (x.get("data") or "").strip() and x.get("parent") not in (None,"root")]
     except Exception as e: print("[aprendizado_de]", e)
     return {"ok":True, "uid":uid, "memoria":fatos, "conhecimento":conhecimento_listar(300)}
+def admin_overview():
+    """KPIs pro centro de comando: total de contas, por plano, ativos, novos, pagantes, MRR estimado, custo de IA,
+    e a serie de novos cadastros por dia (ultimos 30 dias) pro grafico de crescimento."""
+    now = time.time(); hoje = datetime.date.today()
+    b = bans_get(); planos = {}; ativos7 = ativos30 = sign_hoje = sign7 = total = pagantes = 0
+    por_dia = {}   # 'dd/mm' -> qtd de cadastros
+    with _db() as c:
+        for x in c.execute("SELECT * FROM users").fetchall():
+            total += 1
+            pl = ("adm" if x["criador"] else ("business" if x["socio"] else (x["plano"] or "free")))
+            planos[pl] = planos.get(pl, 0) + 1
+            if pl not in ("free", "adm"): pagantes += 1
+            at = get_blob(x["id"], "ativo_em", 0) or 0
+            if at and now-at < 7*86400:  ativos7 += 1
+            if at and now-at < 30*86400: ativos30 += 1
+            try:
+                dt = datetime.datetime.strptime((x["criado"] or "").split(" ")[0], "%d/%m/%Y").date()
+                if dt == hoje: sign_hoje += 1
+                if (hoje-dt).days < 7: sign7 += 1
+                if (hoje-dt).days < 30: por_dia[dt.strftime("%d/%m")] = por_dia.get(dt.strftime("%d/%m"), 0) + 1
+            except Exception: pass
+    crescimento = [{"dia": (hoje-datetime.timedelta(days=i)).strftime("%d/%m"),
+                    "n": por_dia.get((hoje-datetime.timedelta(days=i)).strftime("%d/%m"), 0)} for i in range(29, -1, -1)]
+    mrr = sum(PLANOS_PRECO.get(p, 0)*n for p, n in planos.items() if p not in ("free", "adm"))
+    tok = tokens_admin_resumo()
+    return {"ok":True, "total":total, "planos":planos, "pagantes":pagantes,
+            "ativos7":ativos7, "ativos30":ativos30, "signups_hoje":sign_hoje, "signups_7d":sign7,
+            "banidos":len(b["users"])+len(b["emails"]), "dispositivos":len(_dispos_raw()),
+            "mrr":round(mrr,2), "custo_tokens":tok.get("custo_total",0), "tokens_total":tok.get("tokens_total",0),
+            "crescimento":crescimento}
+def usuario_detalhe(uid):
+    u = get_user(int(uid))
+    if not u: return {"ok":False,"erro":"nao achei essa conta"}
+    try: tk = tokens_estado(u)
+    except Exception: tk = {}
+    return {"ok":True, "id":u["id"], "nome":u["nome"], "email":u["email"] or "", "plano":_pub(u)["plano"],
+            "socio":bool(u["socio"]), "criador":bool(u["criador"]), "criado":u["criado"] or "",
+            "ativo_em":get_blob(u["id"], "ativo_em", 0),
+            "tokens":{"usados":tk.get("usados",0), "restante":tk.get("restante",0), "grant":tk.get("grant",0), "custo":tk.get("custo",0)},
+            "vip":(get_blob(u["id"], "vip", {}) or {}), "push":len(push_subs_get(u["id"]) or []),
+            "banido":banido_motivo(uid=u["id"], email=(u["email"] or ""))}
+def admin_definir_plano(uid, plano):
+    if plano not in ("free","pro","trading","trafego","business"): return {"ok":False,"erro":"plano invalido"}
+    with _db() as c: c.execute("UPDATE users SET plano=? WHERE id=?", (plano, int(uid))); c.commit()
+    return {"ok":True, "user":_pub(get_user(int(uid)))}
+def admin_broadcast(titulo, corpo, url="/"):
+    """Envia uma notificacao (push) pra todos que aceitaram receber. Avisos/anuncios do dono."""
+    if not _PUSH: return {"ok":False,"erro":"Notificacoes nao configuradas (defina VAPID_PRIVATE no servidor)."}
+    titulo=(titulo or "Orion").strip()[:80]; corpo=(corpo or "").strip()[:300]
+    if not corpo: return {"ok":False,"erro":"escreva a mensagem"}
+    n = 0
+    with _db() as c: ids = [r["id"] for r in c.execute("SELECT id FROM users").fetchall()]
+    for uid in ids:
+        try:
+            if push_subs_get(uid): notificar(uid, titulo, corpo, url or "/"); n += 1
+        except Exception: pass
+    return {"ok":True, "enviados":n}
 
 # ---- rate limit simples por IP (anti brute-force no login) ----
 _RATE = {}
@@ -2333,6 +2390,11 @@ class H(BaseHTTPRequestHandler):
         elif path == "/admin/funil": self._send(funil_resumo() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/vips": self._send(vips_listar() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/moderacao": self._send(moderacao_resumo() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/overview": self._send(admin_overview() if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/admin/usuario":
+            if not (u and u["criador"]): self._send({"ok":False,"erro":"so o dono"}); return
+            qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
+            self._send(usuario_detalhe((qs.get("uid") or [0])[0]))
         elif path == "/admin/aprendizado":
             if not (u and u["criador"]): self._send({"ok":False,"erro":"so o dono"}); return
             qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
@@ -2671,10 +2733,10 @@ class H(BaseHTTPRequestHandler):
         elif path == "/pagamento/testar":
             self._send({"mercadopago":{"ok":bool(mp_token())},"paypal":{"ok":bool(pp_creds()[0]),"modo":pp_creds()[2]}} if (u and u["criador"]) else {"erro":"sem permissao"})
         elif path == "/admin/plano":
-            if u and u["criador"] and d.get("plano") in ("free","pro","business"):
-                with _db() as c: c.execute("UPDATE users SET plano=? WHERE id=?", (d["plano"], d.get("id"))); c.commit()
-                self._send({"ok":True,"user":_pub(get_user(d.get("id")))})
+            if u and u["criador"]: self._send(admin_definir_plano(d.get("id"), d.get("plano")))
             else: self._send({"ok":False,"erro":"sem permissao"})
+        elif path == "/admin/broadcast":
+            self._send(admin_broadcast(d.get("titulo"), d.get("corpo"), d.get("url","/")) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/socio":
             if u and u["criador"]:
                 with _db() as c: c.execute("UPDATE users SET socio=?, plano=CASE WHEN ?=1 THEN 'business' ELSE plano END WHERE id=?",
