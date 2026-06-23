@@ -155,6 +155,17 @@ button{font-family:inherit;cursor:pointer}
 .sug{padding:10px 15px;border:1px solid var(--line2);border-radius:12px;background:rgba(18,22,31,.7);
   font-size:13px;color:var(--dim);backdrop-filter:blur(4px)}
 .sug:hover{color:var(--text);border-color:var(--accent)}
+/* briefing proativo do Orion (cara de socio, nao de caixa de texto) */
+.proativo{display:flex;flex-direction:column;gap:8px;width:100%;max-width:560px;margin:4px auto 14px}
+.pro-saud{font-size:14px;font-weight:700;color:var(--text);text-align:left;opacity:.92;margin-bottom:2px}
+.pro-card{display:flex;align-items:center;gap:12px;text-align:left;padding:11px 14px;border:1px solid var(--line2);border-radius:14px;
+  background:linear-gradient(100deg,color-mix(in srgb,var(--accent) 12%,transparent),rgba(18,22,31,.7));cursor:pointer;
+  transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.pro-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 10px 24px -14px var(--accent)}
+.pro-card .pi{font-size:20px;width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:rgba(0,0,0,.25);flex:none}
+.pro-card .pt{font-size:13.5px;font-weight:700;color:var(--text)}
+.pro-card .px{font-size:12px;color:var(--dim);margin-top:1px}
+.pro-card .parr{margin-left:auto;color:var(--faint);font-size:16px}
 .msg{display:flex;gap:12px;max-width:100%}
 .msg .who{width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;
   font-size:12px;font-weight:700}
@@ -565,6 +576,7 @@ button{font-family:inherit;cursor:pointer}
             <div class="orb-wrap"><canvas id="orb" width="300" height="300"></canvas></div>
             <h2 id="welHi">Ola. Sou o Orion.</h2>
             <p>Seu assistente pessoal. Posso conversar por voz ou texto, escrever documentos, organizar sua rotina, pesquisar e cuidar do seu dia a dia. Por onde comecamos?</p>
+            <div id="proativo" class="proativo"></div>
             <div class="suggestions">
               <button class="sug" onclick="briefing()">Resumo do dia</button>
               <button class="sug" onclick="sugere('Gera uma imagem de um astronauta brasileiro pisando em Marte ao por do sol, fotorrealista')">Gerar uma imagem</button>
@@ -891,6 +903,7 @@ function go(id){
   else stopTradingPoll();
   if(id==='termos') renderTermos();
   if(id==='privacidade') renderPriv();
+  if(id==='home') proativoCarregar();
   document.querySelector('.main').scrollTop=0;
 }
 
@@ -916,6 +929,52 @@ async function exportarFinanceiroCSV(){ let r=null; try{ r=await (await fetch('/
   rows.push({tipo:'RESUMO',item:'receita',valor:r.receita},{tipo:'RESUMO',item:'despesas',valor:r.despesas},
             {tipo:'RESUMO',item:'folha',valor:r.folha},{tipo:'RESUMO',item:'lucro_liquido',valor:r.lucro_liquido});
   exportarCSV('financeiro_orion.csv', rows); }
+
+// ===================== ORION PROATIVO (briefing de socio na home) =====================
+async function proativoCarregar(){
+  const box=document.getElementById('proativo'); if(!box) return;
+  if(window.ORION_CLOUD===false){ box.innerHTML=''; return; }   // desktop: endpoint e da nuvem
+  let r=null; try{ r=await (await fetch('/orion/proativo')).json(); }catch(e){ return; }
+  if(!r||!r.ok||!(r.insights||[]).length){ box.innerHTML=''; return; }
+  const cards=(r.insights||[]).map((it,i)=>`<div class="pro-card" onclick='proAcao(${i})'>
+    <span class="pi">${it.icon||'✨'}</span><div style="min-width:0"><div class="pt">${esc(it.titulo||'')}</div><div class="px">${esc(it.texto||'')}</div></div><span class="parr">›</span></div>`).join('');
+  box.innerHTML=`<div class="pro-saud">${esc(r.saudacao||'')}</div>${cards}`;
+  window._PROA=r.insights||[];
+}
+function proAcao(i){ const it=(window._PROA||[])[i]; if(!it||!it.acao) return;
+  if(it.acao.tipo==='ir'){ go(it.acao.alvo); }
+  else if(it.acao.tipo==='chat'){ if(typeof sugere==='function') sugere(it.acao.alvo); else { const inp=document.getElementById('inp'); if(inp){ inp.value=it.acao.alvo; inp.focus(); } } }
+  else if(it.acao.tipo==='analise'){ orionAnalise(); }
+  else if(it.acao.tipo==='agir'){ orionAgir(it.acao.alvo); }
+}
+function _proModal(titulo, htmlInterno){
+  let b=document.getElementById('proModal');
+  if(!b){ b=document.createElement('div'); b.id='proModal'; b.className='cmdk-back';
+    b.innerHTML='<div class="cmdk" style="max-width:620px"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)"><b id="proModalT" style="font-size:15px"></b><button class="btn ghost" style="padding:4px 10px" onclick="document.getElementById(\'proModal\').style.display=\'none\'">&#10005;</button></div><div id="proModalB" style="padding:16px 18px;max-height:60vh;overflow:auto"></div></div>';
+    document.body.appendChild(b); b.addEventListener('click',e=>{ if(e.target===b) b.style.display='none'; }); }
+  b.querySelector('#proModalT').textContent=titulo; b.querySelector('#proModalB').innerHTML=htmlInterno; b.style.display='flex'; return b;
+}
+async function orionAnalise(){
+  _proModal('🧠 Análise inteligente do Orion','<div class="hint">Analisando seus números ao vivo...</div>');
+  let r=null; try{ r=await (await fetch('/orion/analise')).json(); }catch(e){}
+  if(!r||!r.ok){ document.getElementById('proModalB').innerHTML='<div class="hint" style="color:var(--warn)">'+esc((r&&r.erro)||'Não consegui analisar agora.')+'</div>'; return; }
+  document.getElementById('proModalB').innerHTML='<div style="white-space:pre-wrap;line-height:1.55">'+esc(r.analise||'')+'</div>'+
+    '<div class="hint" style="margin-top:12px;border-top:1px solid var(--line);padding-top:8px">Base (seus dados): '+esc(r.resumo||'')+'</div>';
+}
+async function orionAgir(acao){
+  _proModal('✍️ Orion trabalhando','<div class="hint">Escrevendo as mensagens...</div>');
+  let r=null; try{ r=await (await fetch('/orion/agir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao})})).json(); }catch(e){}
+  if(!r||!r.ok){ document.getElementById('proModalB').innerHTML='<div class="hint" style="color:var(--warn)">'+esc((r&&r.erro)||'Não consegui agir agora.')+'</div>'; return; }
+  const ms=r.mensagens||[];
+  const body=(ms.length? ms.map(m=>`<div style="border:1px solid var(--line2);border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="font-weight:700">${esc(m.lead||'Lead')} ${m.contato?'<span class="hint">· '+esc(m.contato)+'</span>':''}</div>
+      <div style="white-space:pre-wrap;margin:6px 0;line-height:1.5">${esc(m.mensagem||'')}</div>
+      <div class="row"><button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="navigator.clipboard.writeText(${JSON.stringify(m.mensagem||'')});piscarSave('COPIADO')">Copiar</button>
+      ${m.contato?`<a class="btn ghost" style="padding:4px 10px;font-size:12px;text-decoration:none" target="_blank" href="https://wa.me/55${(m.contato||'').replace(/\\D/g,'')}?text=${encodeURIComponent(m.mensagem||'')}">Abrir no WhatsApp</a>`:''}</div>
+    </div>`).join('') : '<div class="hint">'+esc(r.aviso||'Nada a fazer.')+'</div>')
+    +(r.aviso&&ms.length?('<div class="hint" style="margin-top:4px">'+esc(r.aviso)+'</div>'):'');
+  document.getElementById('proModalB').innerHTML=body;
+}
 
 // ===================== PALETA DE COMANDO (Ctrl+K) =====================
 let _CMDK_SEL=0, _CMDK_HITS=[];
@@ -1300,6 +1359,23 @@ const TEMAS={
   vinho:{nome:'Vinho',free:false,vars:{'--accent':'#b06bff','--accent2':'#7c3aed'}},
   matrix:{nome:'Matrix',free:false,vars:{'--accent':'#33ff99','--accent2':'#10b981'}},
   carbon:{nome:'Carbono',free:true,vars:{'--accent':'#e7eaf0','--accent2':'#9aa6bf'}},
+  meianoite:{nome:'Meia-noite',free:true,vars:{'--accent':'#7c9cff','--accent2':'#5b7cff'},
+    bg:'radial-gradient(900px 520px at 50% -14%,rgba(124,156,255,.14),transparent 62%),linear-gradient(180deg,#070a16,#04060f)'},
+  cafe:{nome:'Café',free:true,vars:{'--accent':'#d6a06a','--accent2':'#a9744a'},
+    bg:'radial-gradient(820px 500px at 18% -10%,rgba(214,160,106,.14),transparent 60%),linear-gradient(180deg,#15100b,#0d0907)'},
+  // temas com fundo detalhado / mais criativos
+  aurora_b:{nome:'Aurora Boreal',free:false,vars:{'--accent':'#5ef2c9','--accent2':'#7c5cff'},
+    bg:'radial-gradient(1000px 420px at 30% -8%,rgba(94,242,201,.18),transparent 60%),radial-gradient(820px 460px at 80% -6%,rgba(124,92,255,.18),transparent 60%),radial-gradient(700px 520px at 60% 115%,rgba(56,189,248,.10),transparent 60%),linear-gradient(180deg,#04120f,#050810)'},
+  crepusculo:{nome:'Crepúsculo',free:false,vars:{'--accent':'#ff8a5c','--accent2':'#c44fe0'},
+    bg:'linear-gradient(180deg,#2a0f2e 0%,#3a1230 30%,#5a1c2e 60%,#7a2a22 100%),radial-gradient(700px 360px at 70% 8%,rgba(255,180,84,.22),transparent 60%)'},
+  floresta:{nome:'Floresta',free:false,vars:{'--accent':'#6fd66f','--accent2':'#2f9e6a'},
+    bg:'radial-gradient(900px 520px at 25% -10%,rgba(111,214,111,.14),transparent 60%),repeating-linear-gradient(120deg,rgba(47,158,106,.05) 0 2px,transparent 2px 34px),linear-gradient(180deg,#06140d,#040d09)'},
+  synthwave:{nome:'Synthwave',free:false,vars:{'--accent':'#ff4dfd','--accent2':'#22d3ee'},
+    bg:'linear-gradient(180deg,#1a0633 0%,#2a0a4a 45%,#3d1063 60%,#0a0418 60%,#0a0418 100%),repeating-linear-gradient(0deg,transparent 0 38px,rgba(34,211,238,.10) 38px 39px),radial-gradient(600px 300px at 50% 64%,rgba(255,79,253,.22),transparent 60%)'},
+  nebula:{nome:'Nebulosa',free:false,vars:{'--accent':'#b06bff','--accent2':'#ff6bc4'},
+    bg:'radial-gradient(700px 520px at 20% 10%,rgba(176,107,255,.22),transparent 55%),radial-gradient(680px 520px at 85% 30%,rgba(255,107,196,.16),transparent 55%),radial-gradient(900px 700px at 60% 110%,rgba(59,130,246,.12),transparent 60%),linear-gradient(180deg,#0a0618,#05030f)'},
+  sangue:{nome:'Dragão',free:false,vars:{'--accent':'#ff4d4d','--accent2':'#ff9d2f'},
+    bg:'radial-gradient(760px 460px at 50% -10%,rgba(255,77,77,.18),transparent 58%),radial-gradient(620px 460px at 85% 115%,rgba(255,157,47,.14),transparent 60%),linear-gradient(180deg,#1a0707,#0e0404)'},
   // temas por vertical (com fundo detalhado)
   trading:{nome:'Trading',free:false,vars:{'--accent':'#16c784','--accent2':'#0e9f6e'},
     bg:'radial-gradient(900px 500px at 80% -10%,rgba(22,199,132,.16),transparent 60%),repeating-linear-gradient(90deg,rgba(22,199,132,.05) 0 1px,transparent 1px 46px),repeating-linear-gradient(0deg,rgba(22,199,132,.05) 0 1px,transparent 1px 46px),linear-gradient(180deg,#06140f,#04100c)'},
@@ -1363,36 +1439,56 @@ function _animalParts(s,gid){
   const C=s.stops[1], D=s.stops[2];
   const F='url(#'+gid+'f)';        // gradiente de "pelo" (claro->escuro) pra dar volume
   const IE='url(#'+gid+'ie)';      // gradiente da orelha interna (rosado)
+  const brilho='<circle cx="48.6" cy="56.6" r="1" fill="#fff" opacity=".6"/>';   // gloss no nariz
   if(t==='gato') return {
-    back:`<polygon points="29,25 23,4 48,18" fill="${F}" stroke="${D}" stroke-width="0.6"/><polygon points="71,25 77,4 52,18" fill="${F}" stroke="${D}" stroke-width="0.6"/>`, mid:'',
-    top:`<polygon points="31,21 29,10 43,18" fill="${IE}"/><polygon points="69,21 71,10 57,18" fill="${IE}"/>`+
-        `<path d="M46 56.5 l4 3.5 l4 -3.5 z" fill="#ff7a9c"/><ellipse cx="48.6" cy="56.8" rx="1.1" ry="0.7" fill="#fff" opacity=".55"/>`+
-        `<g stroke="#0a0c11" stroke-width="0.8" opacity=".4" stroke-linecap="round"><line x1="16" y1="55" x2="33" y2="56.5"/><line x1="16" y1="60" x2="33" y2="59.5"/><line x1="84" y1="55" x2="67" y2="56.5"/><line x1="84" y1="60" x2="67" y2="59.5"/></g>`};
+    back:`<polygon points="29,26 22,3 48,18" fill="${F}" stroke="${D}" stroke-width="0.7"/><polygon points="71,26 78,3 52,18" fill="${F}" stroke="${D}" stroke-width="0.7"/>`
+        +`<polygon points="25,12 23,4 30,11" fill="${D}" opacity=".6"/><polygon points="75,12 77,4 70,11" fill="${D}" opacity=".6"/>`, mid:'',
+    top:`<polygon points="31,21 29,9 43,18" fill="${IE}"/><polygon points="69,21 71,9 57,18" fill="${IE}"/>`
+        +`<path d="M38 25 q3 -3 6 0" fill="none" stroke="${D}" stroke-width="0.8" opacity=".5"/><path d="M56 25 q3 -3 6 0" fill="none" stroke="${D}" stroke-width="0.8" opacity=".5"/>`  /* sobrancelhas */
+        +`<path d="M45.5 56 l4.5 4 l4.5 -4 q-4.5 2 -9 0 z" fill="#ff7a9c"/>${brilho}<path d="M50 60 v3" stroke="#c2566f" stroke-width="0.9"/>`
+        +`<g stroke="#0a0c11" stroke-width="0.8" opacity=".4" stroke-linecap="round"><path d="M15 54 q9 -1 18 2"/><path d="M14 59 q9 0 19 1"/><path d="M85 54 q-9 -1 -18 2"/><path d="M86 59 q-9 0 -19 1"/></g>`
+        +`<path d="M34 63 q4 3 8 1 M58 64 q4 -2 8 1" fill="none" stroke="${D}" stroke-width="0.8" opacity=".35"/>`};
   if(t==='cachorro') return {
-    back:`<ellipse cx="21" cy="46" rx="9.5" ry="18" fill="${F}" transform="rotate(8 21 46)"/><ellipse cx="79" cy="46" rx="9.5" ry="18" fill="${F}" transform="rotate(-8 79 46)"/>`,
-    mid:`<ellipse cx="50" cy="62" rx="14" ry="10" fill="#fff" opacity=".18"/>`,
-    top:`<ellipse cx="50" cy="58" rx="5" ry="3.8" fill="#2a1d14"/><ellipse cx="48.3" cy="56.7" rx="1.6" ry="1" fill="#fff" opacity=".5"/><path d="M50 61.5 v4" stroke="#2a1d14" stroke-width="1.2" stroke-linecap="round"/>`};
+    back:`<path d="M30 24 Q10 30 14 56 Q22 66 31 50 Z" fill="${F}" stroke="${D}" stroke-width="0.6"/><path d="M70 24 Q90 30 86 56 Q78 66 69 50 Z" fill="${F}" stroke="${D}" stroke-width="0.6"/>`,
+    mid:`<ellipse cx="50" cy="60" rx="15" ry="11" fill="#fff" opacity=".16"/><path d="M40 30 q6 -4 12 1" fill="${D}" opacity=".25"/>`,  /* mancha na testa */
+    top:`<path d="M44 26 q3 -2 6 1" fill="none" stroke="${D}" stroke-width="0.9" opacity=".5"/>`  /* sobrancelha */
+        +`<ellipse cx="50" cy="58" rx="5.2" ry="4" fill="#241812"/><ellipse cx="48" cy="56.6" rx="1.7" ry="1.1" fill="#fff" opacity=".55"/>`
+        +`<path d="M50 62 v3 M50 65 q-3 1.5 -6 0 M50 65 q3 1.5 6 0" fill="none" stroke="#241812" stroke-width="1.1" stroke-linecap="round"/>`
+        +`<path d="M52 66 q3 2 7 1" fill="#ff7a6b" opacity=".85"/>`};  /* linguinha */
   if(t==='coruja') return {
-    back:`<polygon points="31,23 25,3 44,16" fill="${F}"/><polygon points="69,23 75,3 56,16" fill="${F}"/>`,
-    mid:`<circle cx="42" cy="49" r="10" fill="#fff" opacity=".55"/><circle cx="58" cy="49" r="10" fill="#fff" opacity=".55"/><g fill="${D}" opacity=".35"><path d="M34 62 q8 6 16 0" /><path d="M50 62 q8 6 16 0"/></g>`,
-    top:`<polygon points="46,54 54,54 50,62" fill="#f7a93c"/><polygon points="47,55 53,55 50,60" fill="#d98a1c"/>`};
+    back:`<polygon points="30,24 24,2 45,15" fill="${F}"/><polygon points="70,24 76,2 55,15" fill="${F}"/>`,
+    mid:`<circle cx="42" cy="49" r="11" fill="#fff" opacity=".6"/><circle cx="58" cy="49" r="11" fill="#fff" opacity=".6"/>`
+        +`<circle cx="42" cy="49" r="11" fill="none" stroke="${D}" stroke-width="1" opacity=".5"/><circle cx="58" cy="49" r="11" fill="none" stroke="${D}" stroke-width="1" opacity=".5"/>`
+        +`<g fill="${D}" opacity=".3"><path d="M30 60 q7 5 14 0z"/><path d="M42 62 q8 5 16 0z"/><path d="M56 60 q7 5 14 0z"/><path d="M36 68 q7 4 14 0z M50 68 q7 4 14 0z"/></g>`,  /* penas do peito */
+    top:`<polygon points="46,53 54,53 50,62" fill="#f7a93c"/><polygon points="47.5,54 52.5,54 50,59" fill="#d98a1c"/>`};
   if(t==='raposa') return {
-    back:`<polygon points="27,25 20,3 48,18" fill="${F}"/><polygon points="73,25 80,3 52,18" fill="${F}"/>`,
-    mid:`<path d="M30 55 Q50 74 70 55 Q50 64 30 55 Z" fill="#fff" opacity=".45"/>`,
-    top:`<polygon points="30,20 27,8 43,17" fill="#fff"/><polygon points="70,20 73,8 57,17" fill="#fff"/><path d="M46 57.5 l4 3.5 l4 -3.5 z" fill="#1a1a1a"/>`};
+    back:`<polygon points="27,25 19,2 48,18" fill="${F}"/><polygon points="73,25 81,2 52,18" fill="${F}"/>`
+        +`<polygon points="23,10 20,2 29,9" fill="#1a1a1a" opacity=".8"/><polygon points="77,10 80,2 71,9" fill="#1a1a1a" opacity=".8"/>`,  /* pontas pretas */
+    mid:`<path d="M28 54 Q50 76 72 54 Q50 66 28 54 Z" fill="#fff" opacity=".5"/>`,  /* peito branco */
+    top:`<polygon points="30,21 27,7 44,17" fill="#fff"/><polygon points="70,21 73,7 56,17" fill="#fff"/>`
+        +`<path d="M45 56 l5 4 l5 -4 q-5 2 -10 0 z" fill="#1a1a1a"/>${brilho}<path d="M50 60 v3" stroke="#1a1a1a" stroke-width="0.9"/>`
+        +`<path d="M38 26 q3 -2 6 0 M56 26 q3 -2 6 0" fill="none" stroke="${D}" stroke-width="0.8" opacity=".5"/>`};
   if(t==='leao') return {
-    back:`<g>`+Array.from({length:14}).map((_,i)=>{const a=i/14*6.2832;return `<circle cx="${(50+34*Math.cos(a)).toFixed(1)}" cy="${(50+34*Math.sin(a)).toFixed(1)}" r="8.5" fill="${D}"/>`;}).join('')+
-         Array.from({length:14}).map((_,i)=>{const a=(i+.5)/14*6.2832;return `<circle cx="${(50+30*Math.cos(a)).toFixed(1)}" cy="${(50+30*Math.sin(a)).toFixed(1)}" r="6.5" fill="${C}" opacity=".8"/>`;}).join('')+`</g>`,
-    mid:'', top:`<ellipse cx="50" cy="57.5" rx="4.2" ry="3.2" fill="#3a2410"/><ellipse cx="48.4" cy="56.4" rx="1.3" ry="0.8" fill="#fff" opacity=".5"/><path d="M43 62 q7 5 14 0" fill="none" stroke="#3a2410" stroke-width="1.4" stroke-linecap="round"/>`};
+    back:`<g>`+Array.from({length:16}).map((_,i)=>{const a=i/16*6.2832,x=50+38*Math.cos(a),y=50+38*Math.sin(a),x2=50+27*Math.cos(a+.18),y2=50+27*Math.sin(a+.18),x3=50+27*Math.cos(a-.18),y3=50+27*Math.sin(a-.18);return `<polygon points="${x.toFixed(1)},${y.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)} ${x3.toFixed(1)},${y3.toFixed(1)}" fill="${D}"/>`;}).join('')
+        +Array.from({length:14}).map((_,i)=>{const a=i/14*6.2832;return `<circle cx="${(50+30*Math.cos(a)).toFixed(1)}" cy="${(50+30*Math.sin(a)).toFixed(1)}" r="6" fill="${C}" opacity=".85"/>`;}).join('')+`</g>`
+        +`<polygon points="36,22 33,12 45,19" fill="${F}"/><polygon points="64,22 67,12 55,19" fill="${F}"/>`,  /* orelhinhas */
+    mid:'', top:`<ellipse cx="50" cy="57.5" rx="4.4" ry="3.2" fill="#3a2410"/><ellipse cx="48.3" cy="56.3" rx="1.3" ry="0.8" fill="#fff" opacity=".5"/>`
+        +`<path d="M50 60.5 v2.5 M50 63 q-4 2 -7 0 M50 63 q4 2 7 0" fill="none" stroke="#3a2410" stroke-width="1.3" stroke-linecap="round"/>`
+        +`<g fill="#3a2410" opacity=".5"><circle cx="40" cy="60" r="0.7"/><circle cx="43" cy="61.5" r="0.7"/><circle cx="60" cy="60" r="0.7"/><circle cx="57" cy="61.5" r="0.7"/></g>`};  /* pontos do focinho */
   if(t==='panda') return {
-    back:`<circle cx="29" cy="21" r="10" fill="#23262b"/><circle cx="71" cy="21" r="10" fill="#23262b"/><circle cx="29" cy="20" r="6" fill="#15171a"/><circle cx="71" cy="20" r="6" fill="#15171a"/>`,
-    mid:`<ellipse cx="42" cy="50" rx="7" ry="9" fill="#23262b" transform="rotate(-16 42 50)"/><ellipse cx="58" cy="50" rx="7" ry="9" fill="#23262b" transform="rotate(16 58 50)"/>`,
-    top:`<circle cx="42" cy="50" r="2.8" fill="#fff"/><circle cx="58" cy="50" r="2.8" fill="#fff"/><circle cx="42.4" cy="49.4" r="1.4" fill="#0a0c11"/><circle cx="58.4" cy="49.4" r="1.4" fill="#0a0c11"/><ellipse cx="50" cy="58" rx="3.6" ry="2.6" fill="#15171a"/>`};
+    back:`<circle cx="28" cy="20" r="11" fill="#23262b"/><circle cx="72" cy="20" r="11" fill="#23262b"/><circle cx="28" cy="19" r="6.5" fill="#15171a"/><circle cx="72" cy="19" r="6.5" fill="#15171a"/>`,
+    mid:`<ellipse cx="41" cy="50" rx="7.5" ry="9.5" fill="#23262b" transform="rotate(-18 41 50)"/><ellipse cx="59" cy="50" rx="7.5" ry="9.5" fill="#23262b" transform="rotate(18 59 50)"/>`,
+    top:`<circle cx="41" cy="50" r="3" fill="#fff"/><circle cx="59" cy="50" r="3" fill="#fff"/><circle cx="41.5" cy="49.3" r="1.5" fill="#0a0c11"/><circle cx="59.5" cy="49.3" r="1.5" fill="#0a0c11"/>`
+        +`<circle cx="40.6" cy="48.8" r="0.6" fill="#fff"/><circle cx="58.6" cy="48.8" r="0.6" fill="#fff"/>`
+        +`<ellipse cx="50" cy="58" rx="3.8" ry="2.7" fill="#15171a"/>${brilho}<path d="M50 60.5 v2.5 M50 63 q-3 2 -6 0.5 M50 63 q3 2 6 0.5" fill="none" stroke="#15171a" stroke-width="1.1" stroke-linecap="round"/>`};
   if(t==='unicornio') return {
-    back:`<polygon points="34,22 30,8 45,17" fill="${F}"/><polygon points="66,22 70,8 55,17" fill="${F}"/>`+
-         `<g transform="rotate(-8 50 18)"><polygon points="50,1 46,18 54,18" fill="url(#${gid}horn)"/><g stroke="#fff" stroke-width="0.7" opacity=".6"><line x1="48" y1="6" x2="52" y2="6"/><line x1="47.5" y1="11" x2="52.5" y2="11"/></g></g>`,
-    mid:'', top:`<polygon points="35,19 33,9 46,17" fill="#ffe1ef"/><polygon points="65,19 67,9 54,17" fill="#ffe1ef"/>`+
-         `<path d="M46 57 l4 3 l4 -3 z" fill="#ff8fb3"/>`};
+    back:`<polygon points="34,22 30,8 45,17" fill="${F}"/><polygon points="66,22 70,8 55,17" fill="${F}"/>`
+        +`<g transform="rotate(-6 50 18)"><polygon points="50,0 46.5,18 53.5,18" fill="url(#${gid}horn)"/>`
+        +`<g stroke="#caa23a" stroke-width="0.7" opacity=".8"><path d="M47.5 14 q2.5 -1.5 5 0 M47.8 10 q2.2 -1.3 4.4 0 M48.2 6 q1.8 -1 3.6 0"/></g></g>`  /* espiral do chifre */
+        +`<g fill="${C}" opacity=".85"><path d="M32 22 Q22 34 30 50 Q34 38 38 28 Z"/><path d="M68 22 Q78 34 70 50 Q66 38 62 28 Z"/></g>`,  /* crina */
+    mid:'', top:`<polygon points="35,19 33,9 46,17" fill="#ffe1ef"/><polygon points="65,19 67,9 54,17" fill="#ffe1ef"/>`
+        +`<path d="M46 57 l4 3 l4 -3 q-4 1.5 -8 0 z" fill="#ff8fb3"/>${brilho}`
+        +`<ellipse cx="36" cy="56" rx="2.6" ry="1.7" fill="#ff9ec4" opacity=".5"/><ellipse cx="64" cy="56" rx="2.6" ry="1.7" fill="#ff9ec4" opacity=".5"/>`};  /* bochechas rosadas */
   return {back:'',mid:'',top:''};
 }
 function _innerOrb(s,gid){   // "interior vivo" do orb (clipado no circulo). Criatividade extra.
@@ -1468,6 +1564,7 @@ async function carregaPrefs(){
       localStorage.setItem('orion_prefs',JSON.stringify(_PREFS)); aplicaAparencia(); }
     _PREFS._onboarding=!!(r&&r.onboarding);
   }catch(e){}
+  if(VIEW==='home') proativoCarregar();   // briefing proativo assim que entra
 }
 async function salvarPref(campo,val){ _PREFS[campo]=val; localStorage.setItem('orion_prefs',JSON.stringify(_PREFS));
   try{ await fetch('/prefs/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[campo]:val})}); }catch(e){} }
@@ -1598,15 +1695,24 @@ async function renderConfig(){
   const a=document.getElementById('cfgArea');
   a.innerHTML=`
   ${window.ORION_CLOUD?`<div class="card"><h3>Cerebro do Orion (nuvem) - plugavel</h3>
-    <div class="hint" style="margin-bottom:10px">Por padrao usa o Groq (gratis). Voce pode plugar sua propria chave de OpenAI, Mistral, Together, DeepInfra. So vale pra <b>sua</b> conta. Deixe os campos vazios pra usar o padrao.</div>
+    <div class="hint" style="margin-bottom:10px">Por padrao usa o Gemini Flash (gratis). Voce pode plugar sua propria chave: <b>GLM-5.2</b> (Z.ai), OpenAI, Groq, Mistral e outros. Detecto o provedor pela cara da chave, entao basta colar. So vale pra <b>sua</b> conta e fica <b>salva</b> (nao precisa por de novo).</div>
+    ${brain.tem_chave?'<div class="hint" style="color:var(--good);margin-bottom:8px">✓ Voce ja tem uma chave salva. Deixe o campo de chave vazio pra mantê-la; preencha so se quiser trocar.</div>':''}
     <div class="field"><label>Provedor</label>
       <select id="brainProv">${(brain.providers||[]).map(p=>`<option value="${p.id}" data-base="${p.base}" data-modelo="${p.modelo}" data-como="${esc(p.como)}">${esc(p.nome)}</option>`).join('')}</select>
       <div class="hint" id="brainComo"></div>
     </div>
-    <div class="field"><label>Modelo</label><input id="brainModel" placeholder="ex: llama-3.3-70b-versatile" value="${esc(((brain||{}).atual||{}).model||'')}"></div>
-    <div class="field"><label>Sua chave (privada, fica so na sua conta)</label><input id="brainKey" type="password" placeholder="cole sua chave aqui (gsk_..., sk-...)" value=""></div>
+    <div class="field"><label>Modelo</label><input id="brainModel" placeholder="ex: glm-5.2" value="${esc(((brain||{}).atual||{}).model||'')}"></div>
+    <div class="field"><label>Sua chave (privada, fica so na sua conta)</label><input id="brainKey" type="password" placeholder="${brain.tem_chave?'•••••• (chave salva — deixe vazio pra manter)':'cole sua chave aqui (zai-..., AIza..., gsk_..., sk-...)'}" value=""></div>
     <div class="row"><button class="btn primary" onclick="brainSalvar()">Salvar cerebro</button><button class="btn ghost" onclick="brainLimpar()">Voltar ao padrao</button></div>
     <div id="brainMsg" class="hint" style="margin-top:6px"></div>
+  </div>`:''}
+  ${window.ORION_CLOUD?`<div class="card"><h3>🎓 Ensine o Orion (ele se aprimora)</h3>
+    <div class="hint" style="margin-bottom:10px">O Orion ja aprende sozinho com as conversas. Aqui voce dita <b>regras fixas</b> que ele segue em <b>toda</b> conversa. Ex: "sempre responda curto", "me chame de chefe", "foque em trafego pago", "nunca use girias".</div>
+    <div class="tg-order" style="gap:8px"><input id="dirInput" placeholder="escreva uma regra e clique em ensinar" style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')dirAdd()"><button class="btn primary" onclick="dirAdd()">Ensinar</button></div>
+    <div id="dirLista" style="margin-top:10px"></div>
+    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="autoChk" onchange="autonomiaSalvar()"> <span><b>Deixar o Orion agir por mim</b><div class="hint">Quando ligado (e com WhatsApp conectado), o Orion pode enviar os follow-ups sozinho. Desligado, ele só escreve e você revisa.</div></span></label>
+    </div>
   </div>`:''}
   <div class="card"><h3>Cerebro do Orion (desktop)</h3>
     <div class="field"><label>Motor</label>
@@ -1678,7 +1784,7 @@ async function renderConfig(){
     <div id="payTest" class="hint" style="margin-top:8px"></div>
   </div>`:''}
   <div class="card"><h3>Sobre</h3>
-    <div class="hint">Orion v2.0 (cérebro Gemini). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
+    <div class="hint">Orion v2.3 (cérebro Gemini/GLM). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
   </div>
   <div class="row"><button class="btn primary" onclick="salvarConfig()">Salvar configuracoes</button></div>`;
   if(CFG.cerebro) document.getElementById('cfgCerebro').value=CFG.cerebro;
@@ -1704,7 +1810,7 @@ async function renderConfig(){
     };
     bp.onchange=refresh; refresh();
   }
-  audioRender(); audioInit();
+  audioRender(); audioInit(); if(window.ORION_CLOUD){ dirCarregar(); autonomiaCarregar(); }
 }
 async function salvarMP(){
   const t=(document.getElementById('cfgMP')||{}).value; if(!t||t==='********'){ alert('Cole o token, senhor.'); return; }
@@ -1748,15 +1854,41 @@ async function brainSalvar(){
   const key=document.getElementById('brainKey').value.trim();
   const msg=document.getElementById('brainMsg');
   try{ const r=await (await fetch('/brain/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({base,model,key})})).json();
-    if(r.ok){ msg.style.color='var(--good)'; msg.textContent='Cerebro atualizado. Suas proximas mensagens ja usam esse modelo.'; }
+    if(r.ok){ msg.style.color='var(--good)'; msg.textContent=r.tem_chave?'Cerebro salvo e a chave fica guardada. Nao precisa por de novo.':'Cerebro atualizado (usando o padrao do Orion).';
+      document.getElementById('brainKey').value=''; }
     else { msg.style.color='var(--warn)'; msg.textContent=r.erro||'Nao consegui salvar.'; }
   }catch(e){ msg.style.color='var(--warn)'; msg.textContent='Sem conexao.'; }
 }
 async function brainLimpar(){
-  try{ await fetch('/brain/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({base:'',model:'',key:''})});
+  try{ await fetch('/brain/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({limpar:true})});
     document.getElementById('brainKey').value=''; document.getElementById('brainModel').value='';
-    document.getElementById('brainMsg').style.color='var(--good)'; document.getElementById('brainMsg').textContent='Voltou para o padrao do Orion.';
+    document.getElementById('brainMsg').style.color='var(--good)'; document.getElementById('brainMsg').textContent='Voltou para o padrao do Orion (chave removida).';
   }catch(e){}
+}
+// ----- ensinar o Orion (diretrizes que ele sempre segue) -----
+async function dirCarregar(){
+  const box=document.getElementById('dirLista'); if(!box) return;
+  let r={diretrizes:[]}; try{ r=await (await fetch('/orion/diretrizes')).json(); }catch(e){}
+  const ds=r.diretrizes||[];
+  box.innerHTML=ds.length? ds.map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)"><span>📌 ${esc(x)}</span><button class="btn ghost" style="padding:3px 8px" onclick='dirRemover(${JSON.stringify(x)})'>&#10005;</button></div>`).join('')
+    : '<div class="hint">Nenhuma regra ainda. O Orion ja aprende sozinho; aqui voce fixa regras suas.</div>';
+}
+async function dirAdd(){
+  const inp=document.getElementById('dirInput'); const regra=(inp.value||'').trim(); if(!regra) return;
+  try{ await fetch('/orion/ensinar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({regra})}); }catch(e){}
+  inp.value=''; dirCarregar(); piscarSave('APRENDI');
+}
+async function dirRemover(regra){
+  try{ await fetch('/orion/esquecer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({regra})}); }catch(e){}
+  dirCarregar();
+}
+async function autonomiaCarregar(){
+  const chk=document.getElementById('autoChk'); if(!chk) return;
+  try{ const r=await (await fetch('/orion/autonomia')).json(); chk.checked=!!(r.autonomia&&r.autonomia.ligado); }catch(e){}
+}
+async function autonomiaSalvar(){
+  const chk=document.getElementById('autoChk'); if(!chk) return;
+  try{ await fetch('/orion/autonomia/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ligado:chk.checked})}); piscarSave('AUTONOMIA'); }catch(e){}
 }
 async function salvarConfig(){
   const body={cerebro:document.getElementById('cfgCerebro').value,

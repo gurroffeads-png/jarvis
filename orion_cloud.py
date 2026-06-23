@@ -367,6 +367,7 @@ def _provider_auto(key):
     k = (key or "").strip()
     if k.startswith("gsk_"):   return ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile")
     if k.startswith("AIza"):   return ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-2.0-flash")
+    if k.startswith("zai-"):   return ("https://api.z.ai/api/coding/paas/v4", "glm-5.2")   # GLM-5.2 (Z.ai, OpenAI-compativel)
     if k.startswith("sk-or-"): return ("https://openrouter.ai/api/v1", "openai/gpt-4o-mini")
     if k.startswith("sk-ant"): return ("https://api.anthropic.com/v1", "claude-3-5-sonnet-latest")
     if k.startswith("sk-"):    return ("https://api.openai.com/v1", "gpt-4o-mini")
@@ -377,6 +378,7 @@ def _model_ok_base(base, model):
     if not m: return False
     if "groq" in b:                                  return any(x in m for x in ("llama","mixtral","gemma","qwen","deepseek"))
     if "google" in b or "generativelanguage" in b:   return m.startswith("gemini")
+    if "z.ai" in b or "bigmodel" in b:               return m.startswith("glm")
     if "openai.com" in b:                            return m.startswith(("gpt","o1","o3","o4"))
     return True  # provedores desconhecidos/compativeis: confia no que veio
 def _brain_norm(key, base, model):
@@ -385,7 +387,7 @@ def _brain_norm(key, base, model):
     404/401 de chave de um provedor com base/modelo de outro (ex: LLM_MODEL antigo do Groq + chave Gemini)."""
     key=(key or "").strip()
     ab, am = _provider_auto(key)
-    inequivoca = key[:4] in ("AIza","gsk_") or key.startswith(("sk-or-","sk-ant"))
+    inequivoca = key[:4] in ("AIza","gsk_") or key.startswith(("sk-or-","sk-ant","zai-"))
     if inequivoca and ab:                 # a chave decide o provedor
         base = ab
         if not _model_ok_base(base, model): model = am
@@ -429,18 +431,40 @@ def _llm_resolve(u, modo=None):
     mm = MODOS.get(_modo_ok(u, modo) if u else (modo or "avancado"), MODOS["avancado"])
     k, b, m = _brain_norm(llm_key(), llm_base(), mm.get("model") or llm_model())
     return (k, b, m, "managed")
+def _fallbacks(base, model):
+    """Modelos alternativos pra tentar quando o principal estoura o limite (429). No free tier do Gemini
+    cada modelo tem cota separada, entao trocar de modelo de verdade destrava o 'cerebro sobrecarregado'."""
+    b=(base or "").lower(); out=[]
+    if "google" in b or "generativelanguage" in b:
+        cand=["gemini-2.0-flash-lite","gemini-2.0-flash","gemini-1.5-flash","gemini-1.5-flash-8b"]
+    elif "groq" in b:
+        cand=["llama-3.1-8b-instant","gemma2-9b-it","llama-3.3-70b-versatile"]
+    else:
+        return []
+    return [m for m in cand if m and m!=model]
 def _llm_post(base, key, body, timeout=45):
-    """POST OpenAI-compativel. Retry/backoff no 429 (rate limit do free tier do Gemini) pra nao quebrar o chat."""
+    """POST OpenAI-compativel. No 429 (limite do free tier) espera e, se insistir, TROCA pra um modelo
+    alternativo do mesmo provedor (cota separada) pra nao quebrar o chat com 'sobrecarregado'."""
+    cands = [body.get("model")] + _fallbacks(base, body.get("model"))
     last = None
-    for i in range(3):
-        try:
-            req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(),
-                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
-            return json.loads(urllib.request.urlopen(req, timeout=timeout).read().decode())
-        except urllib.error.HTTPError as e:
-            last = e
-            if e.code == 429 and i < 2: time.sleep(1.2*(i+1)); continue   # espera e tenta de novo
-            raise
+    for ci, m in enumerate(cands):
+        b2 = dict(body);
+        if m: b2["model"] = m
+        for i in range(2):
+            try:
+                req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(b2).encode(),
+                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
+                return json.loads(urllib.request.urlopen(req, timeout=timeout).read().decode())
+            except urllib.error.HTTPError as e:
+                last = e
+                if e.code == 429:
+                    if i == 0: time.sleep(0.9 + 0.5*ci); continue   # espera e tenta de novo no mesmo modelo
+                    break                                           # insistiu no 429 -> proximo modelo
+                raise                                               # erro != 429: trocar modelo nao adianta
+            except Exception as e:
+                last = e
+                if i == 0: time.sleep(0.6); continue
+                break
     if last: raise last
 
 def cloud_chat(system, messages, max_tokens=700, u=None, modo=None):
@@ -504,6 +528,7 @@ def _user_brain(u):
     return _brain_norm(pref.get("key") or llm_key(), pref.get("base") or llm_base(), pref.get("model") or llm_model())
 BRAIN_PROVIDERS = [
     {"id":"gemini","nome":"Gemini Flash (Google) - gratis, melhor que Groq","base":"https://generativelanguage.googleapis.com/v1beta/openai/","modelo":"gemini-2.0-flash","como":"aistudio.google.com -> API key (gratis, sem cartao)"},
+    {"id":"glm","nome":"GLM-5.2 (Z.ai) - 1M de contexto, otimo em raciocinio e codigo","base":"https://api.z.ai/api/coding/paas/v4","modelo":"glm-5.2","como":"z.ai -> Coding Plan -> API key (comeca com zai-)"},
     {"id":"groq","nome":"Groq (Llama 3.3 70B) - gratis","base":"https://api.groq.com/openai/v1","modelo":"llama-3.3-70b-versatile","como":"console.groq.com -> API Keys (gratis, rapido)"},
     {"id":"openai","nome":"OpenAI (GPT-4o-mini)","base":"https://api.openai.com/v1","modelo":"gpt-4o-mini","como":"platform.openai.com (pago)"},
     {"id":"together","nome":"Together AI (Llama)","base":"https://api.together.xyz/v1","modelo":"meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo","como":"api.together.ai (US$1 free)"},
@@ -872,6 +897,24 @@ def conhecimento_listar(limite=200):
 def conhecimento_limpar():
     with _db() as c: c.execute("DELETE FROM conhecimento"); c.commit()
     return True
+
+# ======================= DIRETRIZES: o usuario ENSINA o Orion (regras que ele sempre segue) =======================
+# Parte controlavel do "autodidata": alem de aprender fatos sozinho (memoria_aprender), o usuario
+# pode ditar regras de comportamento que ficam salvas e entram em TODA conversa.
+def diretrizes_get(uid): return get_blob(uid, "diretrizes", []) or []
+def diretrizes_add(uid, regra):
+    regra = (regra or "").strip()[:200]
+    if len(regra) < 3: return {"ok":False, "erro":"escreva a regra"}
+    d = diretrizes_get(uid)
+    if regra.lower() not in [x.lower() for x in d]:
+        d.append(regra); d = d[-40:]; set_blob(uid, "diretrizes", d)
+    return {"ok":True, "diretrizes":d}
+def diretrizes_remover(uid, regra):
+    d = [x for x in diretrizes_get(uid) if x != regra]; set_blob(uid, "diretrizes", d)
+    return {"ok":True, "diretrizes":d}
+def diretrizes_contexto(uid):
+    d = diretrizes_get(uid)
+    return (" REGRAS QUE O USUARIO TE ENSINOU (siga SEMPRE, tem prioridade): " + " | ".join(d)) if d else ""
 
 # ---- otimizacao: so usa busca web (tool-calling, mais lento) quando faz sentido ----
 _WEB_GAT = ("hoje","ontem","agora","ultim","recent","noticia","notícia","preco","preço","quanto","cotacao","cotação",
@@ -1375,6 +1418,122 @@ def rotina_acao(u, d):
         (lst.remove(idx) if idx in lst else lst.append(idx))
     else: return {"ok":False,"erro":"acao invalida"}
     set_blob(uid, "rotina", r); return {"ok":True,"estado":rotina_estado(uid)}
+
+# ======================= ORION PROATIVO (briefing de socio, 100% baseado nos dados reais) =======================
+# Inovacao: em vez de esperar um prompt, o Orion JA olhou seu negocio/dia e te aborda com o que importa.
+# REGRA: tudo aqui sai de dados reais do usuario (nunca inventa). Sem LLM -> rapido, sem 429.
+def orion_proativo(u):
+    uid = u["id"]
+    nome = ((u["tratamento"] or u["nome"] or "").strip().split() or ["senhor"])[0]
+    h = datetime.datetime.now().hour
+    saud = "Bom dia" if h < 12 else ("Boa tarde" if h < 18 else "Boa noite")
+    ins = []
+    hoje = datetime.date.today().isoformat()
+    neg = plano_de(u) in ("business", "trafego", "trading", "adm")
+    if neg:
+        leads = get_blob(uid, "leads", []) or []
+        novos = [l for l in leads if (l.get("status") or "novo") == "novo"]
+        if novos:
+            ins.append({"icon":"🎯","titulo":f"{len(novos)} lead(s) esperando contato",
+                        "texto":"Tem gente na sua lista que ainda nao foi abordada. Bora virar venda?","acao":{"tipo":"ir","alvo":"painel"}})
+        vs = vendas_get(uid); hojev = [v for v in vs if str(v.get("data","")).startswith(hoje)]
+        vr = vendas_resumo(uid)
+        if hojev:
+            tot = sum(float(v.get("valor") or 0) for v in hojev)
+            ins.append({"icon":"💰","titulo":f"R$ {tot:.0f} vendidos hoje",
+                        "texto":f"{len(hojev)} venda(s) hoje. Ticket medio do negocio: R$ {vr['ticket']:.0f}.","acao":{"tipo":"ir","alvo":"painel"}})
+        elif vs:
+            ins.append({"icon":"📈","titulo":"Nenhuma venda registrada hoje",
+                        "texto":"Quer 3 ideias rapidas pra fechar uma venda hoje? E so pedir.","acao":{"tipo":"chat","alvo":"Me da 3 ideias praticas pra fechar uma venda hoje no meu negocio"}})
+        fin = financeiro_resumo(uid)
+        if fin.get("receita", 0) > 0 or fin.get("despesas", 0) > 0:
+            if fin.get("lucro_liquido", 0) < 0:
+                ins.append({"icon":"⚠️","titulo":"Seu mes esta no vermelho",
+                            "texto":f"Lucro liquido: R$ {fin['lucro_liquido']:.0f}. Vamos revisar despesas e precos?","acao":{"tipo":"ir","alvo":"painel"}})
+            else:
+                ins.append({"icon":"💵","titulo":f"Lucro liquido do mes: R$ {fin['lucro_liquido']:.0f}",
+                            "texto":"Tudo registrado e batendo. Quer um resumo financeiro?","acao":{"tipo":"ir","alvo":"painel"}})
+    rot = rotina_estado(uid)["stats"]
+    if rot["total"] > 0 and rot["feitos"] < rot["total"]:
+        pref = (f"{rot['streak']} dias seguidos firme! " if rot["streak"] > 1 else "")
+        ins.append({"icon":"✅","titulo":f"Rotina de hoje: {rot['feitos']}/{rot['total']}",
+                    "texto":pref + "Falta pouco pra fechar o dia.","acao":{"tipo":"ir","alvo":"rotina"}})
+    if _NOTICIAS:
+        ins.append({"icon":"📰","titulo":"Resumo do mercado de hoje",
+                    "texto":_NOTICIAS[0][1][:90],"acao":{"tipo":"chat","alvo":"Resume as principais noticias do mercado de hoje, ao vivo, com as fontes"}})
+    if neg:
+        ins.append({"icon":"🧠","titulo":"Analise inteligente do Orion",
+                    "texto":"Eu olho seus numeros e te digo onde mexer pra lucrar mais.","acao":{"tipo":"analise","alvo":""}})
+        if neg and (get_blob(uid,"leads",[]) or []):
+            pend=[l for l in (get_blob(uid,"leads",[]) or []) if (l.get("status") or "novo") in ("novo","em_contato")]
+            if pend:
+                ins.append({"icon":"✍️","titulo":f"Gerar follow-up de {len(pend)} lead(s)",
+                            "texto":"Eu escrevo as mensagens de retomada pra voce so revisar e enviar.","acao":{"tipo":"agir","alvo":"followup_leads"}})
+    if not ins:
+        ins.append({"icon":"✨","titulo":"Por onde comecamos?",
+                    "texto":"Posso escrever, pesquisar ao vivo, organizar sua rotina ou cuidar do seu negocio. So pedir.","acao":{"tipo":"chat","alvo":"O que voce pode fazer por mim?"}})
+    return {"ok":True, "saudacao":f"{saud}, {nome}.", "insights":ins[:6]}
+
+# --- NIVEL 2: analise com IA (consultor), 100% ancorada nos numeros reais (proibido inventar) ---
+def orion_analise(u):
+    uid = u["id"]
+    if plano_de(u) not in ("business","trafego","trading","adm"):
+        return {"ok":False,"erro":"A analise inteligente e dos planos de negocio, senhor."}
+    vr = vendas_resumo(uid); fin = financeiro_resumo(uid); leads = get_blob(uid,"leads",[]) or []
+    novos = sum(1 for l in leads if (l.get("status") or "novo")=="novo")
+    dados = (f"Vendas registradas: {vr['total']} (receita R$ {vr['receita']:.0f}, lucro R$ {vr['lucro']:.0f}, "
+             f"ticket medio R$ {vr['ticket']:.0f}, margem {vr['margem']:.0f}%). "
+             f"Financeiro do mes: receita R$ {fin['receita']:.0f}, despesas R$ {fin['despesas']:.0f}, "
+             f"folha R$ {fin['folha']:.0f}, lucro liquido R$ {fin['lucro_liquido']:.0f}. "
+             f"Leads: {len(leads)} no total, {novos} novos sem contato.")
+    sys = ("Voce e o Orion, consultor de negocios direto e pratico. Analise SOMENTE os numeros abaixo. "
+           "E PROIBIDO inventar ou citar qualquer numero que nao esteja aqui. De no maximo 3 recomendacoes curtas e acionaveis "
+           "pra aumentar lucro/vendas, em portugues do Brasil, sem travessao. Se faltar dado importante, diga o que o usuario deveria registrar.")
+    resp = cloud_chat(sys, [{"role":"user","content":dados}], 420, u, "raciocinio")
+    return {"ok":True, "analise":resp, "resumo":dados}
+
+# --- NIVEL 3: agir (com permissao). Por enquanto: escreve os follow-ups (envia so se WhatsApp+autonomia) ---
+def autonomia_get(uid): return get_blob(uid, "autonomia", {"ligado":False}) or {"ligado":False}
+def autonomia_set(uid, d):
+    a = {"ligado": bool(d.get("ligado"))}; set_blob(uid, "autonomia", a); return {"ok":True, "autonomia":a}
+def orion_agir(u, acao):
+    uid = u["id"]
+    if acao == "followup_leads":
+        leads = get_blob(uid, "leads", []) or []
+        alvos = [l for l in leads if (l.get("status") or "novo") in ("novo","em_contato")][:8]
+        if not alvos: return {"ok":True, "mensagens":[], "aviso":"Nenhum lead pendente, senhor."}
+        wa_on = bool(gcfg("whatsapp_token","WHATSAPP_TOKEN")) and autonomia_get(uid).get("ligado")
+        msgs = []
+        for l in alvos:
+            nome = l.get("nome","cliente"); nicho = l.get("nicho","") or l.get("servico","")
+            sys = ("Escreva UMA mensagem de follow-up curta (2 a 4 linhas), cordial e profissional pra retomar contato com um lead, "
+                   "em portugues do Brasil, sem travessao, pronta pra enviar no WhatsApp. Personalize pelo nome e ramo. NAO invente precos nem prazos.")
+            m = cloud_chat(sys, [{"role":"user","content":f"Lead: {nome}. Ramo/servico: {nicho}. Sou prestador de servico e quero retomar o contato de forma simpatica."}], 160, u)
+            msgs.append({"lead":nome, "contato":l.get("contato",""), "mensagem":m})
+        return {"ok":True, "mensagens":msgs, "enviado":wa_on,
+                "aviso": ("Enviados pelo WhatsApp." if wa_on else "Revise e envie. (Pra eu enviar sozinho, ligue a autonomia e conecte o WhatsApp.)")}
+    return {"ok":False, "erro":"acao desconhecida"}
+def _briefing_texto(u):
+    ins = orion_proativo(u).get("insights", [])
+    ins = [i for i in ins if i.get("acao",{}).get("tipo") in ("ir","chat")]   # so fatos, nao acoes de IA
+    return " · ".join(i["titulo"] for i in ins[:3]) if ins else None
+def loop_briefing():
+    """NIVEL 1: de manha (horario BR), manda um push com o resumo proativo pra quem aceitou notificacao. 1x/dia."""
+    while True:
+        time.sleep(1800)
+        if not _PUSH: continue
+        try:
+            hora = datetime.datetime.utcnow().hour   # Render = UTC; ~7-10h BR = 10-13h UTC
+            if hora < 10 or hora > 13: continue
+            hoje = datetime.date.today().isoformat()
+            with _db() as c: ids = [r["id"] for r in c.execute("SELECT id FROM users").fetchall()]
+            for uid in ids:
+                if get_blob(uid, "brief_em", "") == hoje or not push_subs_get(uid): continue
+                u = get_user(uid)
+                if not u: continue
+                txt = _briefing_texto(u); set_blob(uid, "brief_em", hoje)
+                if txt: notificar(uid, "Bom dia! Seu resumo do Orion", txt, "/")
+        except Exception as e: print("[briefing]", e)
 
 # ======================= LICENCA (mesmo modulo do desktop e do gerador) =======================
 # licenca EMBUTIDA (mesmo algoritmo e segredo do desktop/keygen). Auto-suficiente: nao depende de import externo.
@@ -2399,7 +2558,17 @@ class H(BaseHTTPRequestHandler):
             if not (u and u["criador"]): self._send({"ok":False,"erro":"so o dono"}); return
             qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
             self._send(aprendizado_de((qs.get("uid") or [None])[0]))
-        elif path == "/brain/opcoes": self._send({"providers":BRAIN_PROVIDERS, "atual": (get_blob(u["id"],"brain",{}) if u else {})})
+        elif path == "/brain/opcoes":
+            br = (get_blob(u["id"],"brain",{}) if u else {}) or {}
+            self._send({"providers":BRAIN_PROVIDERS, "atual":{"base":br.get("base",""),"model":br.get("model","")}, "tem_chave":bool(br.get("key"))})
+        elif path == "/orion/diretrizes":
+            self._send({"ok":True, "diretrizes":diretrizes_get(u["id"])} if u else {"ok":False,"erro":"faca login"})
+        elif path == "/orion/proativo":
+            self._send(orion_proativo(u) if u else {"ok":True,"saudacao":"Ola.","insights":[]})
+        elif path == "/orion/analise":
+            self._send(orion_analise(u) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/orion/autonomia":
+            self._send({"ok":True, "autonomia":autonomia_get(u["id"])} if u else {"ok":False,"erro":"faca login"})
         elif path == "/estado":
             self._send({"status":"ocioso","cloud":True,"user":(_pub(u) if u else None),"noticias":_NOTICIAS})
         elif path == "/usuarios":
@@ -2555,7 +2724,7 @@ class H(BaseHTTPRequestHandler):
             if _NOTICIAS and any(w in fl for w in ("noticia","notícia","mercado","acontec","manchete","jornal","economia","hoje")):
                 extra = (" MANCHETES REAIS DE HOJE (resuma a partir DESTAS, NAO diga que nao achou): "
                          + " || ".join(f"[{c}] {t}" for c,t in _NOTICIAS[:10]) + ".")
-            sysp = (PERSONA + f" Hoje e {hoje}." + (f" Trate o usuario como '{trat}'." if trat else "") + memoria_contexto(u["id"]) + conhecimento_contexto() + extra
+            sysp = (PERSONA + f" Hoje e {hoje}." + (f" Trate o usuario como '{trat}'." if trat else "") + diretrizes_contexto(u["id"]) + memoria_contexto(u["id"]) + conhecimento_contexto() + extra
                     + " REGRA ABSOLUTA: e PROIBIDO inventar qualquer informacao (nomes, numeros, precos, datas, fatos, links). Se a pergunta pede um dado factual, atual ou que voce nao tem CERTEZA, use a ferramenta buscar_web ANTES de responder e cite a fonte (com o link). Se a busca nao trouxer o dado, diga claramente que nao encontrou em vez de chutar. Conversa casual pode responder direto, mas nada de fabricar fato.")
             conv_atual = next((c for c in _convs_get(u["id"]) if c["id"]==conv_id), None)
             hist = (conv_atual or {}).get("msgs",[])[-12:-1]   # historico sem a ultima msg (que ja vai abaixo)
@@ -2721,9 +2890,23 @@ class H(BaseHTTPRequestHandler):
             self._send(onboarding_salvar(u, d.get("respostas") or {}) if u else {"ok":False,"erro":"faca login"})
         elif path == "/brain/salvar":
             if u:
-                pref = {"key": (d.get("key") or "").strip(), "base":(d.get("base") or "").strip(), "model":(d.get("model") or "").strip()}
-                set_blob(u["id"], "brain", pref); self._send({"ok":True})
+                if d.get("limpar"):   # voltar ao padrao do Orion
+                    set_blob(u["id"], "brain", {}); self._send({"ok":True, "tem_chave":False})
+                else:
+                    atual = get_blob(u["id"], "brain", {}) or {}
+                    nova = (d.get("key") or "").strip()
+                    pref = {"key": (nova or atual.get("key","")),   # campo vazio = MANTEM a chave (nao apaga)
+                            "base":(d.get("base") or "").strip(), "model":(d.get("model") or "").strip()}
+                    set_blob(u["id"], "brain", pref); self._send({"ok":True, "tem_chave":bool(pref["key"])})
             else: self._send({"ok":False,"erro":"faca login"})
+        elif path == "/orion/ensinar":
+            self._send(diretrizes_add(u["id"], d.get("regra")) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/orion/esquecer":
+            self._send(diretrizes_remover(u["id"], d.get("regra")) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/orion/agir":
+            self._send(orion_agir(u, d.get("acao")) if u else {"ok":False,"erro":"faca login"})
+        elif path == "/orion/autonomia/salvar":
+            self._send(autonomia_set(u["id"], d) if u else {"ok":False,"erro":"faca login"})
         elif path == "/push/subscribe":
             if u: push_subs_add(u["id"], d.get("sub") or {}); self._send({"ok":True})
             else: self._send({"ok":False,"erro":"faca login"})
@@ -2750,6 +2933,7 @@ def main():
     threading.Thread(target=loop_noticias, daemon=True).start()
     threading.Thread(target=loop_reengajar, daemon=True).start()
     threading.Thread(target=loop_assinaturas, daemon=True).start()
+    threading.Thread(target=loop_briefing, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
 
 if __name__ == "__main__":
