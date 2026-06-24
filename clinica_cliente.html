@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agende sua consulta</title>
+<style>
+:root{--bg:#0c0810;--panel:#171020;--panel2:#1f1630;--line:#2c2240;--line2:#41335f;--text:#f3eefb;--dim:#bcacd6;--accent:#ff7ab8;--accent2:#a87bff;--good:#46d39a}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(800px 460px at 50% -10%,rgba(255,122,184,.18),transparent 60%),var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:20px 16px 60px}
+.hero{text-align:center;padding:18px 0 10px}.hero h1{margin:6px 0 2px;font-size:26px}.hero p{color:var(--dim);margin:4px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:0 14px 36px -18px rgba(0,0,0,.7)}
+.card h3{margin:0 0 12px;font-size:16px}
+label{font-size:12px;color:var(--dim);display:block;margin:0 0 4px}.field{margin-bottom:11px}
+input,select{width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:11px;color:var(--text);padding:11px 12px;font-size:15px;outline:none;font-family:inherit}
+input:focus,select:focus{border-color:var(--accent)}
+.btn{width:100%;padding:13px;border:none;border-radius:13px;background:linear-gradient(120deg,var(--accent),var(--accent2));color:#190f1f;font-weight:800;font-size:15px;cursor:pointer}
+.btn.g{background:var(--panel2);color:var(--text);border:1px solid var(--line2)}
+.slots{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.slot{padding:9px 13px;border:1px solid var(--line2);border-radius:11px;background:var(--panel2);cursor:pointer;font-weight:600;font-size:14px}
+.slot.on{background:linear-gradient(120deg,var(--accent),var(--accent2));color:#190f1f;border:none}
+.muted{color:var(--dim);font-size:13px}.msg{min-height:18px;font-size:14px;margin-top:8px;text-align:center}
+.ok{text-align:center;padding:30px 10px}.ok .ic{font-size:54px}
+.foot{text-align:center;color:var(--dim);font-size:12px;margin-top:18px}
+.svc{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--dim);padding:3px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="loading" class="hero"><p class="muted">Carregando...</p></div>
+  <div id="page" style="display:none">
+    <div class="hero"><div style="font-size:40px">💖</div><h1 id="hNome"></h1><p id="hSobre"></p><p id="hEnd" class="muted"></p></div>
+    <div id="form">
+      <div class="card"><h3>1. Escolha o procedimento</h3>
+        <select id="serv" onchange="loadSlots()"></select>
+        <div id="precoInfo" class="muted" style="margin-top:6px"></div>
+        <div id="profWrap" style="display:none;margin-top:10px"><label>Profissional</label><select id="prof" onchange="loadSlots()"></select></div>
+      </div>
+      <div class="card"><h3>2. Escolha o dia e horário</h3>
+        <div class="field"><label>Dia</label><input id="data" type="date" onchange="loadSlots()"></div>
+        <label>Horários livres</label><div id="slots" class="slots"></div><input type="hidden" id="hora">
+      </div>
+      <div class="card"><h3>3. Seus dados</h3>
+        <div class="field"><label>Nome</label><input id="nome" placeholder="seu nome"></div>
+        <div class="field"><label>Telefone (WhatsApp)</label><input id="tel" placeholder="(00) 90000-0000" inputmode="tel"></div>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim);margin-bottom:6px"><input type="checkbox" id="cad" checked style="width:auto"> Quero me cadastrar e receber benefícios e promoções</label>
+        <button class="btn" onclick="agendar()">Confirmar agendamento</button>
+        <div id="msg" class="msg"></div>
+      </div>
+      <div id="fidBox"></div>
+    </div>
+    <div id="sucesso" class="card ok" style="display:none">
+      <div class="ic">✅</div><h3 id="okTxt">Consulta marcada!</h3>
+      <p class="muted" id="okDet"></p><button class="btn g" onclick="location.reload()">Marcar outra</button>
+    </div>
+    <div class="foot">Agendamento online • powered by <b>Clínica+</b> ✦</div>
+  </div>
+  <div id="erro" class="hero" style="display:none"><h1>Ops</h1><p class="muted" id="erroTxt"></p></div>
+</div>
+<script>
+const $=(id)=>document.getElementById(id);
+const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=(v)=>'R$ '+(Number(v||0)).toLocaleString('pt-BR',{minimumFractionDigits:0});
+const CID=new URLSearchParams(location.search).get('c')||'';
+let INFO={};
+(async function(){
+  if(!CID){ erro('Link inválido.'); return; }
+  let r; try{ r=await (await fetch('/pub/clinica?c='+encodeURIComponent(CID))).json(); }catch(e){ erro('Sem conexão.'); return; }
+  if(!r.ok){ erro(r.erro||'Clínica não encontrada.'); return; }
+  INFO=r; $('loading').style.display='none'; $('page').style.display='';
+  $('hNome').textContent=r.nome; $('hSobre').textContent=r.sobre||'Agende sua consulta online'; $('hEnd').textContent=r.endereco||'';
+  if(!r.servicos.length){ $('form').innerHTML='<div class="card muted">Esta clínica ainda não cadastrou serviços.</div>'; return; }
+  $('serv').innerHTML=r.servicos.map(s=>`<option value="${s.id}" data-p="${s.preco}" data-d="${s.duracao}">${esc(s.nome)} · ${fmt(s.preco)} · ${s.duracao}min</option>`).join('');
+  const t=new Date(); $('data').value=t.toISOString().slice(0,10); $('data').min=t.toISOString().slice(0,10);
+  if(r.fidelidade&&r.fidelidade.ativo){ $('fidBox').innerHTML=`<div class="card" style="border-color:var(--accent)"><b>🎁 Programa de fidelidade</b><div class="muted" style="margin-top:4px">A cada ${r.fidelidade.meta} procedimentos você ganha ${esc(r.fidelidade.premio||'um prêmio')}. Cadastre-se pra participar!</div></div>`; }
+  if((r.profissionais||[]).length){ $('profWrap').style.display='block'; profRender(); }
+  loadSlots();
+})();
+function profRender(){
+  const sv=parseInt($('serv').value); const ps=(INFO.profissionais||[]).filter(p=>!p.servicos||!p.servicos.length||p.servicos.map(Number).includes(sv));
+  $('prof').innerHTML='<option value="">Qualquer profissional</option>'+ps.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('');
+}
+function erro(t){ $('loading').style.display='none'; $('erro').style.display=''; $('erroTxt').textContent=t; }
+function precoSel(){ const o=$('serv').selectedOptions[0]; return o?{p:o.dataset.p,d:o.dataset.d}:{}; }
+let _profLast='';
+async function loadSlots(){
+  const ps=precoSel(); $('precoInfo').textContent=ps.p?`Valor: ${fmt(ps.p)} · duração ${ps.d} min`:'';
+  if($('profWrap').style.display!=='none' && _profLast!==$('serv').value){ _profLast=$('serv').value; profRender(); }
+  const fid=$('prof')?$('prof').value:'';
+  $('hora').value=''; $('slots').innerHTML='<span class="muted">carregando...</span>';
+  const r=await (await fetch(`/pub/disponibilidade?c=${CID}&data=${$('data').value}&servico=${$('serv').value}${fid?'&func='+fid:''}`)).json();
+  if(!r.ok){ $('slots').innerHTML='<span class="muted">erro</span>'; return; }
+  if(!r.slots.length){ $('slots').innerHTML='<span class="muted">'+(r.motivo==='fechado nesse dia'?'Fechado nesse dia. Tente outro.':'Sem horários livres nesse dia.')+'</span>'; return; }
+  $('slots').innerHTML=r.slots.map(s=>`<div class="slot" onclick="pick(this,'${s}')">${s}</div>`).join('');
+}
+function pick(el,h){ document.querySelectorAll('.slot').forEach(s=>s.classList.remove('on')); el.classList.add('on'); $('hora').value=h; }
+async function agendar(){
+  const m=$('msg'); const hora=$('hora').value, nome=$('nome').value.trim(), tel=$('tel').value.trim();
+  if(!hora){ m.style.color='#ffb454'; m.textContent='Escolha um horário.'; return; }
+  if(!nome||tel.replace(/\D/g,'').length<10){ m.style.color='#ffb454'; m.textContent='Preencha seu nome e telefone com DDD.'; return; }
+  m.style.color='var(--dim)'; m.textContent='Marcando...';
+  const fid=$('prof')?$('prof').value:'';
+  const r=await (await fetch('/pub/agendar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({c:CID,servico_id:$('serv').value,data:$('data').value,hora,nome,telefone:tel,func_id:fid})})).json();
+  if(!r.ok){ m.style.color='#ff6b6b'; m.textContent=r.erro||'Esse horário não está mais livre. Escolha outro.'; loadSlots(); return; }
+  if($('cad').checked){ try{ await fetch('/pub/cliente',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({c:CID,nome,telefone:tel})}); }catch(e){} }
+  $('form').style.display='none'; $('sucesso').style.display='';
+  const o=$('serv').selectedOptions[0];
+  $('okDet').textContent=`${o?o.textContent.split(' · ')[0]:''} • ${$('data').value.split('-').reverse().join('/')} às ${hora}`;
+  if(r.pix&&r.pix.copia_cola){ $('okTxt').textContent='Consulta reservada! Pague o '+(r.pix.tipo==='total'?'valor':'sinal')+' por PIX pra confirmar:';
+    const qr=r.pix.qr_base64?`data:image/png;base64,${r.pix.qr_base64}`:`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(r.pix.copia_cola)}`;
+    const ex=document.createElement('div'); ex.className='card'; ex.style.marginTop='12px'; ex.innerHTML=`<b>PIX ${fmt(r.pix.valor)}</b><div style="text-align:center;margin:8px 0"><img src="${qr}" style="width:180px;border-radius:10px;background:#fff;padding:6px"></div><label>PIX copia e cola</label><input value="${esc(r.pix.copia_cola)}" readonly onclick="this.select()"><button class="btn" style="margin-top:8px" onclick="navigator.clipboard.writeText('${esc(r.pix.copia_cola)}');this.textContent='Copiado!'">Copiar código PIX</button>`;
+    $('sucesso').insertBefore(ex, $('sucesso').querySelector('button')); }
+}
+</script>
+</body>
+</html>

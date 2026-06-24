@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Clínica+ · Gestão de Clínicas de Estética</title>
+<link rel="manifest" href="/clinica/manifest.webmanifest">
+<meta name="theme-color" content="#ff7ab8">
+<link rel="apple-touch-icon" href="/clinica/icon">
+<style>
+:root{--bg:#0b0e15;--panel:#121724;--panel2:#171d2e;--line:#222a3d;--line2:#324063;--text:#e9edf6;--dim:#9aa6c0;--faint:#6b768f;
+  --accent:#ff7ab8;--accent2:#a87bff;--good:#46d39a;--warn:#ffb454;--bad:#ff6b6b;--radius:16px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:radial-gradient(900px 520px at 80% -10%,rgba(168,123,255,.14),transparent 60%),radial-gradient(800px 500px at 10% -8%,rgba(255,122,184,.12),transparent 60%),var(--bg);
+  color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:15px}
+a{color:var(--accent)}
+.hide{display:none!important}
+.app{display:flex;min-height:100vh}
+.sb{width:230px;background:rgba(13,17,27,.86);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px;position:sticky;top:0;height:100vh;backdrop-filter:blur(8px)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:18px;padding:6px 8px 14px}
+.logo .dot{width:26px;height:26px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:15px}
+.nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow:auto}
+.nav button{display:flex;align-items:center;gap:10px;padding:10px 12px;border:none;border-radius:11px;background:none;color:var(--dim);font-size:14px;font-weight:600;text-align:left;cursor:pointer;width:100%}
+.nav button:hover{background:var(--panel)}
+.nav button.on{background:linear-gradient(100deg,color-mix(in srgb,var(--accent) 24%,transparent),transparent);color:var(--text)}
+.sb-foot{border-top:1px solid var(--line);padding-top:10px;font-size:12px;color:var(--faint)}
+.main{flex:1;min-width:0;padding:22px clamp(14px,3vw,34px);max-width:1100px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+h1{font-size:24px;margin:0 0 2px}.sub{color:var(--dim);font-size:13px;margin-bottom:18px}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.03),transparent 40%),var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:0 10px 30px -16px rgba(0,0,0,.6)}
+.card h3{margin:0 0 12px;font-size:16px}
+.btn{padding:10px 16px;border:1px solid var(--line2);border-radius:12px;background:var(--panel2);color:var(--text);font-weight:700;font-size:14px;cursor:pointer;transition:transform .12s,border-color .12s}
+.btn:hover{border-color:var(--accent);transform:translateY(-1px)}.btn:active{transform:translateY(1px)}
+.btn.primary{background:linear-gradient(120deg,var(--accent),var(--accent2));border:none;color:#15101a}
+.btn.ghost{background:none}
+.btn.sm{padding:5px 11px;font-size:12px;border-radius:9px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input,select,textarea{background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:10px 12px;font-size:14px;font-family:inherit;outline:none;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+label{font-size:12px;color:var(--dim);display:block;margin:0 0 4px}
+.field{margin-bottom:10px}
+.grid{display:grid;gap:12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpi{background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:14px}
+.kpi .v{font-size:24px;font-weight:800}.kpi .l{font-size:12px;color:var(--dim)}
+.lin{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.lin:last-child{border-bottom:none}
+.tag{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--panel2);border:1px solid var(--line2);color:var(--dim)}
+.pill{display:inline-flex;gap:6px;align-items:center}
+.muted{color:var(--dim);font-size:13px}
+.slots{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+.slot{padding:8px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel2);cursor:pointer;font-size:13px;font-weight:600}
+.slot:hover,.slot.on{background:linear-gradient(120deg,var(--accent),var(--accent2));color:#15101a;border:none}
+.daygrid{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:8px 12px;align-items:center}
+.center{min-height:100vh;display:grid;place-items:center;padding:20px}
+.authbox{width:min(440px,94vw);background:var(--panel);border:1px solid var(--line2);border-radius:20px;padding:26px}
+.authbox h2{margin:0 0 4px}.tabs{display:flex;gap:6px;margin:14px 0}
+.tabs button{flex:1;padding:9px;border:1px solid var(--line);border-radius:10px;background:none;color:var(--dim);font-weight:700;cursor:pointer}
+.tabs button.on{background:var(--panel2);color:var(--text);border-color:var(--line2)}
+.msg{font-size:13px;margin-top:8px;min-height:18px}
+/* mascote Orion (assistente convidado) */
+.mascote{position:fixed;right:18px;bottom:18px;width:64px;height:64px;cursor:pointer;z-index:50;filter:drop-shadow(0 8px 18px rgba(168,123,255,.4));animation:flo 4s ease-in-out infinite}
+@keyframes flo{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.mbal{position:fixed;right:18px;bottom:92px;width:min(320px,86vw);background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:16px;z-index:51;box-shadow:0 18px 40px -16px rgba(0,0,0,.7)}
+.botchat{height:280px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:6px 2px}
+.bub{max-width:85%;padding:9px 12px;border-radius:14px;font-size:13.5px;line-height:1.45}
+.bub.b{background:var(--panel2);align-self:flex-start;border-top-left-radius:4px}
+.bub.u{background:linear-gradient(120deg,var(--accent),var(--accent2));color:#15101a;align-self:flex-end;border-top-right-radius:4px}
+.orionpage{background:linear-gradient(135deg,rgba(122,162,255,.12),rgba(168,123,255,.12)),var(--panel);border:1px solid var(--line2);border-radius:20px;padding:26px;text-align:center}
+@media(max-width:760px){.sb{position:fixed;left:-260px;transition:left .2s;z-index:60;box-shadow:0 0 40px rgba(0,0,0,.6)}.sb.open{left:0}.menubtn{display:inline-flex!important}.main{padding-top:64px}}
+.menubtn{display:none;position:fixed;top:12px;left:12px;z-index:61;width:42px;height:42px;border-radius:12px;background:var(--panel);border:1px solid var(--line2);color:var(--text);font-size:20px;cursor:pointer}
+</style>
+</head>
+<body>
+<button class="menubtn" onclick="document.getElementById('sb').classList.toggle('open')">☰</button>
+
+<!-- LOGIN -->
+<div id="login" class="center hide">
+  <div class="authbox">
+    <div class="logo" style="justify-content:center;font-size:22px"><span class="dot">✦</span> Clínica+</div>
+    <p class="muted" style="text-align:center">Gestão completa pra sua clínica de estética: agenda inteligente, atendente de WhatsApp, equipe e faturamento.</p>
+    <div class="tabs"><button id="tabDono" class="on" onclick="authTab('dono')">Entrar</button><button id="tabNovo" onclick="authTab('novo')">Criar conta</button><button id="tabFunc" onclick="authTab('func')">Funcionário</button></div>
+    <div id="formDono">
+      <div id="loPerfil"></div>
+      <div class="field"><label>E-mail ou telefone</label><input id="loEmail" placeholder="seu@email.com ou (00) 90000-0000"></div>
+      <div class="field"><label>Senha</label><input id="loSenha" type="password" placeholder="sua senha" onkeydown="if(event.key==='Enter')loginDono()"></div>
+      <button class="btn primary" style="width:100%" onclick="loginDono()">Entrar</button>
+    </div>
+    <div id="formNovo" class="hide">
+      <div class="field"><label>Nome</label><input id="nvNome" placeholder="seu nome"></div>
+      <div class="field"><label>CPF ou CNPJ</label><input id="nvDoc" placeholder="somente números" inputmode="numeric"></div>
+      <div class="row"><div class="field" style="flex:1"><label>E-mail <span class="muted">(opcional)</span></label><input id="nvEmail" type="email" placeholder="seu@email.com"></div>
+        <div class="field" style="flex:1"><label>Telefone <span class="muted">(opcional)</span></label><input id="nvTel" placeholder="(00) 90000-0000"></div></div>
+      <div class="field"><label>Senha</label><input id="nvSenha" type="password" placeholder="mínimo 6 caracteres"></div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim)"><input type="checkbox" id="nvTermos" style="width:auto"> Li e aceito os termos de uso</label>
+      <button class="btn primary" style="width:100%;margin-top:12px" onclick="criarConta()">Criar minha conta</button>
+      <p class="muted" style="margin-top:8px;text-align:center;font-size:12px">Informe pelo menos um e-mail ou telefone pra acessar depois.</p>
+    </div>
+    <div id="formFunc" class="hide">
+      <div class="field"><label>E-mail da clínica (do chefe)</label><input id="fcClin" placeholder="email da dona da clínica"></div>
+      <div class="field"><label>Seu login</label><input id="fcLogin" placeholder="login que o chefe te deu"></div>
+      <div class="field"><label>Senha</label><input id="fcSenha" type="password"></div>
+      <button class="btn primary" style="width:100%" onclick="loginFunc()">Entrar como funcionário</button>
+    </div>
+    <div id="loMsg" class="msg" style="color:var(--bad);text-align:center"></div>
+  </div>
+</div>
+
+<!-- ONBOARDING -->
+<div id="onb" class="center hide">
+  <div class="authbox" style="width:min(560px,94vw)">
+    <h2>Bem-vinda à Clínica+ ✨</h2>
+    <p class="muted">Algumas perguntas rápidas pra deixar o sistema com a sua cara. Você ajusta tudo depois.</p>
+    <div class="field"><label>Nome da clínica</label><input id="obNome" placeholder="ex: Espaço Bella Estética"></div>
+    <div class="field"><label>Seu nome</label><input id="obDona" placeholder="como você quer ser chamada"></div>
+    <div class="field"><label>Sobre o negócio (o que faz, diferencial)</label><textarea id="obSobre" rows="2" placeholder="ex: clínica de estética facial e corporal, atendimento humanizado"></textarea></div>
+    <div class="row"><div class="field" style="flex:1"><label>WhatsApp / telefone</label><input id="obTel" placeholder="(00) 90000-0000"></div>
+      <div class="field" style="flex:1"><label>Endereço</label><input id="obEnd" placeholder="rua, número, cidade"></div></div>
+    <div class="field"><label>Seus principais serviços (um por linha: nome, preço, minutos)</label>
+      <textarea id="obServ" rows="3" placeholder="Limpeza de pele, 150, 60&#10;Massagem relaxante, 120, 50&#10;Design de sobrancelha, 50, 30"></textarea></div>
+    <button class="btn primary" style="width:100%" onclick="onbSalvar()">Começar a usar</button>
+    <div id="obMsg" class="msg" style="color:var(--bad)"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="app hide">
+  <aside id="sb" class="sb">
+    <div class="logo"><span class="dot">✦</span> Clínica+</div>
+    <nav class="nav" id="nav"></nav>
+    <div class="sb-foot">
+      <div id="sbWho"></div>
+      <button class="btn ghost sm" style="margin-top:8px;width:100%" onclick="sair()">Sair</button>
+    </div>
+  </aside>
+  <main class="main"><div id="view"></div></main>
+</div>
+
+<!-- MASCOTE ORION -->
+<div id="masc" class="mascote hide" onclick="mascToggle()" title="Orion, seu assistente">
+  <svg viewBox="0 0 100 100" width="64" height="64"><defs><radialGradient id="og" cx="40%" cy="32%" r="75%"><stop offset="0%" stop-color="#cfe0ff"/><stop offset="45%" stop-color="#7aa2ff"/><stop offset="100%" stop-color="#3b46c8"/></radialGradient></defs>
+    <ellipse cx="50" cy="90" rx="20" ry="4" fill="#000" opacity=".25"/><circle cx="50" cy="48" r="30" fill="#7aa2ff" opacity=".5"/><circle cx="50" cy="48" r="28" fill="url(#og)"/>
+    <ellipse cx="41" cy="38" rx="10" ry="6" fill="#fff" opacity=".5"/><circle cx="43" cy="48" r="3.4" fill="#0a0c11"/><circle cx="57" cy="48" r="3.4" fill="#0a0c11"/><path d="M43 55 q7 5 14 0" fill="none" stroke="#0a0c11" stroke-width="2.2" stroke-linecap="round"/></svg>
+</div>
+
+<script>
+if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/sw.js'); }catch(e){} }
+const $=(id)=>document.getElementById(id);
+const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=(v)=>'R$ '+(Number(v||0)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const api=async(p,m,b)=>{ try{ const r=await fetch(p,{method:m||'GET',headers:b?{'Content-Type':'application/json'}:undefined,body:b?JSON.stringify(b):undefined}); return await r.json(); }catch(e){ return {ok:false,erro:'sem conexão'}; } };
+let EST={}, VIEW='dashboard', SERV=[], HOJEISO=new Date().toISOString().slice(0,10);
+
+// ---------------- boot ----------------
+(async function boot(){
+  const e=await api('/clinica/estado');
+  if(!e.ok){ mostrarLogin(); return; }
+  EST=e;
+  if(e.sou_dono && !e.onboarded){ $('login').classList.add('hide'); $('onb').classList.remove('hide'); return; }
+  iniciarApp();
+})();
+function mostrarLogin(){ $('login').classList.remove('hide'); $('app').classList.add('hide'); $('onb').classList.add('hide'); $('masc').classList.add('hide');
+  // perfil lembrado: mostra quem entrou por último, mas exige senha
+  try{ const p=JSON.parse(localStorage.getItem('cl_perfil')||'null'); const box=$('loPerfil');
+    if(p&&p.handle){ box.innerHTML=`<div style="display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:10px 12px;margin-bottom:10px"><div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-weight:800;color:#15101a">${esc((p.nome||'?')[0].toUpperCase())}</div><div style="flex:1;min-width:0"><b>${esc(p.nome||'')}</b><div class="muted" style="font-size:12px">${esc(p.handle)}</div></div><button class="btn ghost sm" onclick="esquecerPerfil()">trocar</button></div>`;
+      $('loEmail').value=p.handle; setTimeout(()=>$('loSenha').focus(),100); }
+  }catch(e){}
+}
+function esquecerPerfil(){ localStorage.removeItem('cl_perfil'); $('loPerfil').innerHTML=''; $('loEmail').value=''; }
+function authTab(t){ ['dono','novo','func'].forEach(x=>{$('tab'+x[0].toUpperCase()+x.slice(1)).classList.toggle('on',t===x); $('form'+x[0].toUpperCase()+x.slice(1)).classList.toggle('hide',t!==x);}); $('loMsg').textContent=''; }
+async function loginDono(){ const h=$('loEmail').value.trim(); const r=await api('/clinica/login','POST',{login:h,senha:$('loSenha').value}); if(!r.ok){ $('loMsg').textContent=r.erro||'Não entrou.'; return; }
+  try{ localStorage.setItem('cl_perfil',JSON.stringify({nome:(r.user&&r.user.nome)||'',handle:h})); }catch(e){} location.reload(); }
+async function loginFunc(){ const r=await api('/clinica/func/login','POST',{clinica:$('fcClin').value.trim(),login:$('fcLogin').value.trim(),senha:$('fcSenha').value}); if(!r.ok){ $('loMsg').textContent=r.erro||'Não entrou.'; return; } location.reload(); }
+async function criarConta(){
+  const m=$('loMsg'); m.style.color='var(--bad)';
+  if(!$('nvTermos').checked){ m.textContent='Aceite os termos pra continuar.'; return; }
+  const body={nome:$('nvNome').value.trim(),documento:$('nvDoc').value.trim(),email:$('nvEmail').value.trim(),telefone:$('nvTel').value.trim(),senha:$('nvSenha').value,aceitou_termos:true};
+  const r=await api('/clinica/criar_conta','POST',body);
+  if(!r.ok){ m.textContent=r.erro||'Não consegui criar.'; return; }
+  try{ localStorage.setItem('cl_perfil',JSON.stringify({nome:(r.user&&r.user.nome)||body.nome,handle:body.email||body.telefone})); }catch(e){}
+  location.reload();
+}
+async function onbSalvar(){
+  const serv=($('obServ').value||'').split('\n').map(l=>{const p=l.split(',');return p[0]&&p[0].trim()?{nome:p[0].trim(),preco:parseFloat(p[1])||0,duracao:parseInt(p[2])||60}:null;}).filter(Boolean);
+  const r=await api('/clinica/onboarding','POST',{nome:$('obNome').value.trim(),dona:$('obDona').value.trim(),sobre:$('obSobre').value.trim(),telefone:$('obTel').value.trim(),endereco:$('obEnd').value.trim(),servicos:serv});
+  if(!r.ok){ $('obMsg').textContent=r.erro||'Erro.'; return; } location.reload();
+}
+async function sair(){ if(EST.func){ await api('/clinica/func/logout','POST',{}); } else { await api('/usuario/logout','POST',{}); } location.reload(); }
+
+// ---------------- app shell ----------------
+function iniciarApp(){
+  $('login').classList.add('hide'); $('onb').classList.add('hide'); $('app').classList.remove('hide'); $('masc').classList.remove('hide');
+  const dono=EST.sou_dono, admin=EST.sou_admin;
+  let itens;
+  if(EST.func && !admin){ // funcionário comum
+    itens=[['func','📅 Meus agendamentos'],['agenda','🗓️ Agenda'],['orion','✦ Orion']];
+    VIEW='func';
+  } else {
+    itens=[['dashboard','📊 Painel'],['agenda','🗓️ Agenda'],['relatorios','📈 Relatórios'],['clientes','💖 Clientes'],['servicos','💅 Serviços e preços'],['estoque','📦 Estoque'],['horarios','⏰ Horários'],['atendente','💬 Atendente WhatsApp'],['funcionarios','👥 Funcionários'],['negocio','🏥 Meu negócio'],['orion','✦ Orion']];
+    if(EST.func) itens.splice(1,0,['func','📅 Meus agendamentos']);
+  }
+  const nv=$('nav'); nv.innerHTML=itens.map(([id,t])=>`<button data-v="${id}" onclick="go('${id}')">${t}</button>`).join('');
+  const who=EST.func?`${esc(EST.func.nome)} ${EST.func.admin?'(admin)':'(funcionário)'}`:`${esc(EST.nome_dono||'')}<br><span style="color:var(--faint)">${esc((EST.perfil&&EST.perfil.nome)||'sua clínica')}</span>`;
+  let badge='';
+  if(!EST.func){ if(EST.plano==='pro') badge='<div class="tag" style="color:var(--good);margin-top:6px">✓ Profissional</div>';
+    else if(EST.plano==='trial') badge=`<div class="tag" style="color:var(--accent);margin-top:6px;cursor:pointer" onclick="clAssinar()" title="Assinar agora">Teste grátis · ${EST.trial_dias} dia(s)</div>`;
+    else badge='<button class="btn primary sm" style="margin-top:6px;width:100%" onclick="clAssinar()">⭐ Assinar Profissional</button>'; }
+  $('sbWho').innerHTML=who+badge;
+  go(VIEW);
+  if(!EST.cerebro_ok && dono) setTimeout(()=>mascDica('Pra atendente do WhatsApp responder, conecte um cérebro de IA no app Orion (Config → Cérebro). Posso te mostrar.'),1200);
+}
+function go(v){ VIEW=v; document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v)); $('sb').classList.remove('open');
+  ({dashboard:vDashboard,agenda:vAgenda,relatorios:vRelatorios,clientes:vClientes,servicos:vServicos,estoque:vEstoque,horarios:vHorarios,atendente:vAtendente,funcionarios:vFuncionarios,negocio:vNegocio,orion:vOrion,func:vFunc}[v]||vDashboard)();
+}
+const PRO_REC=['atendente','pix','relatorios','promo','pacotes','estoque','lembrete','equipe'];
+function ehPro(){ return EST.plano==='pro'||EST.plano==='trial'; }
+function proBloqueado(rec){
+  if(EST.func || ehPro() || !PRO_REC.includes(rec)) return false;
+  $('view').innerHTML=`<h1>Recurso do plano Profissional</h1><div class="sub">Esse recurso libera no plano Profissional.</div>
+    <div class="card" style="text-align:center;border-color:var(--accent)"><div style="font-size:40px">⭐</div>
+      <h3>Desbloqueie tudo na Clínica+</h3>
+      <p class="muted" style="max-width:460px;margin:6px auto 14px">Atendente de WhatsApp que agenda, PIX, equipe ilimitada, pacotes, estoque, relatórios e promoções. Tudo num plano só.</p>
+      <button class="btn primary" onclick="clAssinar()">Assinar Profissional</button></div>`;
+  return true;
+}
+async function clAssinar(){
+  const r=await api('/clinica/assinar','POST',{});
+  if(r.ok&&r.url){ window.open(r.url,'_blank'); } else { alert(r.erro||'Pagamento ainda não disponível. Fale com o suporte.'); }
+}
+function reminderHTML(){
+  if(EST.func || EST.conta_completa) return '';
+  const falta=[]; if(!EST.email) falta.push('e-mail'); if(!EST.telefone) falta.push('telefone'); else if(!EST.tel_validado) falta.push('validar telefone'); if(!EST.doc) falta.push('CPF/CNPJ');
+  if(!falta.length) return '';
+  return `<div class="card" style="border-color:var(--warn);background:linear-gradient(100deg,rgba(255,180,84,.12),transparent)">
+    <b>⚠️ Complete seu cadastro</b><div class="muted" style="margin:4px 0 8px">Falta: ${falta.join(', ')}. Isso libera todos os recursos e a segurança da conta.</div>
+    <button class="btn sm" onclick="go('negocio')">Completar agora</button></div>`;
+}
+
+// ---------------- dashboard ----------------
+async function vDashboard(){
+  $('view').innerHTML='<h1>Painel da clínica</h1><div class="sub">Visão geral do seu dia e do mês.</div>'+reminderHTML()+'<div id="d"></div>';
+  const r=await api('/clinica/dashboard'); if(!r.ok){ $('d').innerHTML='<div class="card">Sem permissão.</div>'; return; }
+  const pag=Object.entries(r.por_pagamento||{}).map(([k,v])=>`${k}: ${fmt(v)}`).join(' · ')||'sem recebimentos no mês';
+  const func=(r.por_funcionario||[]).map(f=>`<div class="lin"><span>${esc(f.funcionario)}${f.comissao_pct?' <span class="muted">('+f.comissao_pct+'%)</span>':''}</span><div style="text-align:right"><b>${fmt(f.faturou)}</b>${f.comissao?'<div class="muted">comissão '+fmt(f.comissao)+'</div>':''}</div></div>`).join('')||'<div class="muted">Sem dados por funcionário ainda.</div>';
+  $('d').innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="v" style="color:var(--accent)">${r.agenda_hoje.length}</div><div class="l">Consultas hoje</div></div>
+      <div class="kpi"><div class="v">${r.marcados_total}</div><div class="l">Agendadas (futuras)</div></div>
+      <div class="kpi"><div class="v" style="color:var(--good)">${fmt(r.faturamento_mes)}</div><div class="l">Faturamento do mês</div></div>
+      <div class="kpi"><div class="v">${r.concluidos_mes}</div><div class="l">Atendimentos no mês</div></div>
+      ${r.func_total?`<div class="kpi"><div class="v">${r.func_ativos}/${r.func_total}</div><div class="l">Funcionários ativos</div></div>`:''}
+    </div>
+    <div class="card"><h3>Agenda de hoje</h3><div id="dhoje"></div></div>
+    <div class="card"><h3>Entradas por forma de pagamento (mês)</h3><div class="muted">${esc(pag)}</div></div>
+    <div class="card"><h3>Faturamento por funcionário (mês)</h3>${func}</div>`;
+  $('dhoje').innerHTML=agendaHTML(r.agenda_hoje);
+}
+function agendaHTML(lista){
+  if(!lista||!lista.length) return '<div class="muted">Nenhuma consulta.</div>';
+  return lista.map(a=>{const data=(a.inicio||'').split('T')[0]||'';const hora=(a.inicio||'').split('T')[1]||'';
+    return `<div class="lin"><div><b>${hora}</b> ${data&&VIEW!=='dashboard'?'<span class="muted">'+data.split('-').reverse().join('/')+'</span>':''} · ${esc(a.cliente||'Cliente')} <span class="tag">${esc(a.servico)}</span>${a.func_nome?` <span class="muted">com ${esc(a.func_nome)}</span>`:''}<div class="muted">${esc(a.telefone||'')} · ${fmt(a.valor)}</div></div>
+    <div class="row"><button class="btn sm" onclick="concluir(${a.id})">Concluir</button><button class="btn ghost sm" onclick="remarcar(${a.id},'${a.servico_id}')">Remarcar</button><button class="btn ghost sm" onclick="desmarcar(${a.id})">Desmarcar</button></div></div>`;}).join('');
+}
+async function concluir(id){ const pag=prompt('Forma de pagamento (dinheiro, maquininha, pix):','pix'); if(pag===null) return; await api('/clinica/concluir','POST',{id,pagamento:pag}); go(VIEW); }
+async function desmarcar(id){ if(!confirm('Desmarcar esta consulta? O horário fica livre de novo.')) return; await api('/clinica/desmarcar','POST',{id,motivo:'cancelado no painel'}); go(VIEW); }
+// modal genérico
+function mdl(titulo,html){ let b=$('mdl'); if(b)b.remove(); b=document.createElement('div'); b.id='mdl';
+  b.style.cssText='position:fixed;inset:0;z-index:80;background:rgba(5,4,8,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+  b.innerHTML=`<div style="width:min(520px,94vw);max-height:86vh;overflow:auto;background:var(--panel);border:1px solid var(--line2);border-radius:18px;padding:18px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b style="font-size:16px">${titulo}</b><button class="btn ghost sm" onclick="document.getElementById('mdl').remove()">✕</button></div><div id="mdlB">${html}</div></div>`;
+  b.addEventListener('click',e=>{if(e.target===b)b.remove()}); document.body.appendChild(b); return b;
+}
+async function remarcar(id,sid){ const hoje=new Date().toISOString().slice(0,10);
+  mdl('Remarcar consulta',`<div class="field"><label>Nova data</label><input id="rmData" type="date" value="${hoje}" min="${hoje}" onchange="rmSlots('${sid}')"></div><label>Horários livres</label><div id="rmSlots" class="slots"></div><input type="hidden" id="rmHora"><button class="btn primary" style="margin-top:12px" onclick="rmConfirma(${id})">Confirmar novo horário</button><div id="rmMsg" class="msg"></div>`);
+  rmSlots(sid);
+}
+async function rmSlots(sid){ const r=await api(`/clinica/disponibilidade?data=${$('rmData').value}&servico=${sid}`); $('rmHora').value='';
+  const el=$('rmSlots'); if(!r.ok||!r.slots.length){ el.innerHTML='<span class="muted">'+((r.motivo==='fechado nesse dia')?'Fechado nesse dia.':'Sem horários livres.')+'</span>'; return; }
+  el.innerHTML=r.slots.map(s=>`<div class="slot" onclick="document.querySelectorAll('#rmSlots .slot').forEach(x=>x.classList.remove('on'));this.classList.add('on');document.getElementById('rmHora').value='${s}'">${s}</div>`).join(''); }
+async function rmConfirma(id){ const h=$('rmHora').value; if(!h){ $('rmMsg').style.color='var(--warn)'; $('rmMsg').textContent='Escolha um horário.'; return; }
+  const r=await api('/clinica/remarcar','POST',{id,data:$('rmData').value,hora:h}); if(!r.ok){ $('rmMsg').style.color='var(--bad)'; $('rmMsg').textContent=r.erro||'erro'; return; } $('mdl').remove(); go(VIEW); }
+
+// ---------------- agenda ----------------
+async function vAgenda(){
+  if(!SERV.length){ SERV=(await api('/clinica/servicos')).servicos||[]; }
+  let funcs=[]; if(EST.sou_dono||EST.sou_admin){ funcs=(await api('/clinica/funcionarios')).funcionarios||[]; }
+  $('view').innerHTML=`<h1>Agenda</h1><div class="sub">Marque uma consulta verificando a disponibilidade real (sem sobrepor horários).</div>
+    <div class="card"><h3>Marcar consulta</h3>
+      <div class="row">
+        <div class="field" style="flex:1;min-width:160px"><label>Serviço</label><select id="agServ" onchange="agSlots()">${SERV.map(s=>`<option value="${s.id}">${esc(s.nome)} · ${fmt(s.preco)} · ${s.duracao}min</option>`).join('')||'<option>cadastre um serviço</option>'}</select></div>
+        <div class="field" style="width:170px"><label>Data</label><input id="agData" type="date" value="${HOJEISO}" min="${HOJEISO}" onchange="agSlots()"></div>
+        ${funcs.length?`<div class="field" style="width:170px"><label>Profissional</label><select id="agFunc" onchange="agSlots()"><option value="">qualquer</option>${funcs.map(f=>`<option value="${f.id}">${esc(f.nome)}</option>`).join('')}</select></div>`:''}
+      </div>
+      <div class="row"><div class="field" style="flex:1;min-width:160px"><label>Cliente</label><input id="agCli" placeholder="nome do cliente"></div>
+        <div class="field" style="flex:1;min-width:160px"><label>Telefone</label><input id="agTel" placeholder="WhatsApp"></div></div>
+      <label>Horários livres</label><div id="agSlots" class="slots"></div>
+      <input type="hidden" id="agHora">
+      <button class="btn primary" style="margin-top:14px" onclick="agMarcar()">Confirmar agendamento</button>
+      <div id="agMsg" class="msg"></div>
+    </div>
+    <div class="card"><h3>Consultas do dia <span id="agDiaLbl" class="muted"></span></h3><div id="agLista"></div></div>`;
+  agSlots(); agLista();
+}
+async function agSlots(){
+  const sid=$('agServ')&&$('agServ').value, data=$('agData').value, fid=$('agFunc')?$('agFunc').value:'';
+  $('agHora').value=''; if(!sid){ $('agSlots').innerHTML='<span class="muted">Cadastre um serviço primeiro.</span>'; return; }
+  const r=await api(`/clinica/disponibilidade?data=${data}&servico=${sid}${fid?'&func='+fid:''}`);
+  agLista();
+  if(!r.ok){ $('agSlots').innerHTML='<span class="muted">'+esc(r.erro||'erro')+'</span>'; return; }
+  if(!r.slots.length){ $('agSlots').innerHTML='<span class="muted">'+(r.motivo==='fechado nesse dia'?'Fechado nesse dia.':'Sem horários livres nesse dia.')+'</span>'; return; }
+  $('agSlots').innerHTML=r.slots.map(s=>`<div class="slot" onclick="agPick(this,'${s}')">${s}</div>`).join('');
+}
+function agPick(el,h){ document.querySelectorAll('#agSlots .slot').forEach(s=>s.classList.remove('on')); el.classList.add('on'); $('agHora').value=h; }
+async function agMarcar(){
+  const hora=$('agHora').value; const m=$('agMsg');
+  if(!hora){ m.style.color='var(--warn)'; m.textContent='Escolha um horário livre.'; return; }
+  const r=await api('/clinica/agendar','POST',{servico_id:$('agServ').value,data:$('agData').value,hora,cliente:$('agCli').value.trim(),telefone:$('agTel').value.trim(),func_id:($('agFunc')?$('agFunc').value:'')});
+  if(!r.ok){ m.style.color='var(--bad)'; m.textContent=r.erro||'Não consegui marcar.'; agSlots(); return; }
+  m.style.color='var(--good)'; m.textContent='Consulta marcada! ✓'; $('agCli').value='';$('agTel').value='';$('agHora').value=''; agSlots();
+}
+async function agLista(){ const data=$('agData').value; const lbl=$('agDiaLbl'); if(lbl) lbl.textContent='('+data.split('-').reverse().join('/')+')';
+  const r=await api('/clinica/agenda?data='+data); const el=$('agLista'); if(el) el.innerHTML=agendaHTML((r.agenda||[])); }
+
+// ---------------- relatórios ----------------
+async function vRelatorios(){
+  if(proBloqueado('relatorios')) return;
+  $('view').innerHTML='<h1>Relatórios</h1><div class="sub">Acompanhe seu faturamento, serviços mais vendidos e faltas.</div><div id="rel">carregando...</div>';
+  const r=await api('/clinica/relatorios'); if(!r.ok){ $('rel').innerHTML='<div class="card">Sem permissão.</div>'; return; }
+  const mx=Math.max(1,...r.faturamento_dia.map(d=>d.valor));
+  const barras=r.faturamento_dia.map(d=>`<div title="${d.dia}: ${fmt(d.valor)}" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px"><div style="width:70%;min-height:2px;height:${Math.round(d.valor/mx*120)}px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:4px 4px 0 0"></div><span style="font-size:8px;color:var(--faint);transform:rotate(-60deg);transform-origin:center;white-space:nowrap">${d.dia}</span></div>`).join('');
+  const top=r.top_servicos.map(s=>`<div class="lin"><div><b>${esc(s.servico)}</b> <span class="tag">${s.qtd}x</span></div><b>${fmt(s.receita)}</b></div>`).join('')||'<div class="muted">Sem dados ainda.</div>';
+  $('rel').innerHTML=`
+    <div class="kpis"><div class="kpi"><div class="v" style="color:var(--good)">${fmt(r.total_periodo)}</div><div class="l">Faturado (30 dias)</div></div>
+      <div class="kpi"><div class="v">${r.concluidos}</div><div class="l">Atendimentos</div></div>
+      <div class="kpi"><div class="v" style="color:${r.taxa_falta>20?'var(--bad)':'var(--text)'}">${r.taxa_falta}%</div><div class="l">Taxa de cancelamento</div></div>
+      <div class="kpi"><div class="v">${r.cancelados}</div><div class="l">Cancelados</div></div></div>
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Faturamento por dia (30 dias)</h3><button class="btn ghost sm" onclick="exportarClinicaCSV()">⬇️ Exportar CSV</button></div>
+      <div style="display:flex;align-items:flex-end;gap:2px;height:150px;margin-top:14px;padding-bottom:20px">${barras}</div></div>
+    <div class="card"><h3>💰 Caixa do dia</h3><div class="row" style="margin-bottom:8px"><input id="cxData" type="date" value="${HOJEISO}" style="width:170px" onchange="caixaRender()"></div><div id="cxBox"></div></div>
+    <div class="card"><h3>Serviços mais vendidos</h3>${top}</div>`;
+  caixaRender();
+}
+async function caixaRender(){ const box=$('cxBox'); if(!box) return; const r=await api('/clinica/caixa?data='+$('cxData').value); if(!r.ok){ box.innerHTML='<div class="muted">erro</div>'; return; }
+  const pag=Object.entries(r.por_pagamento||{}).map(([k,v])=>`<div class="lin"><span>${esc(k)}</span><b>${fmt(v)}</b></div>`).join('')||'<div class="muted">Sem entradas nesse dia.</div>';
+  const fnc=(r.por_funcionario||[]).map(f=>`<div class="lin"><span>${esc(f.funcionario)}</span><b>${fmt(f.valor)}</b></div>`).join('');
+  box.innerHTML=`<div style="font-size:24px;font-weight:800;color:var(--good);margin-bottom:4px">${fmt(r.total)}</div><div class="muted" style="margin-bottom:10px">${r.atendimentos} atendimento(s) no dia</div>
+    <b style="font-size:13px">Por forma de pagamento</b>${pag}${fnc?'<b style="font-size:13px;display:block;margin-top:8px">Por profissional</b>'+fnc:''}`;
+}
+async function exportarClinicaCSV(){ const r=await api('/clinica/export'); const rows=(r&&r.rows)||[];
+  if(!rows.length){ alert('Nada pra exportar ainda.'); return; }
+  const cols=Object.keys(rows[0]); const esc2=v=>{v=String(v==null?'':v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const csv=[cols.join(';')].concat(rows.map(o=>cols.map(c=>esc2(o[c])).join(';'))).join('\r\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'})); a.download='agendamentos_clinica.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+// ---------------- clientes + fidelidade + link público ----------------
+async function vClientes(){
+  const r=await api('/clinica/clientes'); const cs=(r&&r.clientes)||[]; const f=(r&&r.fidelidade)||{ativo:false,meta:10,premio:''};
+  const link=location.origin+(EST.link_agendamento||'/agendar');
+  $('view').innerHTML=`<h1>Clientes</h1><div class="sub">Perfis dos seus clientes, fidelidade e o link de agendamento pra divulgar.</div>
+    ${reminderHTML()}
+    <div class="card"><h3>🔗 Link de agendamento (mande pros clientes)</h3>
+      <div class="muted" style="margin-bottom:8px">Seus clientes agendam sozinhos por aqui, escolhendo serviço, dia e horário livres. Cai direto na sua agenda.</div>
+      <div class="row"><input id="lk" value="${esc(link)}" readonly style="flex:1;min-width:200px"><button class="btn primary" onclick="navigator.clipboard.writeText($('lk').value);this.textContent='Copiado!'">Copiar</button>
+      <a class="btn" href="${esc(link)}" target="_blank">Abrir</a>
+      <a class="btn" target="_blank" href="https://wa.me/?text=${encodeURIComponent('Agende sua consulta por aqui: '+link)}">Enviar no WhatsApp</a></div></div>
+    <div class="card"><h3>🎁 Programa de fidelidade</h3>
+      <div class="muted" style="margin-bottom:10px">Você escolhe: a cada X procedimentos o cliente ganha um prêmio. Só conta clientes cadastrados.</div>
+      <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><input type="checkbox" id="fdAtivo" style="width:auto" ${f.ativo?'checked':''}> Ativar fidelidade</label>
+      <div class="row"><div class="field" style="width:170px"><label>A cada quantos procedimentos</label><input id="fdMeta" type="number" value="${f.meta||10}"></div>
+        <div class="field" style="flex:1;min-width:180px"><label>Prêmio</label><input id="fdPremio" value="${esc(f.premio||'')}" placeholder="ex: 1 limpeza de pele grátis"></div></div>
+      <button class="btn primary" onclick="fdSalvar()">Salvar fidelidade</button><span id="fdMsg" class="msg"></span></div>
+    <div class="card"><h3>📣 Disparar promoção no WhatsApp</h3><div class="muted" style="margin-bottom:8px">Escreva e mande pros clientes. Precisa do WhatsApp da clínica conectado (aba Atendente).</div>
+      <textarea id="promoMsg" rows="3" placeholder="Ex: Semana de tratamentos faciais com 20% off! Agende já 💖"></textarea>
+      <div class="row" style="margin-top:8px"><div class="field" style="width:220px"><label>Enviar para</label><select id="promoAlvo"><option value="todos">Todos os clientes</option><option value="cadastrados">Só cadastrados</option><option value="fieis">Clientes fiéis (3+ procedimentos)</option><option value="inativos">Inativos (45+ dias sem vir)</option></select></div>
+        <button class="btn primary" style="align-self:end" onclick="promoEnviar()">Disparar</button></div>
+      <div id="promoMsgR" class="msg"></div></div>
+    <div class="card"><h3>Seus clientes (${cs.length})</h3><div class="muted" style="margin-bottom:6px">Toque num cliente pra ver a ficha (histórico + observações).</div><div id="clLista">${cs.length?cs.map(c=>`<div class="lin" style="cursor:pointer" onclick="fichaCliente('${esc(c.tel)}')"><div><b>${esc(c.nome||'(sem nome)')}</b> ${c.cadastrado?'<span class="tag" style="color:var(--good)">cadastrado</span>':'<span class="tag">avulso</span>'}<div class="muted">${esc(c.tel||'')} · ${c.procedimentos} procedimento(s)</div></div>${c.ganhou?'<span class="tag" style="color:var(--accent);border-color:var(--accent)">🎁 ganhou prêmio!</span>':(c.falta_premio?`<span class="muted">faltam ${c.falta_premio}</span>`:'')}</div>`).join(''):'<div class="muted">Ninguém ainda. Compartilhe o link acima ou marque uma consulta.</div>'}</div></div>`;
+}
+let _PACS=[];
+async function fichaCliente(tel){
+  const r=await api('/clinica/cliente/ficha?tel='+encodeURIComponent(tel)); if(!r.ok){ return; } const c=r.cliente; const a=c.anamnese||{};
+  if(!_PACS.length){ _PACS=(await api('/clinica/pacotes')).pacotes||[]; }
+  const hist=(r.historico||[]).map(h=>{const d=(h.data||'').split('T');return `<div class="lin"><div><b>${esc(h.servico)}</b> <span class="tag">${esc(h.status)}</span><div class="muted">${(d[0]||'').split('-').reverse().join('/')} ${d[1]||''}${h.pagamento?' · '+esc(h.pagamento):''}</div></div><b>${fmt(h.valor)}</b></div>`;}).join('')||'<div class="muted">Sem histórico ainda.</div>';
+  const pacAtivos=(c.pacotes||[]).map(p=>`<div class="lin"><span>📦 ${esc(p.nome)}</span><b>${p.restantes}/${p.total} sessões</b></div>`).join('');
+  const fotos=(c.fotos||[]).map(f=>`<div style="position:relative;display:inline-block;margin:4px"><img src="${f.data}" style="width:90px;height:90px;object-fit:cover;border-radius:10px"><button class="btn ghost sm" style="position:absolute;top:2px;right:2px;padding:1px 6px" onclick="fotoApagar('${esc(c.tel)}',${f.id})">✕</button></div>`).join('')||'<div class="muted">Sem fotos.</div>';
+  mdl('Ficha · '+esc(c.nome||c.tel),`
+    <div class="muted" style="margin-bottom:10px">${esc(c.tel)}${c.email?' · '+esc(c.email):''} · ${c.procedimentos} procedimento(s) ${c.ganhou?'· <span style="color:var(--accent)">🎁 prêmio</span>':(c.falta_premio?'· faltam '+c.falta_premio:'')}</div>
+    ${pacAtivos?'<div class="card" style="padding:10px 12px">'+pacAtivos+'</div>':''}
+    ${_PACS.length?`<div class="row" style="margin-bottom:10px"><select id="fcPac" style="flex:1">${_PACS.map(p=>`<option value="${p.id}">${esc(p.nome)} · ${p.sessoes}x · ${fmt(p.preco)}</option>`).join('')}</select><button class="btn" onclick="venderPacote('${esc(c.tel)}')">Vender pacote</button></div>`:''}
+    <h3 style="margin:10px 0 6px;font-size:15px">🩺 Anamnese</h3>
+    <div class="row"><div class="field" style="flex:1;min-width:140px"><label>Alergias</label><input id="anAl" value="${esc(a.alergias||'')}"></div><div class="field" style="flex:1;min-width:140px"><label>Medicações</label><input id="anMed" value="${esc(a.medicacoes||'')}"></div></div>
+    <div class="row"><div class="field" style="flex:1;min-width:140px"><label>Condições de saúde</label><input id="anCond" value="${esc(a.condicoes||'')}"></div>
+      <div class="field" style="width:120px"><label>Gestante</label><select id="anGest"><option ${a.gestante!=='sim'?'selected':''}>nao</option><option ${a.gestante==='sim'?'selected':''}>sim</option></select></div>
+      <div class="field" style="width:120px"><label>Fumante</label><select id="anFum"><option ${a.fumante!=='sim'?'selected':''}>nao</option><option ${a.fumante==='sim'?'selected':''}>sim</option></select></div></div>
+    <div class="field"><label>Observações de saúde / evolução</label><textarea id="anObs" rows="2">${esc(a.obs_saude||'')}</textarea></div>
+    <button class="btn primary" onclick="anamneseSalvar('${esc(c.tel)}')">Salvar anamnese</button><span id="anMsg" class="msg"></span>
+    <h3 style="margin:16px 0 6px;font-size:15px">📷 Fotos (antes/depois)</h3>
+    <div id="fcFotos">${fotos}</div>
+    <label class="btn ghost" style="margin-top:8px;display:inline-block">Adicionar foto<input type="file" accept="image/*" style="display:none" onchange="fotoUpload('${esc(c.tel)}',this)"></label>
+    <div class="field" style="margin-top:14px"><label>Observações gerais</label><textarea id="fcObs" rows="2">${esc(c.obs||'')}</textarea></div>
+    <button class="btn" onclick="fichaSalvarObs('${esc(c.tel)}')">Salvar observações</button><span id="fcMsg" class="msg"></span>
+    <h3 style="margin:16px 0 6px;font-size:15px">Histórico</h3>${hist}`);
+}
+async function fichaSalvarObs(tel){ const r=await api('/clinica/cliente/obs','POST',{tel,obs:$('fcObs').value}); const m=$('fcMsg'); m.style.color='var(--good)'; m.textContent=r.ok?'Salvo ✓':'erro'; }
+async function anamneseSalvar(tel){ const r=await api('/clinica/cliente/anamnese','POST',{tel,alergias:$('anAl').value,medicacoes:$('anMed').value,condicoes:$('anCond').value,gestante:$('anGest').value,fumante:$('anFum').value,obs_saude:$('anObs').value}); const m=$('anMsg'); m.style.color='var(--good)'; m.textContent=r.ok?'Salvo ✓':'erro'; }
+async function venderPacote(tel){ const pid=$('fcPac').value; if(!confirm('Vender este pacote pro cliente?')) return; const r=await api('/clinica/pacote/vender','POST',{tel,pacote_id:pid,pagamento:'pix'}); if(r.ok) fichaCliente(tel); else alert(r.erro||'erro'); }
+async function fotoApagar(tel,id){ await api('/clinica/cliente/foto/apagar','POST',{tel,id}); fichaCliente(tel); }
+function fotoUpload(tel,inp){ const f=inp.files[0]; if(!f) return; if(f.size>1500000){ alert('Imagem grande demais (máx ~1,5MB).'); return; }
+  const rd=new FileReader(); rd.onload=async()=>{ const r=await api('/clinica/cliente/foto','POST',{tel,data:rd.result}); if(r.ok) fichaCliente(tel); else alert(r.erro||'erro'); }; rd.readAsDataURL(f); }
+async function fdSalvar(){ const r=await api('/clinica/fidelidade','POST',{ativo:$('fdAtivo').checked,meta:$('fdMeta').value,premio:$('fdPremio').value}); const m=$('fdMsg'); m.style.color='var(--good)'; m.textContent=r.ok?'Salvo ✓':'erro'; }
+async function promoEnviar(){ const msg=$('promoMsg').value.trim(); const m=$('promoMsgR'); if(msg.length<3){ m.style.color='var(--warn)'; m.textContent='Escreva a mensagem.'; return; }
+  if(!confirm('Disparar essa mensagem pros clientes selecionados?')) return; m.style.color='var(--dim)'; m.textContent='Enviando...';
+  const r=await api('/clinica/promo','POST',{mensagem:msg,alvo:$('promoAlvo').value});
+  if(r.ok){ m.style.color='var(--good)'; m.textContent='Enviado pra '+r.enviados+' de '+r.alvos+' cliente(s).'; } else { m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
+
+// ---------------- serviços ----------------
+async function vServicos(){
+  const r=await api('/clinica/servicos'); SERV=r.servicos||[];
+  $('view').innerHTML=`<h1>Serviços e preços</h1><div class="sub">Tudo editável. Mude valores e duração quando precisar — o sistema se adapta.</div>
+    <div class="card"><h3>Novo serviço</h3>
+      <div class="row"><div class="field" style="flex:2;min-width:160px"><label>Nome</label><input id="svNome" placeholder="ex: Limpeza de pele"></div>
+      <div class="field" style="width:130px"><label>Preço (R$)</label><input id="svPreco" type="number" placeholder="150"></div>
+      <div class="field" style="width:140px"><label>Duração (min)</label><input id="svDur" type="number" placeholder="60"></div></div>
+      <button class="btn primary" onclick="svSalvar()">Adicionar</button></div>
+    <div class="card"><h3>Sua tabela</h3><div id="svLista"></div></div>
+    <div class="card"><h3>📦 Pacotes de sessão</h3><div class="muted" style="margin-bottom:10px">Venda blocos de sessões (ex: 10 limpezas) com desconto. A cada atendimento o sistema debita 1 sessão automaticamente. Você vende o pacote na ficha do cliente.</div>
+      <div class="row"><div class="field" style="flex:1;min-width:150px"><label>Nome do pacote</label><input id="pcNome" placeholder="ex: 10 Limpezas"></div>
+        <div class="field" style="flex:1;min-width:150px"><label>Serviço</label><select id="pcServ"><option value="">qualquer</option>${SERV.map(s=>`<option value="${s.id}">${esc(s.nome)}</option>`).join('')}</select></div>
+        <div class="field" style="width:110px"><label>Sessões</label><input id="pcSess" type="number" placeholder="10"></div>
+        <div class="field" style="width:130px"><label>Preço total</label><input id="pcPreco" type="number" placeholder="1200"></div></div>
+      <button class="btn primary" onclick="pacSalvar()">Adicionar pacote</button><div id="pacLista" style="margin-top:10px"></div></div>
+    <div class="card"><h3>💳 Pagamento online (PIX)</h3><div class="muted" style="margin-bottom:10px">A chave PIX da sua clínica (qualquer banco). O dinheiro cai direto na sua conta. Cartão e dinheiro continuam presenciais.</div><div id="pixBox"></div></div>`;
+  svRender(); pixLoad(); pacRender();
+}
+async function pacRender(){ const r=await api('/clinica/pacotes'); _PACS=(r&&r.pacotes)||[]; const el=$('pacLista'); if(!el) return;
+  const snome=id=>{const s=SERV.find(x=>String(x.id)===String(id));return s?s.nome:'qualquer serviço';};
+  el.innerHTML=_PACS.length?_PACS.map(p=>`<div class="lin"><div><b>${esc(p.nome)}</b> <span class="tag">${p.sessoes}x</span><div class="muted">${esc(snome(p.servico_id))} · ${fmt(p.preco)}</div></div><button class="btn ghost sm" onclick="pacApagar(${p.id})">✕</button></div>`).join(''):'<div class="muted">Nenhum pacote.</div>'; }
+async function pacSalvar(){ const nome=$('pcNome').value.trim(); if(!nome) return; const r=await api('/clinica/pacote/salvar','POST',{nome,servico_id:$('pcServ').value,sessoes:$('pcSess').value,preco:$('pcPreco').value}); if(r.ok){ $('pcNome').value='';$('pcSess').value='';$('pcPreco').value=''; pacRender(); } }
+async function pacApagar(id){ if(!confirm('Apagar pacote?')) return; await api('/clinica/pacote/apagar','POST',{id}); pacRender(); }
+async function pixLoad(){ const box=$('pixBox'); if(!box) return; const r=await api('/clinica/pix'); const p=(r&&r.pix)||{};
+  box.innerHTML=`<div class="muted" style="margin-bottom:8px">${p.tem_chave?'<span style="color:var(--good)">✓ chave PIX cadastrada ('+esc(p.chave_masc)+') — o dinheiro cai direto no SEU banco</span>':'É só a sua chave PIX (qualquer banco). Sem token, sem complicação.'}</div>
+    <div class="row"><div class="field" style="width:150px"><label>Tipo da chave</label><select id="pxTipo"><option ${p.tipo_chave==='cpf'?'selected':''}>cpf</option><option ${p.tipo_chave==='cnpj'?'selected':''}>cnpj</option><option ${p.tipo_chave==='celular'?'selected':''}>celular</option><option ${p.tipo_chave==='email'?'selected':''}>email</option><option ${p.tipo_chave==='aleatoria'?'selected':''}>aleatoria</option></select></div>
+      <div class="field" style="flex:1;min-width:200px"><label>Chave PIX</label><input id="pxChave" placeholder="${p.tem_chave?'•••••• (deixe vazio pra manter)':'sua chave PIX'}"></div></div>
+    <div class="row"><div class="field" style="flex:1;min-width:160px"><label>Nome do recebedor</label><input id="pxRec" value="${esc(p.recebedor||'')}" placeholder="nome que aparece no PIX"></div>
+      <div class="field" style="width:160px"><label>Cidade</label><input id="pxCid" value="${esc(p.cidade||'')}" placeholder="ex: Sao Paulo"></div></div>
+    <label style="display:flex;gap:8px;align-items:center;margin:6px 0 10px"><input type="checkbox" id="pxAtivo" style="width:auto" ${p.ativo?'checked':''}> Pedir PIX no agendamento online</label>
+    <div class="row"><div class="field" style="width:170px"><label>Cobrar</label><select id="pxModo"><option value="sinal" ${p.modo!=='total'?'selected':''}>Só um sinal</option><option value="total" ${p.modo==='total'?'selected':''}>Valor total</option></select></div>
+      <div class="field" style="width:130px"><label>Sinal (%)</label><input id="pxPct" type="number" value="${p.sinal_pct||30}"></div>
+      <div class="field" style="flex:1;min-width:160px"><label>Maquininha (presencial)</label><input id="pxMaq" value="${esc(p.maquininha||'')}" placeholder="ex: Stone, PagSeguro"></div></div>
+    <button class="btn primary" onclick="pixSalvar()">Salvar</button>${p.tem_chave?'<button class="btn ghost" onclick="pixLimpar()">Remover chave</button>':''}<span id="pxMsg" class="msg"></span>
+    <div class="muted" style="margin-top:8px">Cartão e dinheiro são registrados ao concluir a consulta (presencial). O PIX online é opcional e cai direto na sua conta.</div>`;
+}
+async function pixSalvar(){ const r=await api('/clinica/pix/salvar','POST',{ativo:$('pxAtivo').checked,modo:$('pxModo').value,sinal_pct:$('pxPct').value,chave:$('pxChave').value.trim(),tipo_chave:$('pxTipo').value,recebedor:$('pxRec').value.trim(),cidade:$('pxCid').value.trim(),maquininha:$('pxMaq').value.trim()}); const m=$('pxMsg'); if(r.ok){ m.style.color='var(--good)'; m.textContent='Salvo ✓'; pixLoad(); } else { m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
+async function pixLimpar(){ if(!confirm('Remover a chave PIX?')) return; await api('/clinica/pix/salvar','POST',{limpar_chave:true,ativo:false}); pixLoad(); }
+function svRender(){ $('svLista').innerHTML=SERV.length?SERV.map(s=>`<div class="lin"><div><b>${esc(s.nome)}</b> <span class="tag">${s.duracao} min</span></div><div class="row"><b>${fmt(s.preco)}</b><button class="btn ghost sm" onclick="svApagar(${s.id})">✕</button></div></div>`).join(''):'<div class="muted">Nenhum serviço ainda.</div>'; }
+async function svSalvar(){ const nome=$('svNome').value.trim(); if(!nome) return; const r=await api('/clinica/servico/salvar','POST',{nome,preco:$('svPreco').value,duracao:$('svDur').value}); if(r.ok){ SERV=r.servicos; svRender(); $('svNome').value='';$('svPreco').value='';$('svDur').value=''; } }
+async function svApagar(id){ if(!confirm('Apagar serviço?')) return; await api('/clinica/servico/apagar','POST',{id}); SERV=SERV.filter(s=>s.id!==id); svRender(); }
+
+// ---------------- estoque ----------------
+async function vEstoque(){
+  if(proBloqueado('estoque')) return;
+  $('view').innerHTML='<h1>Estoque</h1><div class="sub">Produtos e insumos (ácidos, cremes, descartáveis). Alerta quando está acabando.</div><div id="est"></div>';
+  estRender();
+}
+async function estRender(){
+  const r=await api('/clinica/estoque'); const es=(r&&r.estoque)||[]; const al=(r&&r.alertas)||[];
+  const lista=es.length?es.map(p=>{const baixo=al.some(a=>a.nome===p.nome);return `<div class="lin" style="${baixo?'border-left:3px solid var(--warn);padding-left:8px':''}"><div><b>${esc(p.nome)}</b> ${baixo?'<span class="tag" style="color:var(--warn)">acabando</span>':''}<div class="muted">mín: ${p.minimo} ${esc(p.unidade)}</div></div>
+    <div class="row"><button class="btn ghost sm" onclick="estMexer(${p.id},-1)">−</button><b style="min-width:46px;text-align:center">${p.qtd} ${esc(p.unidade)}</b><button class="btn ghost sm" onclick="estMexer(${p.id},1)">+</button><button class="btn ghost sm" onclick="estApagar(${p.id})">✕</button></div></div>`;}).join(''):'<div class="muted">Nenhum produto. Cadastre acima.</div>';
+  $('est').innerHTML=`${al.length?`<div class="card" style="border-color:var(--warn);background:linear-gradient(100deg,rgba(255,180,84,.12),transparent)"><b>⚠️ Repor: </b>${al.map(a=>esc(a.nome)).join(', ')}</div>`:''}
+    <div class="card"><h3>Novo produto</h3><div class="row"><div class="field" style="flex:1;min-width:150px"><label>Produto</label><input id="esNome" placeholder="ex: Ácido glicólico"></div>
+      <div class="field" style="width:110px"><label>Quantidade</label><input id="esQtd" type="number" value="0"></div>
+      <div class="field" style="width:100px"><label>Mínimo</label><input id="esMin" type="number" value="0"></div>
+      <div class="field" style="width:90px"><label>Unidade</label><input id="esUn" placeholder="un, ml, g"></div></div>
+      <button class="btn primary" onclick="estSalvar()">Adicionar</button></div>
+    <div class="card"><h3>Seus produtos</h3>${lista}</div>`;
+}
+async function estSalvar(){ const nome=$('esNome').value.trim(); if(!nome) return; await api('/clinica/estoque/salvar','POST',{nome,qtd:$('esQtd').value,minimo:$('esMin').value,unidade:$('esUn').value.trim()||'un'}); estRender(); }
+async function estMexer(id,delta){ await api('/clinica/estoque/mexer','POST',{id,delta}); estRender(); }
+async function estApagar(id){ if(!confirm('Apagar produto?')) return; await api('/clinica/estoque/apagar','POST',{id}); estRender(); }
+
+// ---------------- horários ----------------
+async function vHorarios(){
+  const r=await api('/clinica/horario'); const h=r.horario; const dn={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
+  $('view').innerHTML=`<h1>Horários de funcionamento</h1><div class="sub">Marque os dias que abre, defina o horário, e o intervalo entre encaixes. A agenda respeita tudo isso.</div>
+    <div class="card"><div class="daygrid">
+      <b></b><b class="muted">Abre</b><b class="muted">Fecha</b><b></b>
+      ${['seg','ter','qua','qui','sex','sab','dom'].map(d=>`
+        <label style="margin:0;display:flex;gap:8px;align-items:center"><input type="checkbox" id="h_${d}_a" style="width:auto" ${h.dias[d].aberto?'checked':''}> ${dn[d]}</label>
+        <input id="h_${d}_i" type="time" value="${h.dias[d].ini}">
+        <input id="h_${d}_f" type="time" value="${h.dias[d].fim}">
+        <span></span>`).join('')}
+    </div>
+    <div class="row" style="margin-top:14px"><div class="field" style="width:200px"><label>Intervalo entre encaixes (min)</label><input id="hInt" type="number" value="${h.intervalo}"></div></div>
+    <button class="btn primary" onclick="hSalvar()">Salvar horários</button><span id="hMsg" class="msg"></span></div>
+    <div class="card"><h3>🚫 Bloqueios e folgas</h3><div class="muted" style="margin-bottom:10px">Bloqueie um dia inteiro (folga, feriado) ou um intervalo (almoço, compromisso). A agenda não oferece esses horários.</div>
+      <div class="row"><div class="field" style="width:160px"><label>Data</label><input id="blqData" type="date"></div>
+        <label style="display:flex;gap:7px;align-items:center;margin-top:18px"><input type="checkbox" id="blqDia" style="width:auto" onchange="document.getElementById('blqHoras').style.display=this.checked?'none':'flex'"> dia todo</label>
+        <div id="blqHoras" class="row"><div class="field" style="width:110px"><label>Das</label><input id="blqIni" type="time" value="12:00"></div><div class="field" style="width:110px"><label>Até</label><input id="blqFim" type="time" value="13:00"></div></div></div>
+      <div class="field"><label>Motivo (opcional)</label><input id="blqMot" placeholder="ex: almoço, folga, feriado"></div>
+      <button class="btn primary" onclick="blqAdd()">Bloquear</button>
+      <div id="blqLista" style="margin-top:12px"></div></div>`;
+  blqLoad();
+}
+async function blqLoad(){ const r=await api('/clinica/bloqueios'); const bs=(r&&r.bloqueios)||[]; const el=$('blqLista'); if(!el) return;
+  el.innerHTML=bs.length?bs.map(b=>`<div class="lin"><div><b>${(b.data||'').split('-').reverse().join('/')}</b> ${b.dia_todo?'<span class="tag">dia todo</span>':'<span class="muted">'+esc(b.ini)+' às '+esc(b.fim)+'</span>'}${b.motivo?' · '+esc(b.motivo):''}</div><button class="btn ghost sm" onclick="blqDel(${b.id})">✕</button></div>`).join(''):'<div class="muted">Nenhum bloqueio.</div>'; }
+async function blqAdd(){ if(!$('blqData').value) return; await api('/clinica/bloqueio/add','POST',{data:$('blqData').value,dia_todo:$('blqDia').checked,ini:$('blqIni').value,fim:$('blqFim').value,motivo:$('blqMot').value.trim()}); $('blqMot').value=''; blqLoad(); }
+async function blqDel(id){ await api('/clinica/bloqueio/remover','POST',{id}); blqLoad(); }
+async function hSalvar(){ const dias={}; ['seg','ter','qua','qui','sex','sab','dom'].forEach(d=>{dias[d]={aberto:$('h_'+d+'_a').checked,ini:$('h_'+d+'_i').value,fim:$('h_'+d+'_f').value};});
+  const r=await api('/clinica/horario','POST',{dias,intervalo:$('hInt').value}); const m=$('hMsg'); m.style.color='var(--good)'; m.textContent=r.ok?'Salvo ✓':'erro'; }
+
+// ---------------- atendente (FAQ + bot) ----------------
+let FAQ=[];
+async function vAtendente(){
+  if(proBloqueado('atendente')) return;
+  FAQ=(await api('/clinica/faq')).faq||[];
+  const lem=(await api('/clinica/lembrete')).lembrete||{ativo:true,confirmar:true,horas:3};
+  $('view').innerHTML=`<h1>Atendente de WhatsApp</h1><div class="sub">A atendente responde com a SUA tabela e horários — e <b>agenda/desmarca sozinha</b> na conversa. Teste no simulador.</div>
+    <div class="card"><h3>🔔 Confirmação e lembrete automáticos</h3><div class="muted" style="margin-bottom:10px">Manda mensagem pro cliente no WhatsApp. Precisa do WhatsApp conectado (Integrações do Orion).</div>
+      <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="lemConf" style="width:auto" ${lem.confirmar?'checked':''}> Enviar confirmação ao marcar</label>
+      <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="lemAtivo" style="width:auto" ${lem.ativo?'checked':''}> Enviar lembrete antes da consulta</label>
+      <div class="row"><div class="field" style="width:160px"><label>Horas antes</label><input id="lemHoras" type="number" value="${lem.horas||3}"></div></div>
+      <button class="btn primary" onclick="lemSalvar()">Salvar</button><span id="lemMsg" class="msg"></span></div>
+    <div class="card"><h3>📱 Conectar o WhatsApp da clínica</h3><div class="muted" style="margin-bottom:10px">Ligue o seu número do WhatsApp Business (Meta) pra atendente atender e agendar sozinha no seu número. <a href="/" target="_blank">Como obter o token/ID</a></div>
+      <div id="waBox"></div></div>
+    <div class="card"><h3>Respostas prontas (perguntas frequentes)</h3><div id="faqLista"></div>
+      <div class="row" style="margin-top:10px"><div class="field" style="flex:1;min-width:160px"><label>Pergunta</label><input id="fqP" placeholder="ex: Vocês fazem limpeza de pele?"></div>
+      <div class="field" style="flex:2;min-width:200px"><label>Resposta</label><input id="fqR" placeholder="resposta padrão"></div></div>
+      <button class="btn primary" onclick="fqAdd()">Adicionar resposta</button></div>
+    <div class="card"><h3>Simulador da atendente 💬</h3><div class="muted" style="margin-bottom:8px">Escreva como se fosse um cliente. ${EST.cerebro_ok?'':'<b style="color:var(--warn)">Conecte um cérebro de IA no Orion pra ela responder de verdade.</b>'}</div>
+      <div id="botchat" class="botchat"></div>
+      <div class="row" style="margin-top:8px"><input id="botInp" placeholder="ex: qual o valor da limpeza de pele?" onkeydown="if(event.key==='Enter')botSend()"><button class="btn primary" onclick="botSend()">Enviar</button></div></div>`;
+  faqRender(); waLoad();
+}
+function faqRender(){ $('faqLista').innerHTML=FAQ.length?FAQ.map((q,i)=>`<div class="lin"><div><b>${esc(q.pergunta)}</b><div class="muted">${esc(q.resposta)}</div></div><button class="btn ghost sm" onclick="fqDel(${i})">✕</button></div>`).join(''):'<div class="muted">Sem respostas prontas.</div>'; }
+async function fqAdd(){ const p=$('fqP').value.trim(),r=$('fqR').value.trim(); if(!p||!r) return; FAQ.push({pergunta:p,resposta:r}); await api('/clinica/faq','POST',{faq:FAQ}); $('fqP').value='';$('fqR').value=''; faqRender(); }
+async function fqDel(i){ FAQ.splice(i,1); await api('/clinica/faq','POST',{faq:FAQ}); faqRender(); }
+async function lemSalvar(){ const r=await api('/clinica/lembrete/salvar','POST',{ativo:$('lemAtivo').checked,confirmar:$('lemConf').checked,horas:$('lemHoras').value}); const m=$('lemMsg'); m.style.color='var(--good)'; m.textContent=r.ok?'Salvo ✓':'erro'; }
+async function waLoad(){ const box=$('waBox'); if(!box) return; const r=await api('/clinica/wa'); const w=(r&&r.wa)||{};
+  box.innerHTML=`${w.tem_token?'<div class="muted" style="color:var(--good);margin-bottom:8px">✓ WhatsApp conectado'+(w.phone_id?' (ID '+esc(w.phone_id)+')':'')+'</div>':''}
+    <div class="row"><div class="field" style="flex:1;min-width:180px"><label>Token de acesso (WhatsApp Cloud API)</label><input id="waTok" type="password" placeholder="${w.tem_token?'•••••• (deixe vazio pra manter)':'cole o token'}"></div>
+      <div class="field" style="width:200px"><label>Phone number ID</label><input id="waPid" value="${esc(w.phone_id||'')}" placeholder="ID do número"></div></div>
+    <button class="btn primary" onclick="waSalvar()">Salvar e conectar</button> ${w.tem_token?'<button class="btn ghost" onclick="waLimpar()">Desconectar</button>':''}<span id="waMsg" class="msg"></span>
+    <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><div class="muted">Configure no painel da Meta (webhook):</div>
+      <div class="field"><label>URL de callback</label><input value="${esc((r&&r.webhook)||'')}" readonly onclick="this.select()"></div>
+      <div class="field"><label>Token de verificação</label><input value="${esc((r&&r.verify)||'')}" readonly onclick="this.select()"></div>
+      <div class="muted">Inscreva-se no campo <b>messages</b>. Depois é só o cliente mandar mensagem que a atendente responde e agenda sozinha.</div></div>`;
+}
+async function waSalvar(){ const r=await api('/clinica/wa/salvar','POST',{token:$('waTok').value.trim(),phone_id:$('waPid').value.trim()}); const m=$('waMsg'); if(r.ok){ m.style.color='var(--good)'; m.textContent='Conectado ✓'; waLoad(); } else { m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
+async function waLimpar(){ if(!confirm('Desconectar o WhatsApp?')) return; await api('/clinica/wa/salvar','POST',{limpar:true}); waLoad(); }
+let BOTH=[];
+function botPush(t,who){ BOTH.push({who,t}); const c=$('botchat'); c.innerHTML=BOTH.map(m=>`<div class="bub ${m.who}">${esc(m.t)}</div>`).join(''); c.scrollTop=c.scrollHeight; }
+async function botSend(){ const i=$('botInp'); const t=i.value.trim(); if(!t) return; i.value=''; botPush(t,'u'); botPush('digitando...','b');
+  const hist=BOTH.filter(m=>m.t!=='digitando...').slice(-8).map(m=>({role:m.who==='u'?'user':'assistant',content:m.t}));
+  const r=await api('/clinica/bot','POST',{mensagem:t,historico:hist.slice(0,-1),tel:'5511990001122',nome:'Cliente teste'}); BOTH.pop(); const c=$('botchat'); c.innerHTML=BOTH.map(m=>`<div class="bub ${m.who}">${esc(m.t)}</div>`).join('');
+  botPush(r.resposta||'(sem resposta)','b'); }
+
+// ---------------- funcionários ----------------
+async function vFuncionarios(){
+  const r=await api('/clinica/funcionarios'); const fs=r.funcionarios||[];
+  if(!SERV.length){ SERV=(await api('/clinica/servicos')).servicos||[]; }
+  const ativos=fs.filter(f=>f.ativo).length;
+  const svChecks=SERV.map(s=>`<label style="display:inline-flex;gap:5px;align-items:center;margin:0 10px 6px 0;font-size:13px"><input type="checkbox" class="fnSv" value="${s.id}" style="width:auto"> ${esc(s.nome)}</label>`).join('')||'<span class="muted">Cadastre serviços primeiro.</span>';
+  $('view').innerHTML=`<h1>Funcionários</h1><div class="sub">Cadastre sua equipe e dê um login pra cada um. Eles entram na própria área. Marque "admin" pra quem pode ver o painel.</div>
+    <div class="card"><h3>Novo funcionário</h3>
+      <div class="row"><div class="field" style="flex:1;min-width:160px"><label>Nome completo</label><input id="fnNome"></div>
+        <div class="field" style="flex:1;min-width:140px"><label>CPF</label><input id="fnCpf" placeholder="somente números" inputmode="numeric"></div>
+        <div class="field" style="width:160px"><label>Data de nascimento</label><input id="fnNasc" type="date"></div></div>
+      <div class="row"><div class="field" style="flex:1;min-width:150px"><label>Telefone</label><input id="fnTel" placeholder="(00) 90000-0000"></div>
+        <div class="field" style="flex:1;min-width:170px"><label>E-mail</label><input id="fnEmail" type="email" placeholder="email@exemplo.com"></div>
+        <div class="field" style="flex:1;min-width:120px"><label>Cargo</label><input id="fnCargo" placeholder="ex: esteticista"></div></div>
+      <div class="row"><div class="field" style="flex:1;min-width:120px"><label>Login de acesso</label><input id="fnLogin" placeholder="ex: ana"></div>
+        <div class="field" style="flex:1;min-width:120px"><label>Senha</label><input id="fnSenha" type="text" placeholder="senha de acesso"></div>
+        <div class="field" style="width:130px"><label>Comissão (%)</label><input id="fnComis" type="number" placeholder="ex: 40"></div>
+        <label style="display:flex;gap:7px;align-items:center;margin-top:18px"><input type="checkbox" id="fnAdmin" style="width:auto"> admin (vê o painel)</label></div>
+      <div class="field"><label>Serviços que faz <span class="muted">(vazio = todos)</span></label><div style="padding:8px 0">${svChecks}</div></div>
+      <button class="btn primary" onclick="fnSalvar()">Cadastrar funcionário</button><span id="fnMsg" class="msg"></span></div>
+    <div class="card"><h3>Equipe <span class="muted" style="font-weight:400">· ${ativos} ativo(s) de ${fs.length}</span></h3>
+      <div id="fnLista">${fs.length?fs.map(f=>`<div class="lin" style="${f.ativo?'':'opacity:.55'}"><div><b>${esc(f.nome)}</b> <span class="tag">${esc(f.cargo||'equipe')}</span>${f.admin?' <span class="tag" style="color:var(--accent)">admin</span>':''} ${f.ativo?'<span class="tag" style="color:var(--good)">ativo</span>':'<span class="tag" style="color:var(--bad)">inativo</span>'}<div class="muted">login: ${esc(f.login)} · ${esc(f.telefone||'sem tel')}${f.comissao_pct?' · comissão '+f.comissao_pct+'%':''}${f.cpf?' · CPF '+esc(f.cpf):''}</div></div>
+        <div class="row"><button class="btn ghost sm" onclick="fnAtivo(${f.id},${f.ativo?'false':'true'})">${f.ativo?'Desativar':'Ativar'}</button><button class="btn ghost sm" onclick="fnApagar(${f.id})">✕</button></div></div>`).join(''):'<div class="muted">Sem funcionários. O sistema funciona normal mesmo sem equipe.</div>'}</div></div>`;
+}
+async function fnSalvar(){ const m=$('fnMsg'); const nome=$('fnNome').value.trim(),login=$('fnLogin').value.trim(),cpf=$('fnCpf').value.replace(/\D/g,''),tel=$('fnTel').value.trim();
+  if(!nome||!login||!$('fnSenha').value){ m.style.color='var(--warn)';m.textContent='Preencha nome, login e senha.'; return; }
+  if(cpf.length!==11){ m.style.color='var(--warn)';m.textContent='Informe o CPF (11 dígitos).'; return; }
+  if(tel.replace(/\D/g,'').length<10){ m.style.color='var(--warn)';m.textContent='Informe o telefone com DDD.'; return; }
+  const servicos=[...document.querySelectorAll('.fnSv:checked')].map(c=>parseInt(c.value));
+  const r=await api('/clinica/func/salvar','POST',{nome,cpf,nascimento:$('fnNasc').value,telefone:tel,email:$('fnEmail').value.trim(),cargo:$('fnCargo').value.trim(),login,senha:$('fnSenha').value,admin:$('fnAdmin').checked,servicos,comissao_pct:$('fnComis').value});
+  if(!r.ok){ m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; return; } vFuncionarios(); }
+async function fnAtivo(id,ativo){ await api('/clinica/func/ativo','POST',{id,ativo}); vFuncionarios(); }
+async function fnApagar(id){ if(!confirm('Remover funcionário?')) return; await api('/clinica/func/apagar','POST',{id}); vFuncionarios(); }
+
+// ---------------- meu negócio ----------------
+async function vNegocio(){
+  const p=EST.perfil||{}; const e=await api('/clinica/estado'); EST=Object.assign(EST,e); const pf=EST.perfil||{};
+  $('view').innerHTML=`<h1>Meu negócio</h1><div class="sub">Quanto mais o sistema souber de você, melhor ele resolve como você resolveria.</div>
+    <div class="card">
+      <div class="field"><label>Nome da clínica</label><input id="ngNome" value="${esc(pf.nome||'')}"></div>
+      <div class="field"><label>Seu nome</label><input id="ngDona" value="${esc(pf.dona||'')}"></div>
+      <div class="field"><label>Sobre o negócio</label><textarea id="ngSobre" rows="3">${esc(pf.sobre||'')}</textarea></div>
+      <div class="row"><div class="field" style="flex:1"><label>WhatsApp / telefone</label><input id="ngTel" value="${esc(pf.telefone||'')}"></div>
+        <div class="field" style="flex:1"><label>Instagram</label><input id="ngInsta" value="${esc(pf.instagram||'')}"></div></div>
+      <div class="field"><label>Endereço</label><input id="ngEnd" value="${esc(pf.endereco||'')}"></div>
+      <div class="field"><label>Mensagem de boas-vindas (a atendente usa)</label><input id="ngBv" value="${esc(pf.boas_vindas||'')}" placeholder="Oi! Que bom te ver por aqui 💖"></div>
+      <button class="btn primary" onclick="ngSalvar()">Salvar</button><span id="ngMsg" class="msg"></span></div>
+    <div class="card"><h3>Dados da conta</h3><div class="muted" style="margin-bottom:10px">Mantenha atualizado pra segurança e contato. ${EST.conta_completa?'<span style="color:var(--good)">✓ cadastro completo</span>':'<span style="color:var(--warn)">cadastro incompleto</span>'}</div>
+      <div class="row"><div class="field" style="flex:1;min-width:160px"><label>E-mail ${EST.email?'':'<span style="color:var(--warn)">(adicione no Orion)</span>'}</label><input value="${esc(EST.email||'')}" ${EST.email?'readonly':'disabled'}></div>
+        <div class="field" style="flex:1;min-width:140px"><label>CPF ou CNPJ</label><input id="ctDoc" value="" placeholder="${EST.doc?'já cadastrado (deixe vazio p/ manter)':'somente números'}" inputmode="numeric"></div></div>
+      <div class="row"><div class="field" style="flex:1;min-width:160px"><label>Telefone ${EST.tel_validado?'<span style="color:var(--good)">✓ validado</span>':''}</label><input id="ctTel" value="${esc(EST.telefone||'')}"></div>
+        <div style="display:flex;align-items:end;gap:8px;padding-bottom:10px">${EST.tel_validado?'':'<button class="btn" onclick="telEnviar()">Validar telefone</button>'}</div></div>
+      <button class="btn primary" onclick="ctSalvar()">Salvar dados</button><span id="ctMsg" class="msg"></span>
+      <div id="telBox"></div></div>`;
+}
+async function ctSalvar(){ const r=await api('/clinica/conta','POST',{telefone:$('ctTel').value.trim(),documento:$('ctDoc').value.trim()}); const m=$('ctMsg'); m.style.color='var(--good)'; m.textContent=r.ok?'Salvo ✓':'erro'; const e=await api('/clinica/estado'); EST=Object.assign(EST,e); }
+async function telEnviar(){ const r=await api('/clinica/tel/enviar','POST',{telefone:$('ctTel').value.trim()}); const box=$('telBox');
+  if(!r.ok){ box.innerHTML='<div class="msg" style="color:var(--bad)">'+esc(r.erro||'erro')+'</div>'; return; }
+  const dev=r.dev_code?` <span class="muted">(modo teste, código: ${r.dev_code})</span>`:'';
+  box.innerHTML=`<div class="card" style="margin-top:12px"><div class="muted" style="margin-bottom:8px">${r.enviado?'Enviei um código pro seu telefone.':'Não há gateway de SMS configurado no servidor.'}${dev}</div>
+    <div class="row"><input id="telCod" placeholder="código de 6 dígitos" style="width:160px"><button class="btn primary" onclick="telValidar()">Confirmar</button></div></div>`;
+}
+async function telValidar(){ const r=await api('/clinica/tel/validar','POST',{codigo:$('telCod').value.trim()}); if(r.ok){ const e=await api('/clinica/estado'); EST=Object.assign(EST,e); vNegocio(); } else { $('telBox').innerHTML+='<div class="msg" style="color:var(--bad)">código inválido</div>'; } }
+async function ngSalvar(){ const r=await api('/clinica/perfil','POST',{nome:$('ngNome').value,dona:$('ngDona').value,sobre:$('ngSobre').value,telefone:$('ngTel').value,instagram:$('ngInsta').value,endereco:$('ngEnd').value,boas_vindas:$('ngBv').value});
+  const m=$('ngMsg'); m.style.color='var(--good)'; m.textContent=r.ok?'Salvo ✓':'erro'; EST.perfil=r.perfil; }
+
+// ---------------- funcionário (sua área) ----------------
+async function vFunc(){
+  const r=await api('/clinica/func/eu');
+  $('view').innerHTML=`<h1>Meus agendamentos</h1><div class="sub">Sua agenda e seu faturamento.</div>
+    <div class="kpis"><div class="kpi"><div class="v" style="color:var(--good)">${fmt((r&&r.faturamento_mes)||0)}</div><div class="l">Você gerou no mês</div></div>
+      ${(r&&r.comissao_pct)?`<div class="kpi"><div class="v" style="color:var(--accent)">${fmt(r.comissao_mes)}</div><div class="l">Sua comissão (${r.comissao_pct}%)</div></div>`:''}
+      <div class="kpi"><div class="v">${(r&&r.atendimentos_mes)||0}</div><div class="l">Atendimentos no mês</div></div>
+      <div class="kpi"><div class="v">${(r&&r.agendamentos||[]).length}</div><div class="l">Consultas marcadas</div></div></div>
+    <div class="card"><h3>Próximas consultas</h3>${agendaHTML((r&&r.agendamentos)||[])}</div>`;
+}
+
+// ---------------- página Orion (divulgação) ----------------
+function vOrion(){
+  $('view').innerHTML=`<h1>Conheça o Orion ✦</h1><div class="sub">Seu assistente de IA pessoal, separado deste sistema — pra cuidar de tudo no seu dia a dia.</div>
+    <div class="orionpage">
+      <div style="font-size:48px">✦</div>
+      <h2 style="margin:6px 0">Orion — seu sócio de IA no bolso</h2>
+      <p class="muted" style="max-width:560px;margin:8px auto 18px">Converse por voz ou texto, pesquise ao vivo, escreva, organize sua rotina e gerencie seu negócio. O mesmo Orion que te ajuda aqui na clínica, agora completo pra você.</p>
+      <div class="row" style="justify-content:center">
+        <a class="btn primary" href="/" target="_blank">Abrir o Orion</a>
+        <a class="btn" href="/site" target="_blank">Ver planos</a>
+      </div>
+      <p class="muted" style="margin-top:16px">Já usa o Orion? Sua conta da clínica é a mesma. 💜</p>
+    </div>`;
+}
+
+// ---------------- mascote Orion ----------------
+let mascOpen=false;
+function mascToggle(){ mascOpen=!mascOpen; let b=$('mbal'); if(b) b.remove();
+  if(!mascOpen) return;
+  b=document.createElement('div'); b.id='mbal'; b.className='mbal';
+  b.innerHTML=`<div style="font-weight:800;margin-bottom:6px">Oi, eu sou o Orion ✦</div>
+    <div class="muted" style="font-size:13px">Sou o assistente deste sistema. Dicas rápidas:</div>
+    <ul style="margin:8px 0 10px;padding-left:18px;font-size:13px;color:var(--dim);line-height:1.5">
+      <li>Cadastre seus <b>serviços</b> com preço e duração — a agenda usa isso.</li>
+      <li>Defina seus <b>horários</b> pra não marcar fora do expediente.</li>
+      <li>Use o <b>simulador da atendente</b> pra testar o WhatsApp.</li>
+    </ul>
+    <a class="btn primary sm" href="/" target="_blank">Conhecer o Orion completo</a>
+    <button class="btn ghost sm" style="margin-left:6px" onclick="mascToggle()">Fechar</button>`;
+  document.body.appendChild(b);
+}
+function mascDica(t){ let b=$('mbal'); if(b) b.remove(); b=document.createElement('div'); b.id='mbal'; b.className='mbal';
+  b.innerHTML=`<div style="font-weight:800;margin-bottom:6px">Orion ✦</div><div class="muted" style="font-size:13px">${esc(t)}</div><button class="btn ghost sm" style="margin-top:10px" onclick="mascToggle()">Ok</button>`;
+  document.body.appendChild(b); mascOpen=true; }
+</script>
+</body>
+</html>
