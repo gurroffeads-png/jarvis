@@ -1,5 +1,4 @@
-# Render Blueprint - sobe o Orion Cloud de graca (plano free).
-# No Render: New > Blueprint > aponta pro seu repositorio. Ele le este arquivo.
+# Render Blueprint - ORION (app principal). New > Blueprint > aponta pro repositorio.
 services:
   - type: web
     name: orion
@@ -7,20 +6,17 @@ services:
     plan: free
     autoDeploy: true
     envVars:
+      - key: APP_MODE
+        value: orion                 # este servico abre o ORION na raiz "/"
       - key: ORION_SECRET
-        generateValue: true          # gera um segredo forte automatico
-      - key: LLM_BASE_URL
-        value: https://api.groq.com/openai/v1
-      - key: LLM_MODEL
-        value: llama-3.3-70b-versatile
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false                  # Postgres (Render/Neon) - dados persistentes. IMPORTANTE.
       - key: LLM_API_KEY
-        sync: false                  # voce cola a chave (gratis do Groq) no painel
-      # Pagamento (opcional, cole quando tiver):
+        sync: false                  # chave gratis do Gemini (aistudio.google.com). Base/modelo o codigo deduz sozinho.
       - key: MP_ACCESS_TOKEN
-        sync: false
-      - key: PAYPAL_CLIENT_ID
-        sync: false
-      - key: PAYPAL_SECRET
-        sync: false
-      - key: PAYPAL_MODE
-        value: sandbox
+        sync: false                  # seu Mercado Pago (recebe planos + mensalidades da Clinica+)
+      - key: VAPID_PRIVATE
+        sync: false                  # notificacoes push (opcional)
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false                  # verificacao do webhook do WhatsApp (opcional)

@@ -1694,8 +1694,9 @@ async function renderConfig(){
   const vol=(CFG.volume!=null?CFG.volume:90), rate=(CFG.rate!=null?CFG.rate:0);
   const a=document.getElementById('cfgArea');
   a.innerHTML=`
-  ${window.ORION_CLOUD?`<div class="card"><h3>Cerebro do Orion (nuvem) - plugavel</h3>
-    <div class="hint" style="margin-bottom:10px">Por padrao usa o Gemini Flash (gratis). Voce pode plugar sua propria chave: <b>GLM-5.2</b> (Z.ai), OpenAI, Groq, Mistral e outros. Detecto o provedor pela cara da chave, entao basta colar. So vale pra <b>sua</b> conta e fica <b>salva</b> (nao precisa por de novo).</div>
+  ${window.ORION_CLOUD?`<div class="card"><h3>🧠 Cérebro de IA</h3>
+    <div class="hint" style="margin-bottom:10px">O Orion é uma <b>ferramenta</b>: o cérebro grátis (Gemini Flash) já vem pronto, é só usar. Quer um modelo mais forte (Claude, GPT-4o, GLM-5.2)? Crie conta no provedor, pegue a chave e cole aqui — ela fica <b>só na sua conta</b> e <b>salva</b>.</div>
+    <div class="hint" style="margin-bottom:10px">Pegar uma chave: <a href="https://aistudio.google.com/apikey" target="_blank">Gemini (grátis)</a> · <a href="https://console.groq.com/keys" target="_blank">Groq (grátis)</a> · <a href="https://z.ai" target="_blank">GLM-5.2</a> · <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a> · <a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic (Claude)</a></div>
     ${brain.tem_chave?'<div class="hint" style="color:var(--good);margin-bottom:8px">✓ Voce ja tem uma chave salva. Deixe o campo de chave vazio pra mantê-la; preencha so se quiser trocar.</div>':''}
     <div class="field"><label>Provedor</label>
       <select id="brainProv">${(brain.providers||[]).map(p=>`<option value="${p.id}" data-base="${p.base}" data-modelo="${p.modelo}" data-como="${esc(p.como)}">${esc(p.nome)}</option>`).join('')}</select>
@@ -1714,7 +1715,7 @@ async function renderConfig(){
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="autoChk" onchange="autonomiaSalvar()"> <span><b>Deixar o Orion agir por mim</b><div class="hint">Quando ligado (e com WhatsApp conectado), o Orion pode enviar os follow-ups sozinho. Desligado, ele só escreve e você revisa.</div></span></label>
     </div>
   </div>`:''}
-  <div class="card"><h3>Cerebro do Orion (desktop)</h3>
+  <div class="card" id="cardCerebroDesktop"><h3>Cérebro do Orion (somente no app de computador)</h3>
     <div class="field"><label>Motor</label>
       <select id="cfgCerebro">
         <option value="ollama">Ollama local (gratis, padrao)</option>
@@ -1784,7 +1785,7 @@ async function renderConfig(){
     <div id="payTest" class="hint" style="margin-top:8px"></div>
   </div>`:''}
   <div class="card"><h3>Sobre</h3>
-    <div class="hint">Orion v2.3 (cérebro Gemini/GLM). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
+    <div class="hint">Orion v3.4 (cérebro Gemini/GLM). <a href="#" onclick="go('termos');return false">Termos de Uso</a> &middot; <a href="#" onclick="go('privacidade');return false">Politica de Privacidade</a></div>
   </div>
   <div class="row"><button class="btn primary" onclick="salvarConfig()">Salvar configuracoes</button></div>`;
   if(CFG.cerebro) document.getElementById('cfgCerebro').value=CFG.cerebro;
@@ -1804,12 +1805,14 @@ async function renderConfig(){
   document.getElementById('cfgCerebro').onchange=upd; upd();
   const bp=document.getElementById('brainProv');
   if(bp){
-    const refresh=()=>{ const op=bp.selectedOptions[0]; if(!op) return;
+    const refresh=(forcar)=>{ const op=bp.selectedOptions[0]; if(!op) return;
       document.getElementById('brainComo').textContent='Onde pegar a chave: '+op.dataset.como;
-      if(!document.getElementById('brainModel').value.trim()) document.getElementById('brainModel').value=op.dataset.modelo||'';
+      // ao TROCAR o provedor, ja ajusta o modelo pra evitar chave de um com modelo de outro (o erro 404)
+      if(forcar===true || !document.getElementById('brainModel').value.trim()) document.getElementById('brainModel').value=op.dataset.modelo||'';
     };
-    bp.onchange=refresh; refresh();
+    bp.onchange=()=>refresh(true); refresh(false);
   }
+  if(window.ORION_CLOUD){ const cd=document.getElementById('cardCerebroDesktop'); if(cd) cd.style.display='none'; }
   audioRender(); audioInit(); if(window.ORION_CLOUD){ dirCarregar(); autonomiaCarregar(); }
 }
 async function salvarMP(){

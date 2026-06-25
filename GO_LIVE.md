@@ -2,11 +2,18 @@
 
 Tudo roda num único serviço (`nuvem/`) no Render. Abaixo, o que ligar pra funcionar 100%.
 
+## 0. DUAS nuvens separadas (Orion e Clínica+)
+São **dois serviços** no Render, cada um com sua pasta, seu banco e seu domínio:
+- **Orion** → pasta `nuvem/` (env `APP_MODE=orion`). A raiz `/` abre o Orion.
+- **Clínica+** → pasta `nuvem_clinica/` (env `APP_MODE=clinica`). A raiz `/` abre a Clínica+ (resolve o problema do login: você cai direto na tela da clínica).
+
+O código é o mesmo nas duas; o que muda é o `APP_MODE`. No serviço da Clínica+, setar também `ORION_URL` (a URL do serviço do Orion) pros links "Conheça o Orion" apontarem certo. **Bancos separados** (cada um seu `DATABASE_URL`).
+
 ## 1. Deploy no Render
-1. Suba a pasta `nuvem/` (já tem tudo: `orion_cloud.py`, os HTMLs, `requirements.txt`, `render.yaml`).
-2. Render → New → Web Service → conecte o repo/pasta.
-3. Start command: `python orion_cloud.py` (a porta vem do env `PORT`, já tratado).
-4. Banco: configure `DATABASE_URL` (Postgres do Render/Neon) pra não perder dados. Sem ele, usa SQLite local (some a cada deploy).
+1. Suba a pasta `nuvem/` (Orion) num serviço e `nuvem_clinica/` (Clínica+) em outro. Cada uma tem `render.yaml` próprio.
+2. Render → New → Web Service (ou Blueprint) → conecte o repo/pasta.
+3. Roda em Docker (Dockerfile incluso); a porta vem do env `PORT`, já tratado.
+4. **Banco: configure `DATABASE_URL`** (Postgres do Render/Neon) em CADA serviço pra não perder dados. Sem ele, usa SQLite local (some a cada deploy) — foi o que fez seu login "sumir".
 
 ## 2. Variáveis de ambiente (Render → Environment)
 | Variável | Pra quê | Obrigatória? |

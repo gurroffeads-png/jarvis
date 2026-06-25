@@ -41,6 +41,9 @@ SITE_FILE = os.path.join(PASTA, "orion_site.html")
 CLINICA_FILE = os.path.join(PASTA, "clinica_app.html")
 CLIENTE_FILE = os.path.join(PASTA, "clinica_cliente.html")
 CLINICA_SITE_FILE = os.path.join(PASTA, "clinica_site.html")
+# APP_MODE: "orion" (padrao) ou "clinica". No modo clinica, a raiz "/" abre a Clinica+ (nao o Orion).
+APP_MODE = os.environ.get("APP_MODE", "orion").strip().lower()
+ORION_URL = os.environ.get("ORION_URL", "").rstrip("/")   # link cruzado pro Orion quando as nuvens estao separadas
 
 # ======================= BANCO (SQLite local OU Postgres na nuvem) =======================
 # Se existir DATABASE_URL (ex: Neon), usa Postgres (dados PERSISTEM entre deploys).
@@ -3226,6 +3229,15 @@ class H(BaseHTTPRequestHandler):
     def _file(self, path, ctype):
         try: self._send(open(path,"rb").read(), 200, ctype)
         except Exception: self._send(b"", 404)
+    def _send_html(self, path, dev_cookie=None):
+        """Serve um HTML injetando os globais (ORION_CLOUD, ORION_URL, APP_MODE) pra cross-links e modo."""
+        try:
+            html = open(path, encoding="utf-8").read()
+            inj = ("<script>window.ORION_CLOUD=true;window.ORION_URL=" + json.dumps(ORION_URL or "/")
+                   + ";window.APP_MODE=" + json.dumps(APP_MODE) + ";</script>")
+            html = html.replace("<head>", "<head>\n"+inj, 1)
+            self._send(html, 200, "text/html", dev_cookie=dev_cookie)
+        except Exception: self._send(b"<h1>pagina nao encontrada</h1>", 404, "text/html", dev_cookie=dev_cookie)
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length",0) or 0)
@@ -3456,18 +3468,22 @@ class H(BaseHTTPRequestHandler):
             if not did: did = novo = novo_device_id()
             try: dispositivo_registrar(did, (u["id"] if u else None), (u["nome"] if u else ""), self._client_ip(), self.headers.get("User-Agent",""))
             except Exception: pass
+            if APP_MODE == "clinica":   # esse servico e o da Clinica+: a raiz abre a Clinica+
+                self._send_html(CLINICA_FILE, dev_cookie=(novo or None)); return
             try:
                 html = open(HTML_FILE,encoding="utf-8").read()
                 html = html.replace("<head>", "<head>\n<script>window.ORION_CLOUD=true;</script>",1)
                 self._send(html,200,"text/html", dev_cookie=(novo or None))
             except Exception: self._send(b"<h1>orion_app.html nao encontrado</h1>",200,"text/html", dev_cookie=(novo or None))
-        elif path == "/site": self._file(SITE_FILE,"text/html") if os.path.exists(SITE_FILE) else self._send(b"",404)
+        elif path == "/site":
+            if APP_MODE == "clinica": self._send_html(CLINICA_SITE_FILE)
+            else: self._file(SITE_FILE,"text/html") if os.path.exists(SITE_FILE) else self._send(b"",404)
         elif path in ("/clinica/sobre","/clinica/vender","/clinicamais"):
-            self._file(CLINICA_SITE_FILE,"text/html") if os.path.exists(CLINICA_SITE_FILE) else self._send(b"",404)
+            self._send_html(CLINICA_SITE_FILE)
         elif path in ("/clinica","/clinica/"):
-            self._file(CLINICA_FILE,"text/html") if os.path.exists(CLINICA_FILE) else self._send(b"<h1>clinica_app.html nao encontrado</h1>",200,"text/html")
+            self._send_html(CLINICA_FILE)
         elif path in ("/agendar","/agendar/"):
-            self._file(CLIENTE_FILE,"text/html") if os.path.exists(CLIENTE_FILE) else self._send(b"<h1>clinica_cliente.html nao encontrado</h1>",200,"text/html")
+            self._send_html(CLIENTE_FILE)
         elif path == "/clinica/manifest.webmanifest":
             self._send(json.dumps({"name":"Clínica+","short_name":"Clínica+","start_url":"/clinica","scope":"/clinica",
                 "display":"standalone","orientation":"portrait","background_color":"#0b0e15","theme_color":"#ff7ab8","lang":"pt-BR",
@@ -3936,9 +3952,11 @@ class H(BaseHTTPRequestHandler):
                 else:
                     atual = get_blob(u["id"], "brain", {}) or {}
                     nova = (d.get("key") or "").strip()
-                    pref = {"key": (nova or atual.get("key","")),   # campo vazio = MANTEM a chave (nao apaga)
-                            "base":(d.get("base") or "").strip(), "model":(d.get("model") or "").strip()}
-                    set_blob(u["id"], "brain", pref); self._send({"ok":True, "tem_chave":bool(pref["key"])})
+                    k = nova or atual.get("key","")   # campo vazio = MANTEM a chave (nao apaga)
+                    # NORMALIZA na hora de salvar: chave decide o provedor e corrige modelo que nao casa (mata o 404)
+                    k2, base2, model2 = _brain_norm(k, (d.get("base") or "").strip(), (d.get("model") or "").strip())
+                    pref = {"key":k2, "base":base2, "model":model2} if k else {}
+                    set_blob(u["id"], "brain", pref); self._send({"ok":True, "tem_chave":bool(pref.get("key"))})
             else: self._send({"ok":False,"erro":"faca login"})
         elif path == "/orion/ensinar":
             self._send(diretrizes_add(u["id"], d.get("regra")) if u else {"ok":False,"erro":"faca login"})
