@@ -24,6 +24,14 @@ import re, html as _html
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
+import sys
+# Quando rodado como script (`python orion_cloud.py`, como no Render), este modulo
+# vira "__main__". Registramos ele tambem como "orion_cloud" em sys.modules pra que o
+# `clinica_backend` (que faz `import orion_cloud`) use ESTA instancia em vez de carregar
+# uma copia separada. Sem isso, os nomes cl_* sao injetados na copia errada e o main()
+# quebra com NameError (loop_lembretes). Quando importado normalmente, este bloco e pulado.
+if __name__ == "__main__":
+    sys.modules.setdefault("orion_cloud", sys.modules["__main__"])
 
 PASTA = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get("PORT", "8766"))
