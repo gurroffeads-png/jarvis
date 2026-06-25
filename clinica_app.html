@@ -5,44 +5,55 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Clínica+ · Gestão de Clínicas de Estética</title>
 <link rel="manifest" href="/clinica/manifest.webmanifest">
-<meta name="theme-color" content="#ff7ab8">
+<meta name="theme-color" content="#e85a9b">
 <link rel="apple-touch-icon" href="/clinica/icon">
 <style>
-:root{--bg:#0b0e15;--panel:#121724;--panel2:#171d2e;--line:#222a3d;--line2:#324063;--text:#e9edf6;--dim:#9aa6c0;--faint:#6b768f;
-  --accent:#ff7ab8;--accent2:#a87bff;--good:#46d39a;--warn:#ffb454;--bad:#ff6b6b;--radius:16px}
+:root{--bg:#fbf5f8;--bg2:#f3e7ef;--panel:#ffffff;--panel2:#fbf3f7;--panel3:#f6ecf2;--line:#efe0e9;--line2:#e6d1de;--text:#2d2434;--dim:#7c6e86;--faint:#a99cb2;
+  --accent:#e85a9b;--accent2:#a87bff;--gold:#c0903a;--good:#1fa97e;--warn:#cf8412;--bad:#d8495f;--radius:18px;
+  --sb-bg:rgba(255,255,255,.78);--inp-bg:#ffffff}
+:root[data-theme="dark"]{--bg:#0b0e15;--bg2:#0b0e15;--panel:#121724;--panel2:#171d2e;--panel3:#1b2335;--line:#222a3d;--line2:#324063;--text:#e9edf6;--dim:#9aa6c0;--faint:#6b768f;
+  --accent:#ff7ab8;--accent2:#a87bff;--gold:#e0b44a;--good:#46d39a;--warn:#ffb454;--bad:#ff6b6b;
+  --sb-bg:rgba(13,17,27,.86);--inp-bg:#171d2e}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:radial-gradient(900px 520px at 80% -10%,rgba(168,123,255,.14),transparent 60%),radial-gradient(800px 500px at 10% -8%,rgba(255,122,184,.12),transparent 60%),var(--bg);
+body{margin:0;background:radial-gradient(900px 540px at 82% -12%,rgba(168,123,255,.16),transparent 60%),radial-gradient(820px 500px at 8% -8%,rgba(232,90,155,.14),transparent 62%),linear-gradient(180deg,var(--bg),var(--bg2));background-attachment:fixed;
   color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:15px}
 a{color:var(--accent)}
+h1,.logo,.authbox h2,.orionpage h2{font-family:Georgia,'Times New Roman',serif;letter-spacing:.2px}
 .hide{display:none!important}
 .app{display:flex;min-height:100vh}
-.sb{width:230px;background:rgba(13,17,27,.86);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px;position:sticky;top:0;height:100vh;backdrop-filter:blur(8px)}
-.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:18px;padding:6px 8px 14px}
-.logo .dot{width:26px;height:26px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:15px}
-.nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow:auto}
-.nav button{display:flex;align-items:center;gap:10px;padding:10px 12px;border:none;border-radius:11px;background:none;color:var(--dim);font-size:14px;font-weight:600;text-align:left;cursor:pointer;width:100%}
-.nav button:hover{background:var(--panel)}
-.nav button.on{background:linear-gradient(100deg,color-mix(in srgb,var(--accent) 24%,transparent),transparent);color:var(--text)}
+.sb{width:236px;background:var(--sb-bg);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px;position:sticky;top:0;height:100vh;backdrop-filter:blur(12px)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:19px;padding:6px 8px 14px;color:var(--text)}
+.logo .dot{width:28px;height:28px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:15px;color:#fff;box-shadow:0 6px 14px -4px rgba(232,90,155,.6)}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1;overflow:auto}
+.nav .grp{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);font-weight:700;padding:13px 12px 4px}
+.nav button{display:flex;align-items:center;gap:10px;padding:9px 12px;border:none;border-left:3px solid transparent;border-radius:0 11px 11px 0;background:none;color:var(--dim);font-size:14px;font-weight:600;text-align:left;cursor:pointer;width:100%}
+.nav button:hover{background:var(--panel3);color:var(--text)}
+.nav button.on{background:linear-gradient(100deg,color-mix(in srgb,var(--accent) 14%,#fff),#fff);color:var(--text);border-left-color:var(--accent);font-weight:700}
 .sb-foot{border-top:1px solid var(--line);padding-top:10px;font-size:12px;color:var(--faint)}
 .main{flex:1;min-width:0;padding:22px clamp(14px,3vw,34px);max-width:1100px}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;flex-wrap:wrap}
-h1{font-size:24px;margin:0 0 2px}.sub{color:var(--dim);font-size:13px;margin-bottom:18px}
-.card{background:linear-gradient(180deg,rgba(255,255,255,.03),transparent 40%),var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:0 10px 30px -16px rgba(0,0,0,.6)}
+h1{font-size:25px;margin:0 0 2px}.sub{color:var(--dim);font-size:13px;margin-bottom:18px}
+.pagehead{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.pagehead .ph-ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,#fff),color-mix(in srgb,var(--accent2) 14%,#fff));border:1px solid var(--line2);flex-shrink:0}
+.pagehead h1{margin:0}.pagehead .sub{margin:2px 0 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:0 14px 34px -24px rgba(120,60,110,.45)}
 .card h3{margin:0 0 12px;font-size:16px}
 .btn{padding:10px 16px;border:1px solid var(--line2);border-radius:12px;background:var(--panel2);color:var(--text);font-weight:700;font-size:14px;cursor:pointer;transition:transform .12s,border-color .12s}
 .btn:hover{border-color:var(--accent);transform:translateY(-1px)}.btn:active{transform:translateY(1px)}
-.btn.primary{background:linear-gradient(120deg,var(--accent),var(--accent2));border:none;color:#15101a}
+.btn.primary{background:linear-gradient(120deg,var(--accent),var(--accent2));border:none;color:#fff;box-shadow:0 8px 18px -8px rgba(232,90,155,.6)}
 .btn.ghost{background:none}
 .btn.sm{padding:5px 11px;font-size:12px;border-radius:9px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input,select,textarea{background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:10px 12px;font-size:14px;font-family:inherit;outline:none;width:100%}
-input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+input,select,textarea{background:var(--inp-bg);border:1px solid var(--line2);border-radius:10px;color:var(--text);padding:10px 12px;font-size:14px;font-family:inherit;outline:none;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+input::placeholder,textarea::placeholder{color:var(--faint)}
 label{font-size:12px;color:var(--dim);display:block;margin:0 0 4px}
 .field{margin-bottom:10px}
 .grid{display:grid;gap:12px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.kpi{background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:14px}
-.kpi .v{font-size:24px;font-weight:800}.kpi .l{font-size:12px;color:var(--dim)}
+.kpi{background:linear-gradient(165deg,var(--panel),var(--panel3));border:1px solid var(--line2);border-radius:16px;padding:15px 16px;position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--accent),var(--accent2))}
+.kpi .v{font-size:25px;font-weight:800}.kpi .l{font-size:12px;color:var(--dim)}
 .lin{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .lin:last-child{border-bottom:none}
 .tag{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--panel2);border:1px solid var(--line2);color:var(--dim)}
@@ -50,7 +61,7 @@ label{font-size:12px;color:var(--dim);display:block;margin:0 0 4px}
 .muted{color:var(--dim);font-size:13px}
 .slots{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
 .slot{padding:8px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel2);cursor:pointer;font-size:13px;font-weight:600}
-.slot:hover,.slot.on{background:linear-gradient(120deg,var(--accent),var(--accent2));color:#15101a;border:none}
+.slot:hover,.slot.on{background:linear-gradient(120deg,var(--accent),var(--accent2));color:#fff;border:none}
 .daygrid{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:8px 12px;align-items:center}
 .center{min-height:100vh;display:grid;place-items:center;padding:20px}
 .authbox{width:min(440px,94vw);background:var(--panel);border:1px solid var(--line2);border-radius:20px;padding:26px}
@@ -69,9 +80,21 @@ label{font-size:12px;color:var(--dim);display:block;margin:0 0 4px}
 .orionpage{background:linear-gradient(135deg,rgba(122,162,255,.12),rgba(168,123,255,.12)),var(--panel);border:1px solid var(--line2);border-radius:20px;padding:26px;text-align:center}
 @media(max-width:760px){.sb{position:fixed;left:-260px;transition:left .2s;z-index:60;box-shadow:0 0 40px rgba(0,0,0,.6)}.sb.open{left:0}.menubtn{display:inline-flex!important}.main{padding-top:64px}}
 .menubtn{display:none;position:fixed;top:12px;left:12px;z-index:61;width:42px;height:42px;border-radius:12px;background:var(--panel);border:1px solid var(--line2);color:var(--text);font-size:20px;cursor:pointer}
+/* barra de carregamento global (some quando nao ha requisicao em andamento) */
+#loadbar{position:fixed;top:0;left:0;height:3px;width:100%;z-index:100;background:linear-gradient(90deg,var(--accent),var(--accent2),var(--accent));background-size:200% 100%;opacity:0;transition:opacity .2s;animation:lbslide 1.1s linear infinite}
+#loadbar.on{opacity:1}
+@keyframes lbslide{0%{background-position:200% 0}100%{background-position:-200% 0}}
+/* estado "carregando" dentro de uma view e botoes ocupados */
+.loading{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:14px;padding:18px}
+.spin{width:18px;height:18px;border:2px solid var(--line2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn[disabled]{opacity:.6;cursor:default;transform:none!important}
+.themebtn{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:9px;padding:5px 8px;font-size:13px;cursor:pointer}
+.themebtn:hover{border-color:var(--accent);color:var(--text)}
 </style>
 </head>
 <body>
+<div id="loadbar"></div>
 <button class="menubtn" onclick="document.getElementById('sb').classList.toggle('open')">☰</button>
 
 <!-- LOGIN -->
@@ -88,7 +111,7 @@ label{font-size:12px;color:var(--dim);display:block;margin:0 0 4px}
     </div>
     <div id="formNovo" class="hide">
       <div class="field"><label>Nome</label><input id="nvNome" placeholder="seu nome"></div>
-      <div class="field"><label>CPF ou CNPJ</label><input id="nvDoc" placeholder="somente números" inputmode="numeric"></div>
+      <div class="field"><label>CPF ou CNPJ</label><input id="nvDoc" placeholder="somente números" inputmode="numeric" onblur="cnpjAutofill()"><div id="nvDocMsg" class="muted" style="font-size:12px;margin-top:3px"></div></div>
       <div class="row"><div class="field" style="flex:1"><label>E-mail <span class="muted">(opcional)</span></label><input id="nvEmail" type="email" placeholder="seu@email.com"></div>
         <div class="field" style="flex:1"><label>Telefone <span class="muted">(opcional)</span></label><input id="nvTel" placeholder="(00) 90000-0000"></div></div>
       <div class="field"><label>Senha</label><input id="nvSenha" type="password" placeholder="mínimo 6 caracteres"></div>
@@ -130,7 +153,10 @@ label{font-size:12px;color:var(--dim);display:block;margin:0 0 4px}
     <nav class="nav" id="nav"></nav>
     <div class="sb-foot">
       <div id="sbWho"></div>
-      <button class="btn ghost sm" style="margin-top:8px;width:100%" onclick="sair()">Sair</button>
+      <div class="row" style="margin-top:8px;gap:6px">
+        <button id="temaBtn" class="themebtn" style="flex:1" onclick="temaToggle()">🌙 Tema escuro</button>
+        <button class="btn ghost sm" onclick="sair()">Sair</button>
+      </div>
     </div>
   </aside>
   <main class="main"><div id="view"></div></main>
@@ -148,7 +174,14 @@ if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/sw.js'
 const $=(id)=>document.getElementById(id);
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt=(v)=>'R$ '+(Number(v||0)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-const api=async(p,m,b)=>{ try{ const r=await fetch(p,{method:m||'GET',headers:b?{'Content-Type':'application/json'}:undefined,body:b?JSON.stringify(b):undefined}); return await r.json(); }catch(e){ return {ok:false,erro:'sem conexão'}; } };
+let _load=0;
+function loadOn(){ _load++; const b=$('loadbar'); if(b)b.classList.add('on'); }
+function loadOff(){ _load=Math.max(0,_load-1); if(_load===0){ const b=$('loadbar'); if(b)b.classList.remove('on'); } }
+const api=async(p,m,b)=>{ loadOn(); try{ const r=await fetch(p,{method:m||'GET',headers:b?{'Content-Type':'application/json'}:undefined,body:b?JSON.stringify(b):undefined}); return await r.json(); }catch(e){ return {ok:false,erro:'sem conexão'}; } finally{ loadOff(); } };
+// tema claro/escuro (padrao claro; lembra a escolha)
+function temaAplicar(t){ document.documentElement.setAttribute('data-theme', t==='dark'?'dark':'light'); try{ localStorage.setItem('cl_tema', t); }catch(e){} const el=$('temaBtn'); if(el) el.textContent = t==='dark'?'☀️ Tema claro':'🌙 Tema escuro'; }
+function temaToggle(){ const atual=document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light'; temaAplicar(atual==='dark'?'light':'dark'); }
+try{ temaAplicar(localStorage.getItem('cl_tema')||'light'); }catch(e){ temaAplicar('light'); }
 let EST={}, VIEW='dashboard', SERV=[], HOJEISO=new Date().toISOString().slice(0,10);
 
 // ---------------- boot ----------------
@@ -156,13 +189,13 @@ let EST={}, VIEW='dashboard', SERV=[], HOJEISO=new Date().toISOString().slice(0,
   const e=await api('/clinica/estado');
   if(!e.ok){ mostrarLogin(); return; }
   EST=e;
-  if(e.sou_dono && !e.onboarded){ $('login').classList.add('hide'); $('onb').classList.remove('hide'); return; }
+  if(e.sou_dono && !e.onboarded){ $('login').classList.add('hide'); $('onb').classList.remove('hide'); cnpjPrefillOnb(); return; }
   iniciarApp();
 })();
 function mostrarLogin(){ $('login').classList.remove('hide'); $('app').classList.add('hide'); $('onb').classList.add('hide'); $('masc').classList.add('hide');
   // perfil lembrado: mostra quem entrou por último, mas exige senha
   try{ const p=JSON.parse(localStorage.getItem('cl_perfil')||'null'); const box=$('loPerfil');
-    if(p&&p.handle){ box.innerHTML=`<div style="display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:10px 12px;margin-bottom:10px"><div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-weight:800;color:#15101a">${esc((p.nome||'?')[0].toUpperCase())}</div><div style="flex:1;min-width:0"><b>${esc(p.nome||'')}</b><div class="muted" style="font-size:12px">${esc(p.handle)}</div></div><button class="btn ghost sm" onclick="esquecerPerfil()">trocar</button></div>`;
+    if(p&&p.handle){ box.innerHTML=`<div style="display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:10px 12px;margin-bottom:10px"><div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-weight:800;color:#fff">${esc((p.nome||'?')[0].toUpperCase())}</div><div style="flex:1;min-width:0"><b>${esc(p.nome||'')}</b><div class="muted" style="font-size:12px">${esc(p.handle)}</div></div><button class="btn ghost sm" onclick="esquecerPerfil()">trocar</button></div>`;
       $('loEmail').value=p.handle; setTimeout(()=>$('loSenha').focus(),100); }
   }catch(e){}
 }
@@ -171,6 +204,24 @@ function authTab(t){ ['dono','novo','func'].forEach(x=>{$('tab'+x[0].toUpperCase
 async function loginDono(){ const h=$('loEmail').value.trim(); const r=await api('/clinica/login','POST',{login:h,senha:$('loSenha').value}); if(!r.ok){ $('loMsg').textContent=r.erro||'Não entrou.'; return; }
   try{ localStorage.setItem('cl_perfil',JSON.stringify({nome:(r.user&&r.user.nome)||'',handle:h})); }catch(e){} location.reload(); }
 async function loginFunc(){ const r=await api('/clinica/func/login','POST',{clinica:$('fcClin').value.trim(),login:$('fcLogin').value.trim(),senha:$('fcSenha').value}); if(!r.ok){ $('loMsg').textContent=r.erro||'Não entrou.'; return; } location.reload(); }
+async function cnpjAutofill(){
+  const doc=($('nvDoc').value||'').replace(/\D/g,''); const dm=$('nvDocMsg');
+  if(doc.length!==14){ if(dm)dm.textContent=''; return; }   // só CNPJ (CPF não tem consulta pública)
+  if(dm){ dm.style.color='var(--dim)'; dm.textContent='Buscando dados da empresa...'; }
+  const r=await api('/pub/cnpj?doc='+doc);
+  if(r.ok && r.info){
+    const nome=r.info.fantasia||r.info.razao;
+    if(nome && !$('nvNome').value.trim()) $('nvNome').value=nome;
+    try{ localStorage.setItem('cl_cnpj_info', JSON.stringify(r.info)); }catch(e){}
+    if(dm){ dm.style.color='var(--good)'; dm.textContent='✓ '+(nome||'empresa encontrada')+(r.info.cidade?(' · '+r.info.cidade+'/'+r.info.uf):''); }
+  } else if(dm){ dm.style.color='var(--dim)'; dm.textContent=''; }
+}
+function cnpjPrefillOnb(){
+  try{ const i=JSON.parse(localStorage.getItem('cl_cnpj_info')||'null'); if(!i) return;
+    if(!$('obNome').value.trim()) $('obNome').value=i.fantasia||i.razao||'';
+    if(!$('obEnd').value.trim() && i.cidade) $('obEnd').value=i.cidade+(i.uf?(' - '+i.uf):'');
+  }catch(e){}
+}
 async function criarConta(){
   const m=$('loMsg'); m.style.color='var(--bad)';
   if(!$('nvTermos').checked){ m.textContent='Aceite os termos pra continuar.'; return; }
@@ -191,21 +242,27 @@ async function sair(){ if(EST.func){ await api('/clinica/func/logout','POST',{})
 function iniciarApp(){
   $('login').classList.add('hide'); $('onb').classList.add('hide'); $('app').classList.remove('hide'); $('masc').classList.remove('hide');
   const dono=EST.sou_dono, admin=EST.sou_admin;
-  let itens;
+  let grupos;
   if(EST.func && !admin){ // funcionário comum
-    itens=[['func','📅 Meus agendamentos'],['agenda','🗓️ Agenda'],['orion','✦ Orion']];
+    grupos=[['',[['func','📅 Meus agendamentos'],['agenda','🗓️ Agenda'],['orion','✦ Orion']]]];
     VIEW='func';
   } else {
-    itens=[['dashboard','📊 Painel'],['agenda','🗓️ Agenda'],['relatorios','📈 Relatórios'],['clientes','💖 Clientes'],['servicos','💅 Serviços e preços'],['estoque','📦 Estoque'],['horarios','⏰ Horários'],['atendente','💬 Atendente WhatsApp'],['funcionarios','👥 Funcionários'],['negocio','🏥 Meu negócio'],['orion','✦ Orion']];
-    if(EST.func) itens.splice(1,0,['func','📅 Meus agendamentos']);
+    grupos=[
+      ['Dia a dia',  [['dashboard','📊 Painel'],['agenda','🗓️ Agenda'],['clientes','💖 Clientes']]],
+      ['Crescer',    [['atendente','💬 Atendente WhatsApp'],['relatorios','📈 Relatórios']]],
+      ['Configurar', [['servicos','💅 Serviços e preços'],['horarios','⏰ Horários'],['estoque','📦 Estoque'],['funcionarios','👥 Funcionários'],['negocio','🏥 Meu negócio']]],
+      ['',           [['orion','✦ Orion']]],
+    ];
+    if(EST.func) grupos[0][1].splice(1,0,['func','📅 Meus agendamentos']);
   }
-  const nv=$('nav'); nv.innerHTML=itens.map(([id,t])=>`<button data-v="${id}" onclick="go('${id}')">${t}</button>`).join('');
+  const nv=$('nav'); nv.innerHTML=grupos.map(([lab,its])=>(lab?`<div class="grp">${lab}</div>`:'')+its.map(([id,t])=>`<button data-v="${id}" onclick="go('${id}')">${t}</button>`).join('')).join('');
   const who=EST.func?`${esc(EST.func.nome)} ${EST.func.admin?'(admin)':'(funcionário)'}`:`${esc(EST.nome_dono||'')}<br><span style="color:var(--faint)">${esc((EST.perfil&&EST.perfil.nome)||'sua clínica')}</span>`;
   let badge='';
   if(!EST.func){ if(EST.plano==='pro') badge='<div class="tag" style="color:var(--good);margin-top:6px">✓ Profissional</div>';
     else if(EST.plano==='trial') badge=`<div class="tag" style="color:var(--accent);margin-top:6px;cursor:pointer" onclick="clAssinar()" title="Assinar agora">Teste grátis · ${EST.trial_dias} dia(s)</div>`;
-    else badge='<button class="btn primary sm" style="margin-top:6px;width:100%" onclick="clAssinar()">⭐ Assinar Profissional</button>'; }
+    else badge='<button class="btn primary sm" style="margin-top:6px;width:100%" onclick="clAssinar()">⭐ Assinar Profissional</button><div style="text-align:center;margin-top:5px"><a href="#" style="font-size:12px" onclick="proBloqueado(\'atendente\');return false">tenho uma chave</a></div>'; }
   $('sbWho').innerHTML=who+badge;
+  try{ temaAplicar(localStorage.getItem('cl_tema')||'light'); }catch(e){}
   go(VIEW);
   if(!EST.func && !localStorage.getItem('cl_tutorial_v1')){ setTimeout(clTutorial,500); }
   else if(!EST.cerebro_ok && dono) setTimeout(()=>mascDica('Pra atendente do WhatsApp responder, conecte um cérebro de IA (Config → Cérebro).'),1200);
@@ -222,7 +279,7 @@ function clTutorial(){ _tutI=0; tutShow(); }
 function tutShow(){
   const s=TUT[_tutI]; let b=document.getElementById('tut'); if(b)b.remove();
   b=document.createElement('div'); b.id='tut';
-  b.style.cssText='position:fixed;inset:0;z-index:90;background:rgba(5,4,8,.7);display:flex;align-items:center;justify-content:center;padding:18px';
+  b.style.cssText='position:fixed;inset:0;z-index:90;background:rgba(45,36,52,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:18px';
   b.innerHTML=`<div style="width:min(440px,94vw);background:var(--panel);border:1px solid var(--line2);border-radius:20px;padding:26px;text-align:center">
     <div style="font-size:46px">${s.ic}</div><h2 style="margin:8px 0 6px">${s.t}</h2>
     <p class="muted" style="margin:0 0 18px">${s.d}</p>
@@ -236,6 +293,7 @@ function tutShow(){
 function tutProx(){ const dest=TUT[_tutI].v; _tutI++; if(_tutI>=TUT.length){ tutPular(); go('servicos'); return; } tutShow(); }
 function tutPular(){ localStorage.setItem('cl_tutorial_v1','1'); const b=document.getElementById('tut'); if(b)b.remove(); }
 function go(v){ VIEW=v; document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v)); $('sb').classList.remove('open');
+  $('view').innerHTML='<div class="loading"><div class="spin"></div> Carregando...</div>';
   ({dashboard:vDashboard,agenda:vAgenda,relatorios:vRelatorios,clientes:vClientes,servicos:vServicos,estoque:vEstoque,horarios:vHorarios,atendente:vAtendente,funcionarios:vFuncionarios,negocio:vNegocio,orion:vOrion,func:vFunc}[v]||vDashboard)();
 }
 const PRO_REC=['atendente','pix','relatorios','promo','pacotes','estoque','lembrete','equipe'];
@@ -246,12 +304,25 @@ function proBloqueado(rec){
     <div class="card" style="text-align:center;border-color:var(--accent)"><div style="font-size:40px">⭐</div>
       <h3>Desbloqueie tudo na Clínica+</h3>
       <p class="muted" style="max-width:460px;margin:6px auto 14px">Atendente de WhatsApp que agenda, PIX, equipe ilimitada, pacotes, estoque, relatórios e promoções. Tudo num plano só.</p>
-      <button class="btn primary" onclick="clAssinar()">Assinar Profissional</button></div>`;
+      <button class="btn primary" onclick="clAssinar()">Assinar Profissional</button>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+        <div class="muted" style="margin-bottom:6px">Tem uma chave de ativação?</div>
+        <div class="row" style="justify-content:center"><input id="chaveInp" placeholder="CLI-XXXXXX-XXXXXX-XX" style="max-width:260px;text-transform:uppercase"><button class="btn" onclick="clAtivarChave()">Ativar</button></div>
+        <div id="chaveMsg" class="msg" style="text-align:center"></div>
+      </div></div>`;
   return true;
 }
 async function clAssinar(){
   const r=await api('/clinica/assinar','POST',{});
   if(r.ok&&r.url){ window.open(r.url,'_blank'); } else { alert(r.erro||'Pagamento ainda não disponível. Fale com o suporte.'); }
+}
+async function clAtivarChave(){
+  const m=$('chaveMsg'), inp=$('chaveInp'); if(!inp) return;
+  const chave=(inp.value||'').trim(); if(!chave){ m.style.color='var(--bad)'; m.textContent='Cole a chave.'; return; }
+  m.style.color='var(--dim)'; m.textContent='Ativando...';
+  const r=await api('/clinica/ativar_chave','POST',{chave});
+  if(r.ok){ m.style.color='var(--good)'; m.textContent='Pronto! Profissional ativado. Recarregando...'; setTimeout(()=>location.reload(),1200); }
+  else { m.style.color='var(--bad)'; m.textContent=r.erro||'Não consegui ativar.'; }
 }
 function reminderHTML(){
   if(EST.func || EST.conta_completa) return '';

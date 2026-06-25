@@ -130,7 +130,7 @@ def cl_func_login(clinica_email, login, senha):
     if not r: return None
     uid = r["id"]
     for f in cl_func_get(uid):
-        if f.get("login")==(login or "").strip().lower() and f.get("senha_hash") and f["senha_hash"]==_hash(senha):
+        if f.get("login")==(login or "").strip().lower() and f.get("senha_hash") and _senha_ok(senha, f["senha_hash"]):
             if f.get("ativo", True) is False: return "inativo"
             return {"uid":uid, "fid":f["id"], "nome":f.get("nome"), "admin":bool(f.get("admin"))}
     return None
@@ -363,6 +363,25 @@ def cl_plano_set_pro(uid, meses=1):
 def cl_plano_set_free(uid):
     p = cl_plano_raw(uid); p["plano"]="free"; p.pop("pro_ate", None); p["trial_ate"] = 0
     set_blob(uid, "cl_plano", p); return {"ok":True, "plano":"free"}
+def cl_ativar_chave(uid, chave):
+    """Ativa a Clinica+ Pro com uma chave de licenca (que o dono da plataforma gera e vende).
+    A chave tem plano "clinica". Master (do dono) e ilimitada; chave de venda e uso unico."""
+    chave = (chave or "").strip().upper().replace(" ", "")
+    pl = lic_check(chave)
+    if not pl: return {"ok":False, "erro":"Chave invalida. Confira se copiou ela inteira."}
+    if pl != "clinica": return {"ok":False, "erro":"Essa chave nao e da Clinica+."}
+    if not _is_master(chave):                       # chave de venda: uso unico (consome no banco)
+        try:
+            with _db() as c:
+                row = c.execute("SELECT * FROM licencas WHERE chave=?", (chave,)).fetchone()
+                if not row: return {"ok":False, "erro":"Chave nao encontrada. Gere pelo painel."}
+                if row["usada"]: return {"ok":False, "erro":"Essa chave ja foi usada."}
+                c.execute("UPDATE licencas SET usada=1, user_id=?, usada_em=? WHERE chave=?",
+                          (uid, datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), chave)); c.commit()
+        except Exception as e:
+            print("[cl_ativar_chave]", repr(e)); return {"ok":False, "erro":"erro ao validar a chave, tente de novo"}
+    cl_plano_set_pro(uid, 12)
+    return {"ok":True, "plano":"pro", "via":"chave"}
 def admin_clinicas():
     """Pro dono da plataforma: lista todas as clinicas, plano, faturamento e MRR da Clinica+."""
     out = []; total_pro = 0
@@ -449,14 +468,28 @@ def clinica_criar_conta(d):
     email = (d.get("email") or "").strip().lower() or None
     tel = _digs(d.get("telefone"))
     if not email and not tel: return {"ok":False, "erro":"informe um e-mail ou telefone pra acessar depois"}
+    if email and ("@" not in email or "." not in email.split("@")[-1]): return {"ok":False, "erro":"e-mail invalido"}
+    if tel and len(tel) < 10: return {"ok":False, "erro":"telefone invalido (com DDD)"}
+    # checa duplicado ANTES de inserir (funciona igual em SQLite e Postgres; nao depende do tipo de erro do driver)
     try:
+        with _db() as c:
+            if email and c.execute("SELECT 1 FROM users WHERE lower(email)=lower(?)", (email,)).fetchone():
+                return {"ok":False, "erro":"Esse e-mail ja tem conta. Use a aba Entrar pra acessar."}
+        if tel and _tel_index().get(tel):
+            return {"ok":False, "erro":"Esse telefone ja tem conta. Use a aba Entrar pra acessar."}
         with _db() as c:
             n = c.execute("SELECT COUNT(*) n FROM users").fetchone()["n"]
             cur = c.execute("INSERT INTO users(nome,email,senha_hash,nome_real,tratamento,foto,plano,criador,origem,criado) VALUES(?,?,?,?,?,?,?,?,?,?)",
                 (nome.title(), email, _hash(d.get("senha")), nome, "", "", "free", 1 if n==0 else 0, "clinica", datetime.datetime.now().strftime("%d/%m/%Y %H:%M")))
             c.commit(); uid = cur.lastrowid
     except INTEGRITY_ERRORS:
-        return {"ok":False, "erro":"ja existe uma conta com esse e-mail"}
+        return {"ok":False, "erro":"Esse e-mail ja tem conta. Use a aba Entrar pra acessar."}
+    except Exception as e:
+        print("[clinica_criar_conta]", repr(e))
+        # rede/corrida: se mesmo assim foi violacao de unicidade, avisa amigavelmente
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower() or "23505" in str(e):
+            return {"ok":False, "erro":"Esse e-mail ja tem conta. Use a aba Entrar pra acessar."}
+        return {"ok":False, "erro":"nao consegui criar a conta agora, tente de novo em instantes"}
     conta_extra_set(uid, {"telefone":tel, "documento":_digs(d.get("documento")), "tel_validado":False})
     if tel: _tel_index_set(tel, uid)
     return {"ok":True, "uid":uid}
@@ -472,7 +505,7 @@ def clinica_login_dono(ident, senha):
             r = c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone() if uid else \
                 c.execute("SELECT * FROM users WHERE lower(nome)=lower(?)", (ident,)).fetchone()
     if not r: return None
-    if r["senha_hash"] and _hash(senha) != r["senha_hash"]: return False
+    if r["senha_hash"] and not _senha_ok(senha, r["senha_hash"]): return False
     return r["id"]
 def _wa_creds(uid=None):
     """Credenciais do WhatsApp: da clinica (se ela conectou o proprio numero) ou as globais do admin."""

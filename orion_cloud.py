@@ -146,8 +146,22 @@ def init_db():
 init_db()
 
 def _hash(s):
+    """Hash de senha com salt + PBKDF2 (lento de propósito, anti-rainbow-table)."""
     if not s: return None
-    return hashlib.sha256(("orion_"+s).encode()).hexdigest()
+    salt = secrets.token_hex(8)
+    dk = hashlib.pbkdf2_hmac("sha256", s.encode(), salt.encode(), 120000)
+    return "pbkdf2$120000$" + salt + "$" + dk.hex()
+def _senha_ok(s, stored):
+    """Confere a senha. Aceita o formato novo (pbkdf2$...) E o antigo (sha256 sem salt),
+    pra contas criadas antes do upgrade continuarem entrando. Comparacao em tempo constante."""
+    if not s or not stored: return False
+    if stored.startswith("pbkdf2$"):
+        try:
+            _, it, salt, h = stored.split("$")
+            dk = hashlib.pbkdf2_hmac("sha256", s.encode(), salt.encode(), int(it))
+            return hmac.compare_digest(dk.hex(), h)
+        except Exception: return False
+    return hmac.compare_digest(hashlib.sha256(("orion_"+s).encode()).hexdigest(), stored)   # compat: hash antigo
 def _pub(u):
     plano = "adm" if u["criador"] else ("business" if u["socio"] else (u["plano"] or "free"))
     vipd = get_blob(u["id"], "vip", {}) or {}
@@ -1559,7 +1573,7 @@ def loop_briefing():
 # ======================= LICENCA (mesmo modulo do desktop e do gerador) =======================
 # licenca EMBUTIDA (mesmo algoritmo e segredo do desktop/keygen). Auto-suficiente: nao depende de import externo.
 _LIC_SECRET = "Orion-LIC-2026-Gurroffe-Ads-Kx7p9Q2w"
-_LIC_PB = {"pro": 1, "business": 2, "adm": 3, "trading": 4, "trafego": 5}; _LIC_BP = {1: "pro", 2: "business", 3: "adm", 4: "trading", 5: "trafego"}
+_LIC_PB = {"pro": 1, "business": 2, "adm": 3, "trading": 4, "trafego": 5, "clinica": 6}; _LIC_BP = {1: "pro", 2: "business", 3: "adm", 4: "trading", 5: "trafego", 6: "clinica"}
 def _lic_mac(msg): return hmac.new(_LIC_SECRET.encode(), msg, hashlib.sha256).digest()[:5]
 def _lic_make_det(plano, serial):
     plano=(plano or "").lower()
@@ -2481,6 +2495,7 @@ class H(BaseHTTPRequestHandler):
             if res is False: return self._send({"ok":False,"erro":"senha incorreta"})
             return self._send({"ok":True, "user":_pub(get_user(res))}, cookie=make_session(res))
         if path == "/clinica/func/login":
+            if not _rate_ok(self._client_ip(), "funclogin", 10, 300): return self._send({"ok":False,"erro":"muitas tentativas, espere uns minutos"})
             r = cl_func_login(d.get("clinica"), d.get("login"), d.get("senha"))
             if r == "inativo": return self._send({"ok":False,"erro":"seu acesso esta desativado. Fale com o responsavel."})
             if not r: return self._send({"ok":False,"erro":"clinica, login ou senha incorretos"})
@@ -2528,6 +2543,7 @@ class H(BaseHTTPRequestHandler):
         if dono and path == "/clinica/estoque/apagar":  return self._send(cl_estoque_apagar(uid, d.get("id")))
         if dono and path == "/clinica/estoque/mexer":   return self._send(cl_estoque_mexer(uid, d.get("id"), d.get("delta")))
         if dono and path == "/clinica/assinar": return self._send(cl_assinar(uid, base_url(self)))
+        if dono and path == "/clinica/ativar_chave": return self._send(cl_ativar_chave(uid, d.get("chave")))
         if path == "/clinica/remarcar":  return self._send(cl_remarcar(uid, d.get("id"), d.get("data"), d.get("hora")))
         if dono and path == "/clinica/conta":          return self._send({"ok":True, "conta":conta_extra_set(uid, {"telefone":_digs(d.get("telefone")) or None, "documento":(_digs(d.get("documento")) if _doc_ok(d.get("documento")) else None)})})
         if dono and path == "/clinica/tel/enviar":     return self._send(tel_codigo_enviar(uid, d.get("telefone")))
@@ -2608,8 +2624,8 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         try: self._get()
         except Exception as e:
-            print("[GET]", self.path, repr(e))
-            try: self._send({"erro":f"erro interno: {e}"}, 500)
+            print("[GET]", self.path, repr(e))   # detalhe so no log do servidor, nunca pro cliente (seguranca)
+            try: self._send({"erro":"erro interno, tente de novo"}, 500)
             except Exception: pass
     _GET_PUBLICO = ("/","/index.html","/site","/clinica","/clinica/","/agendar","/agendar/","/logo","/icon","/favicon.ico","/manifest.webmanifest","/sw.js",".well-known")
     def _get(self):
@@ -2659,6 +2675,10 @@ class H(BaseHTTPRequestHandler):
             except Exception: cuid = 0
             if path == "/pub/clinica": self._send(cl_publico(cuid))
             elif path == "/pub/disponibilidade": self._send(cl_disponibilidade(cuid, g("data"), g("servico"), g("func")))
+            elif path == "/pub/cnpj":
+                if not _rate_ok(self._client_ip(), "cnpj", 12, 300): return self._send({"ok":False,"erro":"muitas consultas, espere um pouco"})
+                info = enriquecer_cnpj(g("doc") or "")
+                self._send({"ok":bool(info), "info":info or {}})
             else: self._send({"ok":False,"erro":"nao encontrado"},404)
         elif path.startswith("/clinica/"):
             self._clinica_get(path)
@@ -2800,8 +2820,8 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         try: self._post()
         except Exception as e:
-            print("[POST]", self.path, repr(e))
-            try: self._send({"ok":False,"erro":f"erro interno: {e}"}, 500)
+            print("[POST]", self.path, repr(e))   # detalhe so no log do servidor, nunca pro cliente (seguranca)
+            try: self._send({"ok":False,"erro":"erro interno, tente de novo"}, 500)
             except Exception: pass
     def _post(self):
         path = self.path
@@ -2875,7 +2895,7 @@ class H(BaseHTTPRequestHandler):
             if mot: self._send({"ok":False,"banido":True,"erro":"Conta suspensa: "+mot}); return
             if r["senha_hash"]:
                 if not d.get("senha"): self._send({"ok":False,"precisa_senha":True}); return
-                if _hash(d.get("senha")) != r["senha_hash"]: self._send({"ok":False,"erro":"Senha errada, senhor."}); return
+                if not _senha_ok(d.get("senha"), r["senha_hash"]): self._send({"ok":False,"erro":"Senha errada, senhor."}); return
             try: dispositivo_registrar(self._device(), r["id"], r["nome"], self._client_ip(), self.headers.get("User-Agent",""))
             except Exception: pass
             self._send({"ok":True,"user":_pub(r)}, cookie=make_session(r["id"]))
