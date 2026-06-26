@@ -339,7 +339,7 @@ async function clAtivarChave(){
 }
 function reminderHTML(){
   if(EST.func || EST.conta_completa) return '';
-  const falta=[]; if(!EST.email) falta.push('e-mail'); if(!EST.telefone) falta.push('telefone'); else if(!EST.tel_validado) falta.push('validar telefone'); if(!EST.doc) falta.push('CPF/CNPJ');
+  const falta=[]; if(!EST.doc) falta.push('CPF/CNPJ'); if(!EST.email && !EST.telefone) falta.push('e-mail ou telefone');
   if(!falta.length) return '';
   return `<div class="card" style="border-color:var(--warn);background:linear-gradient(100deg,rgba(255,180,84,.12),transparent)">
     <b>⚠️ Complete seu cadastro</b><div class="muted" style="margin:4px 0 8px">Falta: ${falta.join(', ')}. Isso libera todos os recursos e a segurança da conta.</div>
@@ -449,23 +449,26 @@ async function calRender(){
   g.innerHTML=html;
 }
 function calPick(ds){ $('agData').value=ds; _calYM=ds.slice(0,7); calRender(); agSlots(); agLista(); diaDetalhe(ds); }
-async function diaDetalhe(ds){
-  const r=await api('/clinica/agenda?data='+ds); const ags=r.agenda||[];
-  const cal=await api('/clinica/calendario?ym='+ds.slice(0,7)); const evs=(cal.ok&&cal.dias&&cal.dias[ds]?cal.dias[ds]:[]).filter(i=>i.tipo==='evento');
-  const dataBR=ds.split('-').reverse().join('/');
-  const cons=ags.length?ags.map(a=>agendaHTML([a])).join(''):'<div class="muted">Nenhuma consulta nesse dia.</div>';
-  const evHtml=evs.length?('<h4 style="margin:16px 0 6px">Compromissos</h4>'+evs.map(e=>`<div class="lin"><div><b>${esc(e.titulo)}</b> ${e.dia_todo?'<span class="tag">dia todo</span>':'<span class="muted">'+esc(e.hora||'')+'</span>'}</div>${EST.sou_dono?`<button class="btn ghost sm" onclick="evRemover(${e.id},'${ds}')">✕</button>`:''}</div>`).join('')):'';
+function diaModalShell(ds){   // abre JA com spinner (feedback imediato) e garante um SO modal (rapidos cliques nao empilham)
   let m=$('diaModal'); if(m)m.remove();
   m=document.createElement('div'); m.id='diaModal';
   m.style.cssText='position:fixed;inset:0;z-index:80;background:rgba(45,36,52,.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:18px';
   m.onclick=(e)=>{ if(e.target===m) m.remove(); };
   m.innerHTML=`<div class="card" style="width:min(560px,96vw);max-height:88vh;overflow:auto;margin:0">
-    <div class="top"><h2 style="margin:0">📅 ${dataBR}</h2><button class="btn ghost sm" onclick="document.getElementById('diaModal').remove()">Fechar</button></div>
-    <div class="muted" style="margin:2px 0 10px">${ags.length} consulta(s)${evs.length?(' · '+evs.length+' compromisso(s)'):''}</div>
+    <div class="top"><h2 style="margin:0">📅 ${ds.split('-').reverse().join('/')}</h2><button class="btn ghost sm" onclick="document.getElementById('diaModal').remove()">Fechar</button></div>
+    <div id="diaBody"><div class="loading"><div class="spin"></div> Carregando...</div></div></div>`;
+  document.body.appendChild(m); return m;
+}
+async function diaDetalhe(ds){
+  diaModalShell(ds);
+  const [r, cal] = await Promise.all([api('/clinica/agenda?data='+ds), api('/clinica/calendario?ym='+ds.slice(0,7))]);
+  const body=$('diaBody'); if(!body) return;   // usuario fechou enquanto carregava
+  const ags=r.agenda||[]; const evs=(cal.ok&&cal.dias&&cal.dias[ds]?cal.dias[ds]:[]).filter(i=>i.tipo==='evento');
+  const cons=ags.length?ags.map(a=>agendaHTML([a])).join(''):'<div class="muted">Nenhuma consulta nesse dia.</div>';
+  const evHtml=evs.length?('<h4 style="margin:16px 0 6px">Compromissos</h4>'+evs.map(e=>`<div class="lin"><div><b>${esc(e.titulo)}</b> ${e.dia_todo?'<span class="tag">dia todo</span>':'<span class="muted">'+esc(e.hora||'')+'</span>'}</div>${EST.sou_dono?`<button class="btn ghost sm" onclick="evRemover(${e.id},'${ds}')">✕</button>`:''}</div>`).join('')):'';
+  body.innerHTML=`<div class="muted" style="margin:2px 0 10px">${ags.length} consulta(s)${evs.length?(' · '+evs.length+' compromisso(s)'):''}</div>
     ${cons}${evHtml}
-    <button class="btn primary" style="margin-top:16px;width:100%" onclick="document.getElementById('diaModal').remove();$('agData').value='${ds}';agSlots();var s=document.getElementById('agServ');if(s)s.scrollIntoView({behavior:'smooth'})">+ Marcar consulta nesse dia</button>
-  </div>`;
-  document.body.appendChild(m);
+    <button class="btn primary" style="margin-top:16px;width:100%" onclick="document.getElementById('diaModal').remove();$('agData').value='${ds}';agSlots();var s=document.getElementById('agServ');if(s)s.scrollIntoView({behavior:'smooth'})">+ Marcar consulta nesse dia</button>`;
 }
 async function evRemover(id,ds){ if(!confirm('Remover compromisso?'))return; await api('/clinica/bloqueio/remover','POST',{id}); calRender(); diaDetalhe(ds); }
 function agEventoForm(){ const box=$('agEvBox'); if(!box) return; box.innerHTML=`<div class="card" style="margin:10px 0 0;background:var(--panel2)">
@@ -733,7 +736,7 @@ async function vAtendente(){
       <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="lemAtivo" style="width:auto" ${lem.ativo?'checked':''}> Enviar lembrete antes da consulta</label>
       <div class="row"><div class="field" style="width:160px"><label>Horas antes</label><input id="lemHoras" type="number" value="${lem.horas||3}"></div></div>
       <button class="btn primary" onclick="lemSalvar()">Salvar</button><span id="lemMsg" class="msg"></span></div>
-    <div class="card"><h3>📱 Conectar o WhatsApp da clínica</h3><div class="muted" style="margin-bottom:10px">Ligue o seu número do WhatsApp Business (Meta) pra atendente atender e agendar sozinha no seu número. <a href="/" target="_blank">Como obter o token/ID</a></div>
+    <div class="card"><h3>📱 Conectar o WhatsApp da clínica</h3><div class="muted" style="margin-bottom:10px">Ligue o seu número do WhatsApp Business (Meta) pra atendente atender e agendar sozinha no seu número. <a href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started" target="_blank" rel="noopener">Guia: como obter o token e o phone ID</a></div>
       <div id="waBox"></div></div>
     <div class="card"><h3>📣 Clientes que vêm de anúncio</h3>
       <div class="muted" style="margin-bottom:8px">Crie uma campanha: o sistema gera uma mensagem-padrão + um link <b>wa.me</b> pra colar no botão do anúncio (Meta). Quando o cliente toca no anúncio, o WhatsApp já abre com a mensagem, o bot reconhece de onde veio e <b>já entra no assunto e agenda</b>.</div>
@@ -832,12 +835,10 @@ async function vNegocio(){
     <div class="card"><h3>Dados da conta</h3><div class="muted" style="margin-bottom:10px">Mantenha atualizado pra segurança e contato. ${EST.conta_completa?'<span style="color:var(--good)">✓ cadastro completo</span>':'<span style="color:var(--warn)">cadastro incompleto</span>'}</div>
       <div class="row"><div class="field" style="flex:1;min-width:160px"><label>E-mail ${EST.email?'':'<span style="color:var(--warn)">(adicione no Orion)</span>'}</label><input value="${esc(EST.email||'')}" ${EST.email?'readonly':'disabled'}></div>
         <div class="field" style="flex:1;min-width:140px"><label>CPF ou CNPJ</label><input id="ctDoc" value="" placeholder="${EST.doc?'já cadastrado (deixe vazio p/ manter)':'somente números'}" inputmode="numeric"></div></div>
-      <div class="row"><div class="field" style="flex:1;min-width:160px"><label>Telefone ${EST.tel_validado?'<span style="color:var(--good)">✓ validado</span>':''}</label><input id="ctTel" value="${esc(EST.telefone||'')}"></div>
-        <div style="display:flex;align-items:end;gap:8px;padding-bottom:10px">${EST.tel_validado?'':'<button class="btn" onclick="telEnviar()">Validar telefone</button>'}</div></div>
-      <button class="btn primary" onclick="ctSalvar()">Salvar dados</button><span id="ctMsg" class="msg"></span>
-      <div id="telBox"></div></div>`;
+      <div class="field"><label>Telefone / WhatsApp</label><input id="ctTel" value="${esc(EST.telefone||'')}" placeholder="(00) 90000-0000"></div>
+      <button class="btn primary" onclick="ctSalvar()">Salvar dados</button><span id="ctMsg" class="msg"></span></div>`;
 }
-async function ctSalvar(){ const r=await api('/clinica/conta','POST',{telefone:$('ctTel').value.trim(),documento:$('ctDoc').value.trim()}); const m=$('ctMsg'); m.style.color='var(--good)'; m.textContent=r.ok?'Salvo ✓':'erro'; const e=await api('/clinica/estado'); EST=Object.assign(EST,e); }
+async function ctSalvar(){ const r=await api('/clinica/conta','POST',{telefone:$('ctTel').value.trim(),documento:$('ctDoc').value.trim()}); const m=$('ctMsg'); if(m){m.style.color=r.ok?'var(--good)':'var(--bad)'; m.textContent=r.ok?'Salvo ✓':(r.erro||'erro');} const e=await api('/clinica/estado'); EST=Object.assign(EST,e); if(r.ok) setTimeout(()=>vNegocio(),700); }
 async function telEnviar(){ const r=await api('/clinica/tel/enviar','POST',{telefone:$('ctTel').value.trim()}); const box=$('telBox');
   if(!r.ok){ box.innerHTML='<div class="msg" style="color:var(--bad)">'+esc(r.erro||'erro')+'</div>'; return; }
   const dev=r.dev_code?` <span class="muted">(modo teste, código: ${r.dev_code})</span>`:'';

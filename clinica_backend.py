@@ -173,10 +173,18 @@ def cl_disponibilidade(uid, data_iso, servico_id, func_id=None):
     sv = cl_servico_by(uid, servico_id); dur = int((sv or {}).get("duracao", 60))
     passo = int(h.get("intervalo", 30)) or 30
     ini = _hm(dd.get("ini","09:00")); fim = _hm(dd.get("fim","18:00"))
+    funcs_ativos = [x for x in cl_func_get(uid) if x.get("ativo", True) is not False]
+    recurso_unico = len(funcs_ativos) <= 1   # 0 ou 1 profissional: a clinica e UM recurso (nao atende 2 ao mesmo tempo)
+    def _conta(a):
+        if recurso_unico or fid is None: return True        # bloqueia contra TODAS as consultas do dia
+        return a.get("func_id")==fid                          # multi-profissional: so as desse profissional
     ocup = [(_dtmin(a["inicio"]), _dtmin(a["inicio"])+int(a.get("duracao",60))) for a in cl_ags_get(uid)
-            if a.get("status")=="marcado" and str(a.get("inicio","")).startswith(data_iso) and (fid is None or a.get("func_id")==fid)]
-    for b in cl_bloqueios_get(uid):   # folgas/bloqueios avulsos contam como ocupado
-        if str(b.get("data"))==data_iso: ocup.append((_hm(b.get("ini","00:00")), _hm(b.get("fim","23:59"))))
+            if a.get("status")=="marcado" and str(a.get("inicio","")).startswith(data_iso) and _conta(a)]
+    for b in cl_bloqueios_get(uid):   # folgas/bloqueios avulsos contam como ocupado (folga de profissional especifico so bloqueia ele)
+        if str(b.get("data"))!=data_iso: continue
+        bf = b.get("func_id")
+        if bf in (None,"","null") or recurso_unico or fid is None or int(bf or 0)==fid:
+            ocup.append((_hm(b.get("ini","00:00")), _hm(b.get("fim","23:59"))))
     agora_min = _hm(datetime.datetime.now().strftime("%H:%M")) if dt==datetime.date.today() else -1
     slots = []; t = ini
     while t + dur <= fim:
@@ -577,8 +585,9 @@ def _tel_index_set(tel, uid):
     tel = _digs(tel)
     if tel: idx = _tel_index(); idx[tel] = uid; set_blob(1, "tel_index", idx)
 def conta_completa(uid):
+    # completo = tem documento (CPF/CNPJ) E pelo menos um contato (e-mail ou telefone). Sem exigir SMS.
     e = conta_extra_get(uid); u = get_user(uid)
-    return bool(u and u["email"] and e.get("telefone") and e.get("documento") and e.get("tel_validado"))
+    return bool(u and e.get("documento") and ((u["email"] or "").strip() or e.get("telefone")))
 def clinica_criar_conta(d):
     nome = (d.get("nome") or "").strip()
     if len(nome) < 2: return {"ok":False, "erro":"diga seu nome"}
@@ -725,7 +734,9 @@ def cl_publico(uid):
 def cl_bloqueios_get(uid): return get_blob(uid, "cl_bloqueios", []) or []
 def cl_bloqueio_add(uid, d):
     if not d.get("data"): return {"ok":False, "erro":"informe a data"}
-    b = {"id":int(time.time()*1000), "data":d.get("data"), "dia_todo":bool(d.get("dia_todo")),
+    try: bfid = int(d.get("func_id")) if d.get("func_id") not in (None,"","null") else None
+    except Exception: bfid = None
+    b = {"id":int(time.time()*1000), "data":d.get("data"), "dia_todo":bool(d.get("dia_todo")), "func_id":bfid,
          "ini":(d.get("ini") or "00:00"), "fim":(d.get("fim") or "23:59"), "motivo":str(d.get("motivo") or "")[:80]}
     if b["dia_todo"]: b["ini"]="00:00"; b["fim"]="23:59"
     bs = cl_bloqueios_get(uid); bs.append(b); set_blob(uid, "cl_bloqueios", bs); return {"ok":True, "bloqueios":bs}
