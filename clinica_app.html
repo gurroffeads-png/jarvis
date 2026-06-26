@@ -91,6 +91,19 @@ label{font-size:12px;color:var(--dim);display:block;margin:0 0 4px}
 .btn[disabled]{opacity:.6;cursor:default;transform:none!important}
 .themebtn{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:9px;padding:5px 8px;font-size:13px;cursor:pointer}
 .themebtn:hover{border-color:var(--accent);color:var(--text)}
+/* calendario da agenda */
+.calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal .wd{font-size:11px;color:var(--faint);text-align:center;font-weight:700;padding:2px}
+.cal .cell{min-height:64px;border:1px solid var(--line);border-radius:10px;padding:4px 5px;background:var(--panel2);cursor:pointer;display:flex;flex-direction:column;gap:2px;overflow:hidden}
+.cal .cell:hover{border-color:var(--accent)}
+.cal .cell.off{opacity:.3;cursor:default;background:none;border-color:transparent}
+.cal .cell.sel{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
+.cal .dn{font-size:12px;font-weight:700;width:21px;height:21px;display:grid;place-items:center;align-self:flex-start}
+.cal .cell.hoje .dn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-radius:50%}
+.cal .ev{font-size:10px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 4px;border-radius:5px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--text)}
+.cal .ev.evt{background:color-mix(in srgb,var(--accent2) 20%,transparent)}
+@media(max-width:520px){.cal .cell{min-height:48px}.cal .ev{display:none}.cal .cell::after{content:attr(data-n);font-size:9px;color:var(--accent)}}
 </style>
 </head>
 <body>
@@ -182,7 +195,7 @@ const api=async(p,m,b)=>{ loadOn(); try{ const r=await fetch(p,{method:m||'GET',
 function temaAplicar(t){ document.documentElement.setAttribute('data-theme', t==='dark'?'dark':'light'); try{ localStorage.setItem('cl_tema', t); }catch(e){} const el=$('temaBtn'); if(el) el.textContent = t==='dark'?'☀️ Tema claro':'🌙 Tema escuro'; }
 function temaToggle(){ const atual=document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light'; temaAplicar(atual==='dark'?'light':'dark'); }
 try{ temaAplicar(localStorage.getItem('cl_tema')||'light'); }catch(e){ temaAplicar('light'); }
-let EST={}, VIEW='dashboard', SERV=[], HOJEISO=new Date().toISOString().slice(0,10);
+let EST={}, VIEW='dashboard', SERV=[], HOJEISO=new Date().toISOString().slice(0,10), _calYM=null;
 
 // ---------------- boot ----------------
 (async function boot(){
@@ -349,9 +362,23 @@ async function vDashboard(){
     </div>
     <div class="card"><h3>Agenda de hoje</h3><div id="dhoje"></div></div>
     <div class="card"><h3>Entradas por forma de pagamento (mês)</h3><div class="muted">${esc(pag)}</div></div>
+    ${EST.sou_dono?'<div class="card"><h3>💰 PIX confirmado (Mercado Pago)</h3><div id="dmp"><div class="loading"><div class="spin"></div></div></div></div>':''}
     <div class="card"><h3>Faturamento por funcionário (mês)</h3>${func}</div>`;
   $('dhoje').innerHTML=agendaHTML(r.agenda_hoje);
+  if(EST.sou_dono) mpDashLoad();
 }
+async function mpDashLoad(){ const el=$('dmp'); if(!el) return;
+  const s=await api('/clinica/mp/status');
+  if(!s.app_ok){ el.innerHTML='<div class="muted">A confirmação automática de PIX via Mercado Pago ainda não foi liberada pela plataforma.</div>'; return; }
+  if(!s.ligado){ el.innerHTML='<div class="muted" style="margin-bottom:8px">Conecte sua conta do Mercado Pago pra confirmar automaticamente as entradas de PIX aqui no painel.</div><button class="btn primary" onclick="mpConectar()">Conectar Mercado Pago</button>'; return; }
+  const e=await api('/clinica/mp/entradas');
+  if(!e.ok){ el.innerHTML=`<div class="muted">${esc(e.erro||'erro')}</div>`+(e.reconnect?' <button class="btn sm" onclick="mpConectar()">Reconectar</button>':''); return; }
+  el.innerHTML=`<div style="font-size:22px;font-weight:800;color:var(--good)">${fmt(e.total)}</div><div class="muted" style="margin-bottom:6px">${e.qtd} PIX nos últimos 30 dias${s.conta?(' · conta '+esc(s.conta)):''}</div>`
+    +(e.lista||[]).slice(0,8).map(x=>`<div class="lin"><span class="muted">${esc((x.quando||'').split('-').reverse().join('/'))}</span><b>${fmt(x.valor)}</b></div>`).join('')
+    +'<button class="btn ghost sm" style="margin-top:8px" onclick="mpDesconectar()">Desconectar</button>';
+}
+async function mpConectar(){ const r=await api('/clinica/mp/conectar'); if(r.ok&&r.url){ window.location.href=r.url; } else { alert(r.erro||'não foi possível conectar agora'); } }
+async function mpDesconectar(){ if(!confirm('Desconectar o Mercado Pago?'))return; await api('/clinica/mp/desconectar','POST',{}); mpDashLoad(); }
 function agendaHTML(lista){
   if(!lista||!lista.length) return '<div class="muted">Nenhuma consulta.</div>';
   return lista.map(a=>{const data=(a.inicio||'').split('T')[0]||'';const hora=(a.inicio||'').split('T')[1]||'';
@@ -378,9 +405,14 @@ async function rmConfirma(id){ const h=$('rmHora').value; if(!h){ $('rmMsg').sty
 
 // ---------------- agenda ----------------
 async function vAgenda(){
-  if(!SERV.length){ SERV=(await api('/clinica/servicos')).servicos||[]; }
+  SERV=(await api('/clinica/servicos')).servicos||SERV;   // sempre atualiza (preço/duração podem ter mudado)
   let funcs=[]; if(EST.sou_dono||EST.sou_admin){ funcs=(await api('/clinica/funcionarios')).funcionarios||[]; }
-  $('view').innerHTML=`<h1>Agenda</h1><div class="sub">Marque uma consulta verificando a disponibilidade real (sem sobrepor horários).</div>
+  $('view').innerHTML=`<h1>Agenda</h1><div class="sub">Veja o mês inteiro, clique num dia pra marcar, e coloque compromissos (reunião, folga).</div>
+    <div class="card">
+      <div class="calhead"><button class="btn ghost sm" onclick="calNav(-1)">‹</button><h3 id="calTit" style="margin:0">...</h3><button class="btn ghost sm" onclick="calNav(1)">›</button></div>
+      <div class="cal" id="calGrid"><div class="loading"><div class="spin"></div></div></div>
+      ${EST.sou_dono?`<div class="row" style="margin-top:10px"><button class="btn sm" onclick="agEventoForm()">+ Compromisso (reunião, folga, evento)</button></div><div id="agEvBox"></div>`:''}
+    </div>
     <div class="card"><h3>Marcar consulta</h3>
       <div class="row">
         <div class="field" style="flex:1;min-width:160px"><label>Serviço</label><select id="agServ" onchange="agSlots()">${SERV.map(s=>`<option value="${s.id}">${esc(s.nome)} · ${fmt(s.preco)} · ${s.duracao}min</option>`).join('')||'<option>cadastre um serviço</option>'}</select></div>
@@ -395,8 +427,56 @@ async function vAgenda(){
       <div id="agMsg" class="msg"></div>
     </div>
     <div class="card"><h3>Consultas do dia <span id="agDiaLbl" class="muted"></span></h3><div id="agLista"></div></div>`;
-  agSlots(); agLista();
+  _calYM=$('agData').value.slice(0,7); calRender(); agSlots(); agLista();
 }
+const _MES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function calNav(delta){ let [y,m]=(_calYM||HOJEISO.slice(0,7)).split('-').map(Number); m+=delta; if(m<1){m=12;y--;} if(m>12){m=1;y++;} _calYM=`${y}-${String(m).padStart(2,'0')}`; calRender(); }
+async function calRender(){
+  if(!_calYM) _calYM=HOJEISO.slice(0,7);
+  const g=$('calGrid'); if(!g) return;
+  const r=await api('/clinica/calendario?ym='+_calYM); if(!r.ok) return;
+  $('calTit').textContent=_MES[r.mes-1]+' '+r.ano;
+  const wd=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']; let off=(r.primeiro_wd+1)%7;
+  let html=wd.map(d=>`<div class="wd">${d}</div>`).join('');
+  for(let i=0;i<off;i++) html+='<div class="cell off"></div>';
+  for(let dn=1;dn<=r.dias_no_mes;dn++){
+    const ds=`${r.ano}-${String(r.mes).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
+    const items=r.dias[ds]||[]; const sel=ds===$('agData').value?' sel':''; const hoje=ds===HOJEISO?' hoje':'';
+    const evs=items.slice(0,3).map(it=>`<div class="ev ${it.tipo==='evento'?'evt':''}" title="${esc(it.titulo)}">${it.hora?it.hora+' ':''}${esc((it.titulo||'').slice(0,11))}</div>`).join('');
+    const mais=items.length>3?`<div class="ev" style="background:none;color:var(--faint)">+${items.length-3}</div>`:'';
+    html+=`<div class="cell${sel}${hoje}" data-n="${items.length||''}" onclick="calPick('${ds}')"><div class="dn">${dn}</div>${evs}${mais}</div>`;
+  }
+  g.innerHTML=html;
+}
+function calPick(ds){ $('agData').value=ds; _calYM=ds.slice(0,7); calRender(); agSlots(); agLista(); diaDetalhe(ds); }
+async function diaDetalhe(ds){
+  const r=await api('/clinica/agenda?data='+ds); const ags=r.agenda||[];
+  const cal=await api('/clinica/calendario?ym='+ds.slice(0,7)); const evs=(cal.ok&&cal.dias&&cal.dias[ds]?cal.dias[ds]:[]).filter(i=>i.tipo==='evento');
+  const dataBR=ds.split('-').reverse().join('/');
+  const cons=ags.length?ags.map(a=>agendaHTML([a])).join(''):'<div class="muted">Nenhuma consulta nesse dia.</div>';
+  const evHtml=evs.length?('<h4 style="margin:16px 0 6px">Compromissos</h4>'+evs.map(e=>`<div class="lin"><div><b>${esc(e.titulo)}</b> ${e.dia_todo?'<span class="tag">dia todo</span>':'<span class="muted">'+esc(e.hora||'')+'</span>'}</div>${EST.sou_dono?`<button class="btn ghost sm" onclick="evRemover(${e.id},'${ds}')">✕</button>`:''}</div>`).join('')):'';
+  let m=$('diaModal'); if(m)m.remove();
+  m=document.createElement('div'); m.id='diaModal';
+  m.style.cssText='position:fixed;inset:0;z-index:80;background:rgba(45,36,52,.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:18px';
+  m.onclick=(e)=>{ if(e.target===m) m.remove(); };
+  m.innerHTML=`<div class="card" style="width:min(560px,96vw);max-height:88vh;overflow:auto;margin:0">
+    <div class="top"><h2 style="margin:0">📅 ${dataBR}</h2><button class="btn ghost sm" onclick="document.getElementById('diaModal').remove()">Fechar</button></div>
+    <div class="muted" style="margin:2px 0 10px">${ags.length} consulta(s)${evs.length?(' · '+evs.length+' compromisso(s)'):''}</div>
+    ${cons}${evHtml}
+    <button class="btn primary" style="margin-top:16px;width:100%" onclick="document.getElementById('diaModal').remove();$('agData').value='${ds}';agSlots();var s=document.getElementById('agServ');if(s)s.scrollIntoView({behavior:'smooth'})">+ Marcar consulta nesse dia</button>
+  </div>`;
+  document.body.appendChild(m);
+}
+async function evRemover(id,ds){ if(!confirm('Remover compromisso?'))return; await api('/clinica/bloqueio/remover','POST',{id}); calRender(); diaDetalhe(ds); }
+function agEventoForm(){ const box=$('agEvBox'); if(!box) return; box.innerHTML=`<div class="card" style="margin:10px 0 0;background:var(--panel2)">
+  <div class="row"><div class="field" style="width:170px"><label>Data</label><input id="evData" type="date" value="${$('agData').value}"></div>
+  <div class="field" style="flex:1;min-width:160px"><label>O que é</label><input id="evMot" placeholder="ex: Reunião de equipe"></div></div>
+  <label style="display:flex;gap:6px;align-items:center;margin:4px 0;font-size:13px;color:var(--dim)"><input type="checkbox" id="evDia" style="width:auto" checked onchange="document.getElementById('evHoras').style.display=this.checked?'none':'flex'"> dia todo</label>
+  <div class="row" id="evHoras" style="display:none"><div class="field" style="width:120px"><label>Início</label><input id="evIni" type="time" value="09:00"></div><div class="field" style="width:120px"><label>Fim</label><input id="evFim" type="time" value="10:00"></div></div>
+  <div class="row" style="margin-top:6px"><button class="btn primary sm" onclick="agEventoSalvar()">Adicionar</button><button class="btn ghost sm" onclick="document.getElementById('agEvBox').innerHTML=''">Cancelar</button></div></div>`; }
+async function agEventoSalvar(){ const data=$('evData').value; if(!data) return; const dia=$('evDia').checked;
+  await api('/clinica/bloqueio/add','POST',{data,dia_todo:dia,ini:dia?'':$('evIni').value,fim:dia?'':$('evFim').value,motivo:($('evMot').value||'').trim()||'Compromisso'});
+  $('agEvBox').innerHTML=''; calRender(); agLista(); }
 async function agSlots(){
   const sid=$('agServ')&&$('agServ').value, data=$('agData').value, fid=$('agFunc')?$('agFunc').value:'';
   $('agHora').value=''; if(!sid){ $('agSlots').innerHTML='<span class="muted">Cadastre um serviço primeiro.</span>'; return; }
@@ -433,9 +513,28 @@ async function vRelatorios(){
     <div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Faturamento por dia (30 dias)</h3><button class="btn ghost sm" onclick="exportarClinicaCSV()">⬇️ Exportar CSV</button></div>
       <div style="display:flex;align-items:flex-end;gap:2px;height:150px;margin-top:14px;padding-bottom:20px">${barras}</div></div>
     <div class="card"><h3>💰 Caixa do dia</h3><div class="row" style="margin-bottom:8px"><input id="cxData" type="date" value="${HOJEISO}" style="width:170px" onchange="caixaRender()"></div><div id="cxBox"></div></div>
+    <div class="card"><h3>⭐ Avaliação dos clientes</h3><div id="avalBox"><div class="muted">carregando...</div></div></div>
+    <div class="card"><h3>💸 Comissão por período</h3><div class="row" style="margin-bottom:8px"><input id="cmIni" type="date" style="width:160px"><input id="cmFim" type="date" value="${HOJEISO}" style="width:160px"><button class="btn primary" onclick="comissaoRender()">Gerar</button></div><div id="cmBox"><div class="muted">Escolha o período e clique em Gerar.</div></div></div>
+    <div class="card"><h3>🔁 Lembrete de retorno automático</h3><div class="muted" style="margin-bottom:8px">Avisa no WhatsApp quem não volta há um tempo, e pede avaliação após cada atendimento.</div><div id="retBox"></div></div>
     <div class="card"><h3>Serviços mais vendidos</h3>${top}</div>`;
-  caixaRender();
+  caixaRender(); avalLoad(); retornoLoad();
+  { const d=new Date(); $('cmIni').value=new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10); }
 }
+async function avalLoad(){ const el=$('avalBox'); if(!el) return; const r=await api('/clinica/avaliacoes');
+  if(!r.ok||!r.total){ el.innerHTML='<div class="muted">Ainda sem avaliações. Elas chegam quando o cliente responde a nota (1 a 5) no WhatsApp após o atendimento.</div>'; return; }
+  el.innerHTML=`<div style="font-size:26px;font-weight:800;color:var(--accent)">${r.media} ⭐</div><div class="muted" style="margin-bottom:8px">${r.total} avaliação(ões)</div>`+
+    (r.ultimas||[]).map(a=>`<div class="lin"><div><b>${'⭐'.repeat(a.nota)}</b> ${esc(a.nome||'Cliente')}${a.comentario?'<div class="muted">'+esc(a.comentario)+'</div>':''}</div></div>`).join(''); }
+async function comissaoRender(){ const el=$('cmBox'); if(!el) return; el.innerHTML='<div class="muted">calculando...</div>';
+  const r=await api('/clinica/comissao?ini='+($('cmIni').value||'')+'&fim='+($('cmFim').value||'')); if(!r.ok){ el.innerHTML='<div class="muted">erro</div>'; return; }
+  el.innerHTML=`<div class="muted" style="margin-bottom:6px">Faturado no período: <b>${fmt(r.total_faturado)}</b> · Comissão total: <b style="color:var(--accent)">${fmt(r.total_comissao)}</b></div>`+
+    (r.linhas.length?r.linhas.map(l=>`<div class="lin"><span>${esc(l.funcionario)} <span class="muted">(${l.qtd}x · ${l.comissao_pct}%)</span></span><div style="text-align:right"><b>${fmt(l.comissao)}</b><div class="muted">de ${fmt(l.faturou)}</div></div></div>`).join(''):'<div class="muted">Sem atendimentos concluídos no período.</div>'); }
+async function retornoLoad(){ const el=$('retBox'); if(!el) return; const r=await api('/clinica/retorno'); const c=(r&&r.retorno)||{};
+  el.innerHTML=`<label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="retAtivo" style="width:auto" ${c.ativo?'checked':''}> Mandar lembrete de retorno</label>
+    <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="retAval" style="width:auto" ${c.avaliar!==false?'checked':''}> Pedir avaliação após o atendimento</label>
+    <div class="row"><div class="field" style="width:160px"><label>Dias sem voltar</label><input id="retDias" type="number" value="${c.dias||30}"></div></div>
+    <div class="field"><label>Mensagem do retorno</label><textarea id="retMsg" rows="2">${esc(c.mensagem||'')}</textarea></div>
+    <button class="btn primary" onclick="retornoSalvar()">Salvar</button><span id="retMsgR" class="msg"></span>`; }
+async function retornoSalvar(){ const r=await api('/clinica/retorno/salvar','POST',{ativo:$('retAtivo').checked,avaliar:$('retAval').checked,dias:$('retDias').value,mensagem:$('retMsg').value.trim()}); const m=$('retMsgR'); m.style.color='var(--good)'; m.textContent=r.ok?'Salvo ✓':'erro'; }
 async function caixaRender(){ const box=$('cxBox'); if(!box) return; const r=await api('/clinica/caixa?data='+$('cxData').value); if(!r.ok){ box.innerHTML='<div class="muted">erro</div>'; return; }
   const pag=Object.entries(r.por_pagamento||{}).map(([k,v])=>`<div class="lin"><span>${esc(k)}</span><b>${fmt(v)}</b></div>`).join('')||'<div class="muted">Sem entradas nesse dia.</div>';
   const fnc=(r.por_funcionario||[]).map(f=>`<div class="lin"><span>${esc(f.funcionario)}</span><b>${fmt(f.valor)}</b></div>`).join('');
@@ -471,8 +570,21 @@ async function vClientes(){
       <div class="row" style="margin-top:8px"><div class="field" style="width:220px"><label>Enviar para</label><select id="promoAlvo"><option value="todos">Todos os clientes</option><option value="cadastrados">Só cadastrados</option><option value="fieis">Clientes fiéis (3+ procedimentos)</option><option value="inativos">Inativos (45+ dias sem vir)</option></select></div>
         <button class="btn primary" style="align-self:end" onclick="promoEnviar()">Disparar</button></div>
       <div id="promoMsgR" class="msg"></div></div>
+    <div class="card"><h3>➕ Cadastrar cliente</h3><div class="muted" style="margin-bottom:8px">Cadastre pra contar na fidelidade, lembrar do aniversário e mandar promoções.</div>
+      <div class="row"><div class="field" style="flex:1;min-width:140px"><label>Nome</label><input id="clNome"></div>
+        <div class="field" style="width:170px"><label>WhatsApp</label><input id="clTel" placeholder="(00) 90000-0000"></div></div>
+      <div class="row"><div class="field" style="flex:1;min-width:160px"><label>E-mail <span class="muted">(opcional)</span></label><input id="clEmail" type="email"></div>
+        <div class="field" style="width:180px"><label>Data de nascimento</label><input id="clNasc" type="date"></div></div>
+      <button class="btn primary" onclick="cliSalvar()">Salvar cliente</button><span id="clMsg" class="msg"></span></div>
+    <div class="card" id="anivCard" style="display:none"><h3>🎂 Aniversariantes do mês</h3><div id="anivLista"></div></div>
     <div class="card"><h3>Seus clientes (${cs.length})</h3><div class="muted" style="margin-bottom:6px">Toque num cliente pra ver a ficha (histórico + observações).</div><div id="clLista">${cs.length?cs.map(c=>`<div class="lin" style="cursor:pointer" onclick="fichaCliente('${esc(c.tel)}')"><div><b>${esc(c.nome||'(sem nome)')}</b> ${c.cadastrado?'<span class="tag" style="color:var(--good)">cadastrado</span>':'<span class="tag">avulso</span>'}<div class="muted">${esc(c.tel||'')} · ${c.procedimentos} procedimento(s)</div></div>${c.ganhou?'<span class="tag" style="color:var(--accent);border-color:var(--accent)">🎁 ganhou prêmio!</span>':(c.falta_premio?`<span class="muted">faltam ${c.falta_premio}</span>`:'')}</div>`).join(''):'<div class="muted">Ninguém ainda. Compartilhe o link acima ou marque uma consulta.</div>'}</div></div>`;
+  anivLoad();
 }
+async function cliSalvar(){ const tel=$('clTel').value.trim(); const m=$('clMsg'); if(!tel){ m.style.color='var(--warn)'; m.textContent='Informe o WhatsApp do cliente.'; return; }
+  const r=await api('/clinica/cliente/salvar','POST',{nome:$('clNome').value.trim(),tel,email:$('clEmail').value.trim(),nascimento:$('clNasc').value,cadastrado:true});
+  if(r.ok){ m.style.color='var(--good)'; m.textContent='Cliente salvo ✓'; vClientes(); } else { m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
+async function anivLoad(){ const r=await api('/clinica/aniversariantes'); const a=(r&&r.aniversariantes)||[]; const c=$('anivCard'),l=$('anivLista'); if(!c||!a.length) return;
+  c.style.display='block'; l.innerHTML=a.map(x=>`<div class="lin"><div><b>${esc(x.nome||'(sem nome)')}</b> <span class="muted">dia ${x.dia}</span></div><a class="btn ghost sm" target="_blank" href="https://wa.me/55${esc((x.tel||'').replace(/\D/g,''))}?text=${encodeURIComponent('Feliz aniversário! 🎉 Aqui é da '+((EST.perfil&&EST.perfil.nome)||'sua clínica')+'. Desejamos tudo de bom! 💖')}">Parabenizar</a></div>`).join(''); }
 let _PACS=[];
 async function fichaCliente(tel){
   const r=await api('/clinica/cliente/ficha?tel='+encodeURIComponent(tel)); if(!r.ok){ return; } const c=r.cliente; const a=c.anamnese||{};
@@ -514,11 +626,12 @@ async function promoEnviar(){ const msg=$('promoMsg').value.trim(); const m=$('p
 async function vServicos(){
   const r=await api('/clinica/servicos'); SERV=r.servicos||[];
   $('view').innerHTML=`<h1>Serviços e preços</h1><div class="sub">Tudo editável. Mude valores e duração quando precisar — o sistema se adapta.</div>
-    <div class="card"><h3>Novo serviço</h3>
+    <div class="card"><h3 id="svTit">Novo serviço</h3>
+      <input type="hidden" id="svId">
       <div class="row"><div class="field" style="flex:2;min-width:160px"><label>Nome</label><input id="svNome" placeholder="ex: Limpeza de pele"></div>
-      <div class="field" style="width:130px"><label>Preço (R$)</label><input id="svPreco" type="number" placeholder="150"></div>
+      <div class="field" style="width:130px"><label>Preço (R$)</label><input id="svPreco" inputmode="decimal" placeholder="150,00"></div>
       <div class="field" style="width:140px"><label>Duração (min)</label><input id="svDur" type="number" placeholder="60"></div></div>
-      <button class="btn primary" onclick="svSalvar()">Adicionar</button></div>
+      <button class="btn primary" id="svBtn" onclick="svSalvar()">Adicionar</button> <button class="btn ghost hide" id="svCancel" onclick="svReset()">Cancelar</button></div>
     <div class="card"><h3>Sua tabela</h3><div id="svLista"></div></div>
     <div class="card"><h3>📦 Pacotes de sessão</h3><div class="muted" style="margin-bottom:10px">Venda blocos de sessões (ex: 10 limpezas) com desconto. A cada atendimento o sistema debita 1 sessão automaticamente. Você vende o pacote na ficha do cliente.</div>
       <div class="row"><div class="field" style="flex:1;min-width:150px"><label>Nome do pacote</label><input id="pcNome" placeholder="ex: 10 Limpezas"></div>
@@ -549,8 +662,10 @@ async function pixLoad(){ const box=$('pixBox'); if(!box) return; const r=await 
 }
 async function pixSalvar(){ const r=await api('/clinica/pix/salvar','POST',{ativo:$('pxAtivo').checked,modo:$('pxModo').value,sinal_pct:$('pxPct').value,chave:$('pxChave').value.trim(),tipo_chave:$('pxTipo').value,recebedor:$('pxRec').value.trim(),cidade:$('pxCid').value.trim(),maquininha:$('pxMaq').value.trim()}); const m=$('pxMsg'); if(r.ok){ m.style.color='var(--good)'; m.textContent='Salvo ✓'; pixLoad(); } else { m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
 async function pixLimpar(){ if(!confirm('Remover a chave PIX?')) return; await api('/clinica/pix/salvar','POST',{limpar_chave:true,ativo:false}); pixLoad(); }
-function svRender(){ $('svLista').innerHTML=SERV.length?SERV.map(s=>`<div class="lin"><div><b>${esc(s.nome)}</b> <span class="tag">${s.duracao} min</span></div><div class="row"><b>${fmt(s.preco)}</b><button class="btn ghost sm" onclick="svApagar(${s.id})">✕</button></div></div>`).join(''):'<div class="muted">Nenhum serviço ainda.</div>'; }
-async function svSalvar(){ const nome=$('svNome').value.trim(); if(!nome) return; const r=await api('/clinica/servico/salvar','POST',{nome,preco:$('svPreco').value,duracao:$('svDur').value}); if(r.ok){ SERV=r.servicos; svRender(); $('svNome').value='';$('svPreco').value='';$('svDur').value=''; } }
+function svRender(){ $('svLista').innerHTML=SERV.length?SERV.map(s=>`<div class="lin"><div><b>${esc(s.nome)}</b> <span class="tag">${s.duracao} min</span></div><div class="row"><b>${fmt(s.preco)}</b><button class="btn ghost sm" onclick="svEditar(${s.id})">Editar</button><button class="btn ghost sm" onclick="svApagar(${s.id})">✕</button></div></div>`).join(''):'<div class="muted">Nenhum serviço ainda.</div>'; }
+function svEditar(id){ const s=SERV.find(x=>x.id===id); if(!s) return; $('svId').value=s.id; $('svNome').value=s.nome; $('svPreco').value=String(s.preco).replace('.',','); $('svDur').value=s.duracao; $('svTit').textContent='Editar serviço'; $('svBtn').textContent='Salvar alteração'; $('svCancel').classList.remove('hide'); $('svNome').focus(); }
+function svReset(){ $('svId').value=''; $('svNome').value='';$('svPreco').value='';$('svDur').value=''; $('svTit').textContent='Novo serviço'; $('svBtn').textContent='Adicionar'; $('svCancel').classList.add('hide'); }
+async function svSalvar(){ const nome=$('svNome').value.trim(); if(!nome) return; const r=await api('/clinica/servico/salvar','POST',{id:$('svId').value||'',nome,preco:$('svPreco').value,duracao:$('svDur').value}); if(r.ok){ SERV=r.servicos; svReset(); svRender(); } else { alert(r.erro||'erro'); } }
 async function svApagar(id){ if(!confirm('Apagar serviço?')) return; await api('/clinica/servico/apagar','POST',{id}); SERV=SERV.filter(s=>s.id!==id); svRender(); }
 
 // ---------------- estoque ----------------
@@ -610,6 +725,7 @@ let FAQ=[];
 async function vAtendente(){
   if(proBloqueado('atendente')) return;
   FAQ=(await api('/clinica/faq')).faq||[];
+  if(!SERV.length){ SERV=(await api('/clinica/servicos')).servicos||[]; }
   const lem=(await api('/clinica/lembrete')).lembrete||{ativo:true,confirmar:true,horas:3};
   $('view').innerHTML=`<h1>Atendente de WhatsApp</h1><div class="sub">A atendente responde com a SUA tabela e horários — e <b>agenda/desmarca sozinha</b> na conversa. Teste no simulador.</div>
     <div class="card"><h3>🔔 Confirmação e lembrete automáticos</h3><div class="muted" style="margin-bottom:10px">Manda mensagem pro cliente no WhatsApp. Precisa do WhatsApp conectado (Integrações do Orion).</div>
@@ -619,6 +735,13 @@ async function vAtendente(){
       <button class="btn primary" onclick="lemSalvar()">Salvar</button><span id="lemMsg" class="msg"></span></div>
     <div class="card"><h3>📱 Conectar o WhatsApp da clínica</h3><div class="muted" style="margin-bottom:10px">Ligue o seu número do WhatsApp Business (Meta) pra atendente atender e agendar sozinha no seu número. <a href="/" target="_blank">Como obter o token/ID</a></div>
       <div id="waBox"></div></div>
+    <div class="card"><h3>📣 Clientes que vêm de anúncio</h3>
+      <div class="muted" style="margin-bottom:8px">Crie uma campanha: o sistema gera uma mensagem-padrão + um link <b>wa.me</b> pra colar no botão do anúncio (Meta). Quando o cliente toca no anúncio, o WhatsApp já abre com a mensagem, o bot reconhece de onde veio e <b>já entra no assunto e agenda</b>.</div>
+      <div class="row"><div class="field" style="flex:1;min-width:150px"><label>Nome da campanha</label><input id="anNome" placeholder="ex: Promo Limpeza de Pele"></div>
+        <div class="field" style="width:200px"><label>Procedimento</label><select id="anServ"><option value="">qualquer</option>${SERV.map(s=>`<option value="${s.id}">${esc(s.nome)}</option>`).join('')}</select></div></div>
+      <div class="field"><label>Mensagem que o cliente envia <span class="muted">(deixe vazio pra gerar automático)</span></label><input id="anMsg" placeholder="Ola! Vim pelo anuncio de ..."></div>
+      <button class="btn primary" onclick="anSalvar()">Criar campanha</button><span id="anMsgR" class="msg"></span>
+      <div id="anLista" style="margin-top:10px"></div></div>
     <div class="card"><h3>Respostas prontas (perguntas frequentes)</h3><div id="faqLista"></div>
       <div class="row" style="margin-top:10px"><div class="field" style="flex:1;min-width:160px"><label>Pergunta</label><input id="fqP" placeholder="ex: Vocês fazem limpeza de pele?"></div>
       <div class="field" style="flex:2;min-width:200px"><label>Resposta</label><input id="fqR" placeholder="resposta padrão"></div></div>
@@ -626,8 +749,16 @@ async function vAtendente(){
     <div class="card"><h3>Simulador da atendente 💬</h3><div class="muted" style="margin-bottom:8px">Escreva como se fosse um cliente. ${EST.cerebro_ok?'':'<b style="color:var(--warn)">Conecte um cérebro de IA no Orion pra ela responder de verdade.</b>'}</div>
       <div id="botchat" class="botchat"></div>
       <div class="row" style="margin-top:8px"><input id="botInp" placeholder="ex: qual o valor da limpeza de pele?" onkeydown="if(event.key==='Enter')botSend()"><button class="btn primary" onclick="botSend()">Enviar</button></div></div>`;
-  faqRender(); waLoad();
+  faqRender(); waLoad(); anLoad();
 }
+async function anLoad(){ const el=$('anLista'); if(!el) return; const r=await api('/clinica/anuncios'); const ans=(r&&r.anuncios)||[];
+  if(!r.tem_numero) el.innerHTML='<div class="muted" style="color:var(--warn)">Cadastre o telefone/WhatsApp da clínica em "Meu negócio" pra gerar o link do anúncio.</div>';
+  el.innerHTML=(el.innerHTML||'')+(ans.length?ans.map(a=>`<div class="lin"><div style="flex:1;min-width:0"><b>${esc(a.nome)}</b>${a.servico?' <span class="tag">'+esc(a.servico)+'</span>':''}<div class="muted" style="font-size:12px;white-space:normal">"${esc(a.mensagem)}"</div></div><div class="row">${a.link?`<button class="btn ghost sm" onclick="navigator.clipboard.writeText('${esc(a.link)}');this.textContent='Link copiado!'">Copiar link</button>`:''}<button class="btn ghost sm" onclick="anApagar(${a.id})">✕</button></div></div>`).join(''):'<div class="muted">Nenhuma campanha ainda.</div>');
+}
+async function anSalvar(){ const nome=$('anNome').value.trim(); const m=$('anMsgR'); if(!nome){ m.style.color='var(--warn)'; m.textContent='Dê um nome.'; return; }
+  const r=await api('/clinica/anuncio/salvar','POST',{nome,servico_id:$('anServ').value,mensagem:$('anMsg').value.trim()});
+  if(r.ok){ m.style.color='var(--good)'; m.textContent='Campanha criada ✓'; $('anNome').value='';$('anMsg').value=''; anLoad(); } else { m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
+async function anApagar(id){ if(!confirm('Apagar campanha?'))return; await api('/clinica/anuncio/apagar','POST',{id}); anLoad(); }
 function faqRender(){ $('faqLista').innerHTML=FAQ.length?FAQ.map((q,i)=>`<div class="lin"><div><b>${esc(q.pergunta)}</b><div class="muted">${esc(q.resposta)}</div></div><button class="btn ghost sm" onclick="fqDel(${i})">✕</button></div>`).join(''):'<div class="muted">Sem respostas prontas.</div>'; }
 async function fqAdd(){ const p=$('fqP').value.trim(),r=$('fqR').value.trim(); if(!p||!r) return; FAQ.push({pergunta:p,resposta:r}); await api('/clinica/faq','POST',{faq:FAQ}); $('fqP').value='';$('fqR').value=''; faqRender(); }
 async function fqDel(i){ FAQ.splice(i,1); await api('/clinica/faq','POST',{faq:FAQ}); faqRender(); }
@@ -730,7 +861,7 @@ async function vFunc(){
 
 // ---------------- página Orion (divulgação) ----------------
 function vOrion(){
-  const OURL=(window.ORION_URL&&window.ORION_URL!=='/')?window.ORION_URL:'/';
+  const OURL=(window.ORION_URL&&window.ORION_URL!=='/')?window.ORION_URL:'https://orion-l89a.onrender.com';
   $('view').innerHTML=`<h1>Conheça o Orion ✦</h1><div class="sub">Seu assistente de IA pessoal, separado deste sistema — pra cuidar de tudo no seu dia a dia.</div>
     <div class="orionpage">
       <div style="font-size:48px">✦</div>
@@ -738,10 +869,18 @@ function vOrion(){
       <p class="muted" style="max-width:560px;margin:8px auto 18px">Converse por voz ou texto, pesquise ao vivo, escreva, organize sua rotina e gerencie seu negócio. Uma ferramenta de IA onde você pluga o modelo que quiser.</p>
       <div class="row" style="justify-content:center">
         <a class="btn primary" href="${OURL}" target="_blank">Abrir o Orion</a>
-        <a class="btn" href="${OURL==='/'?'/site':OURL}" target="_blank">Ver planos</a>
+        <a class="btn" href="${OURL}/site" target="_blank">Ver planos do Orion</a>
       </div>
-    </div>`;
+    </div>
+    ${EST.sou_dono?`<div class="card"><h3>🔗 Conectar ao Orion</h3>
+      <div class="muted" style="margin-bottom:8px">Copie este token e cole no Orion (em Clínica+ → Conectar). Aí o Orion mostra o resumo da sua clínica e você pode pedir pra ele mudar preços por lá.</div>
+      <div class="row"><input id="apiTok" readonly value="carregando..." style="flex:1;min-width:220px;font-family:monospace"><button class="btn primary" onclick="apiTokCopiar()">Copiar</button><button class="btn ghost" onclick="apiTokReset()">Gerar novo</button></div>
+      <div class="muted" style="margin-top:6px;font-size:12px">Se gerar um novo, o token antigo para de funcionar.</div></div>`:''}`;
+  if(EST.sou_dono) apiTokLoad();
 }
+async function apiTokLoad(){ const r=await api('/clinica/api_token'); if(r.ok&&$('apiTok')) $('apiTok').value=r.token; }
+function apiTokCopiar(){ const i=$('apiTok'); navigator.clipboard.writeText(i.value); event.target.textContent='Copiado!'; }
+async function apiTokReset(){ if(!confirm('Gerar um token novo? O atual vai parar de funcionar.'))return; const r=await api('/clinica/api_token/reset','POST',{}); if(r.ok&&$('apiTok')) $('apiTok').value=r.token; }
 
 // ---------------- mascote Orion ----------------
 let mascOpen=false;

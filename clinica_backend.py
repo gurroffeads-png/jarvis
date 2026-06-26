@@ -55,10 +55,27 @@ def cl_servico_by(uid, sid):
     try: sid=int(sid)
     except Exception: pass
     return next((s for s in cl_servicos_get(uid) if s.get("id")==sid), None)
+def _num(v):
+    """Converte preco/numero em formato BR ou US pra float: '150,00'->150.0, '1.500,50'->1500.5, '150'->150.0."""
+    if v is None: return 0.0
+    if isinstance(v, (int, float)): return float(v)
+    s = re.sub(r"[^\d,.\-]", "", str(v).strip())
+    if not s: return 0.0
+    if "," in s and "." in s: s = s.replace(".", "").replace(",", ".")   # 1.500,50 -> 1500.50
+    elif "," in s: s = s.replace(",", ".")                                 # 150,50 -> 150.50
+    try: return float(s)
+    except Exception: return 0.0
 def cl_servico_salvar(uid, d):
-    sv = cl_servicos_get(uid); sid = d.get("id") or int(time.time()*1000)
-    s = {"id":sid, "nome":(d.get("nome") or "").strip()[:80], "preco":float(d.get("preco") or 0), "duracao":max(5,int(d.get("duracao") or 60))}
-    if not s["nome"]: return {"ok":False,"erro":"de um nome ao servico"}
+    sv = cl_servicos_get(uid)
+    nome = (d.get("nome") or "").strip()[:80]
+    if not nome: return {"ok":False,"erro":"de um nome ao servico"}
+    # acha por id OU por nome (case-insensitive) pra EDITAR em vez de duplicar (evita preço fantasma no agendamento)
+    try: sid = int(d.get("id")) if d.get("id") not in (None,"","null") else None
+    except Exception: sid = None
+    ex = (next((x for x in sv if x.get("id")==sid), None) if sid is not None else None) \
+         or next((x for x in sv if (x.get("nome") or "").strip().lower()==nome.lower()), None)
+    sid = ex["id"] if ex else int(time.time()*1000)
+    s = {"id":sid, "nome":nome, "preco":round(_num(d.get("preco")),2), "duracao":max(5,int(_num(d.get("duracao")) or 60))}
     sv = [x for x in sv if x.get("id")!=sid]; sv.append(s); sv.sort(key=lambda x:x["nome"].lower())
     set_blob(uid, "cl_servicos", sv); return {"ok":True, "servicos":sv}
 def cl_servico_apagar(uid, sid):
@@ -180,7 +197,7 @@ def cl_agendar(uid, d, origem="painel"):
     ags = cl_ags_get(uid); aid = int(time.time()*1000)
     a = {"id":aid, "cliente":(d.get("cliente") or "").strip()[:80], "telefone":(d.get("telefone") or "").strip()[:30],
          "servico_id":sv["id"], "servico":sv["nome"], "func_id":fid, "inicio":f"{data}T{hora}", "duracao":int(sv.get("duracao",60)),
-         "valor":float(d.get("valor") if d.get("valor") is not None else sv.get("preco",0)),
+         "valor":(_num(d.get("valor")) if d.get("valor") not in (None,"") else float(sv.get("preco",0))),
          "status":"marcado", "pagamento":(d.get("pagamento") or ""), "origem":origem, "criado":time.time()}
     ags.append(a); set_blob(uid, "cl_agendamentos", ags)
     try:
@@ -223,7 +240,7 @@ def cl_concluir(uid, aid, d=None):
         if a.get("id")==aid:
             a["status"]="concluido"
             if d and d.get("pagamento"): a["pagamento"]=d["pagamento"]
-            if d and d.get("valor") is not None: a["valor"]=float(d["valor"])
+            if d and d.get("valor") not in (None,""): a["valor"]=_num(d["valor"])
             tel = a.get("telefone",""); svid = a.get("servico_id")
             # se o cliente tem pacote pra esse servico, debita 1 sessao (ja foi pago na compra do pacote)
             if tel and _cl_pacote_debitar(uid, tel, svid):
@@ -234,7 +251,80 @@ def cl_concluir(uid, aid, d=None):
         except Exception: pass
     try: _cl_estoque_baixa_servico(uid, svid)   # baixa automatica de insumos
     except Exception: pass
+    try:   # pede avaliacao pós-atendimento pelo WhatsApp (responde 1 a 5)
+        if tel and cl_retorno_get(uid).get("avaliar", True):
+            _cl_aguardar_aval(uid, tel, next((a.get("servico") for a in ags if a.get("id")==aid), ""))
+            _wa_enviar(tel, f"{cl_perfil_get(uid).get('nome','Sua clinica')}: como foi seu atendimento hoje? Responda de 1 a 5 (5 = adorei) 💖", uid)
+    except Exception: pass
     return {"ok":True, "pacote":usou_pacote}
+# ===== avaliacao pos-atendimento, lembrete de retorno, comissao por periodo =====
+def cl_avaliacoes_get(uid): return get_blob(uid, "cl_avaliacoes", []) or []
+def _cl_aguardar_aval(uid, tel, servico):
+    tk=_digs(tel); cs=cl_clientes_raw(uid)
+    if tk in cs: cs[tk]["aguardando_aval"]=(servico or "atendimento"); set_blob(uid,"cl_clientes",cs)
+def cl_aguardando_aval(uid, tel): return bool((cl_clientes_raw(uid).get(_digs(tel)) or {}).get("aguardando_aval"))
+def cl_avaliar(uid, tel, nota, comentario=""):
+    try: nota=int(nota)
+    except Exception: return {"ok":False, "erro":"nota invalida"}
+    if not (1 <= nota <= 5): return {"ok":False, "erro":"nota de 1 a 5"}
+    tk=_digs(tel); c=cl_clientes_raw(uid).get(tk) or {}
+    avs=cl_avaliacoes_get(uid); avs.append({"tel":tk, "nome":c.get("nome",""), "nota":nota, "comentario":str(comentario or "")[:200], "em":time.time()})
+    set_blob(uid, "cl_avaliacoes", avs[-500:])
+    cs=cl_clientes_raw(uid)
+    if tk in cs and cs[tk].get("aguardando_aval"): cs[tk].pop("aguardando_aval", None); set_blob(uid,"cl_clientes",cs)
+    return {"ok":True, "nota":nota}
+def cl_avaliacao_resumo(uid):
+    avs=cl_avaliacoes_get(uid)
+    if not avs: return {"ok":True, "media":0, "total":0, "ultimas":[]}
+    return {"ok":True, "media":round(sum(a["nota"] for a in avs)/len(avs),1), "total":len(avs),
+            "ultimas":[{"nome":a.get("nome",""), "nota":a["nota"], "comentario":a.get("comentario","")} for a in sorted(avs,key=lambda x:-x.get("em",0))[:10]]}
+def cl_retorno_get(uid):
+    r=get_blob(uid,"cl_retorno",None)
+    return r if isinstance(r,dict) else {"ativo":False, "dias":30, "avaliar":True, "mensagem":"Faz um tempinho desde sua ultima visita! Que tal agendar de novo? Te esperamos 💖"}
+def cl_retorno_set(uid, d):
+    cur=cl_retorno_get(uid)
+    r={"ativo":bool(d.get("ativo")), "dias":max(7,int(_num(d.get("dias")) or 30)),
+       "avaliar":(bool(d.get("avaliar")) if d.get("avaliar") is not None else cur.get("avaliar",True)),
+       "mensagem":str(d.get("mensagem") or cur.get("mensagem",""))[:300]}
+    set_blob(uid,"cl_retorno",r); return {"ok":True, "retorno":r}
+def cl_comissao_periodo(uid, ini, fim):
+    ini=(ini or ""); fim=(fim or ""); fmap={f["id"]:f for f in cl_func_get(uid)}; agg={}
+    for a in cl_ags_get(uid):
+        if a.get("status")!="concluido": continue
+        dia=str(a.get("inicio","")).split("T")[0]
+        if (ini and dia<ini) or (fim and dia>fim): continue
+        d=agg.setdefault(a.get("func_id"), {"faturou":0.0,"qtd":0}); d["faturou"]+=float(a.get("valor") or 0); d["qtd"]+=1
+    out=[]
+    for k,v in agg.items():
+        f=fmap.get(k) or {}; pct=f.get("comissao_pct",0) or 0
+        out.append({"funcionario":f.get("nome","(sem funcionario)"), "qtd":v["qtd"], "faturou":round(v["faturou"],2),
+                    "comissao_pct":pct, "comissao":round(v["faturou"]*pct/100.0,2)})
+    out.sort(key=lambda x:-x["comissao"])
+    return {"ok":True, "periodo":{"de":ini,"ate":fim}, "linhas":out, "total_comissao":round(sum(x["comissao"] for x in out),2), "total_faturado":round(sum(x["faturou"] for x in out),2)}
+def loop_retorno():
+    """Lembrete de retorno: avisa quem nao volta ha X dias (1x por ciclo). Precisa do WhatsApp conectado."""
+    while True:
+        time.sleep(6*3600)
+        try:
+            with _db() as c: ids=[r["id"] for r in c.execute("SELECT id FROM users").fetchall()]
+            agora=time.time()
+            for uid in ids:
+                cfg=cl_retorno_get(uid)
+                if not cfg.get("ativo"): continue
+                dias=cfg.get("dias",30); ult={}
+                for a in cl_ags_get(uid):
+                    if a.get("status")!="concluido" or not a.get("telefone"): continue
+                    try: t=datetime.datetime.fromisoformat(a["inicio"]).timestamp()
+                    except Exception: continue
+                    tk=_digs(a["telefone"]); ult[tk]=max(ult.get(tk,0),t)
+                cs=cl_clientes_raw(uid); mud=False
+                for tk,t in ult.items():
+                    if (agora-t) < dias*86400: continue
+                    cl=cs.get(tk) or {}
+                    if agora - cl.get("retorno_em",0) < dias*86400: continue
+                    if _wa_enviar(tk, cfg.get("mensagem",""), uid): cl["retorno_em"]=agora; cs[tk]=cl; mud=True
+                if mud: set_blob(uid,"cl_clientes",cs)
+        except Exception as e: print("[retorno]", e)
 def cl_agenda(uid, data_iso=None, fid=None):
     ags = [a for a in cl_ags_get(uid) if a.get("status")=="marcado"]
     if data_iso: ags = [a for a in ags if str(a.get("inicio","")).startswith(data_iso)]
@@ -363,6 +453,36 @@ def cl_plano_set_pro(uid, meses=1):
 def cl_plano_set_free(uid):
     p = cl_plano_raw(uid); p["plano"]="free"; p.pop("pro_ate", None); p["trial_ate"] = 0
     set_blob(uid, "cl_plano", p); return {"ok":True, "plano":"free"}
+# ===== API de integracao (Orion <-> Clinica+ por token; os 2 SaaS continuam separados) =====
+def cl_api_token(uid):
+    """Token de conexao da clinica pra integrar com o Orion. Gera na 1a vez e indexa token->uid."""
+    t = get_blob(uid, "cl_api_token", "")
+    if not t:
+        t = "clk_" + secrets.token_urlsafe(24)
+        set_blob(uid, "cl_api_token", t)
+        idx = get_blob(1, "cl_api_idx", {}) or {}; idx[t] = uid; set_blob(1, "cl_api_idx", idx)
+    return t
+def cl_api_token_reset(uid):
+    old = get_blob(uid, "cl_api_token", ""); idx = get_blob(1, "cl_api_idx", {}) or {}
+    if old and old in idx: del idx[old]; set_blob(1, "cl_api_idx", idx)
+    set_blob(uid, "cl_api_token", ""); return {"ok":True, "token":cl_api_token(uid)}
+def cl_api_uid(token):
+    if not token: return None
+    return (get_blob(1, "cl_api_idx", {}) or {}).get(str(token).strip())
+def cl_api_resumo(uid):
+    """Resumo pro Orion mostrar: consultas de hoje, futuras, faturamento, entradas por forma de pagamento (PIX etc.), servicos."""
+    d = cl_dashboard(uid); ah = d.get("agenda_hoje", [])
+    return {"ok":True, "clinica":cl_perfil_get(uid).get("nome","Clinica"),
+            "hoje":sum(1 for a in ah if a.get("status")=="marcado"), "agenda_hoje":ah,
+            "futuras":d.get("marcados_total",0), "faturamento_mes":d.get("faturamento_mes",0),
+            "concluidos_mes":d.get("concluidos_mes",0), "por_pagamento":d.get("por_pagamento",{}),
+            "servicos":[{"id":s["id"],"nome":s["nome"],"preco":s["preco"],"duracao":s["duracao"]} for s in cl_servicos_get(uid)]}
+def cl_api_preco(uid, servico, preco):
+    """Muda o preco de um servico (por id ou nome). Usado pela automacao 'mude o preco pelo Orion'."""
+    sv = cl_servico_by(uid, servico) or next((s for s in cl_servicos_get(uid) if (s.get("nome") or "").strip().lower()==str(servico or "").strip().lower()), None)
+    if not sv: return {"ok":False, "erro":"servico nao encontrado: "+str(servico)}
+    cl_servico_salvar(uid, {"id":sv["id"], "nome":sv["nome"], "preco":preco, "duracao":sv["duracao"]})
+    return {"ok":True, "servico":sv["nome"], "preco":round(_num(preco),2)}
 def cl_ativar_chave(uid, chave):
     """Ativa a Clinica+ Pro com uma chave de licenca (que o dono da plataforma gera e vende).
     A chave tem plano "clinica". Master (do dono) e ilimitada; chave de venda e uso unico."""
@@ -538,14 +658,38 @@ def tel_codigo_validar(uid, code):
 
 # ---- CLIENTES + FIDELIDADE (perfis, beneficios escolhidos pela dona) ----
 def cl_clientes_raw(uid): return get_blob(uid, "cl_clientes", {}) or {}
-def cl_cliente_registrar(uid, nome, tel, cadastrado=False, email=""):
+def cl_cliente_registrar(uid, nome, tel, cadastrado=False, email="", nascimento=""):
     tk = _digs(tel)
     if not tk: return None
     cs = cl_clientes_raw(uid); c = cs.get(tk, {"tel":tk, "procedimentos":0, "cadastrado":False, "criado":time.time()})
     if nome: c["nome"] = nome[:80]
     if email: c["email"] = email[:120]
+    if nascimento: c["nascimento"] = str(nascimento)[:10]   # YYYY-MM-DD
     if cadastrado: c["cadastrado"] = True
     cs[tk] = c; set_blob(uid, "cl_clientes", cs); return c
+def cl_cliente_salvar(uid, d):
+    """Dono cadastra/edita um cliente (ou o proprio cliente se cadastra na empresa pela landing)."""
+    tel = _digs(d.get("tel") or d.get("telefone"))
+    if not tel: return {"ok":False, "erro":"informe o telefone (WhatsApp) do cliente"}
+    c = cl_cliente_registrar(uid, (d.get("nome") or "").strip(), tel,
+                             cadastrado=bool(d.get("cadastrado", True)),
+                             email=(d.get("email") or "").strip(), nascimento=(d.get("nascimento") or "").strip())
+    return {"ok":bool(c), "cliente":c}
+def cl_cliente_apagar(uid, tel):
+    tk = _digs(tel); cs = cl_clientes_raw(uid)
+    if tk in cs: del cs[tk]; set_blob(uid, "cl_clientes", cs)
+    return {"ok":True}
+def cl_aniversariantes(uid, mes=None):
+    """Clientes que fazem aniversario no mes (mes=1..12, padrao o atual)."""
+    mes = int(mes or datetime.date.today().month)
+    out = []
+    for c in cl_clientes_raw(uid).values():
+        n = c.get("nascimento") or ""
+        if len(n) >= 7:
+            try:
+                if int(n[5:7]) == mes: out.append({"nome":c.get("nome",""), "tel":c.get("tel",""), "dia":int(n[8:10]) if len(n)>=10 else 0})
+            except Exception: pass
+    return sorted(out, key=lambda x:x["dia"])
 def cl_cliente_proc_inc(uid, tel):
     tk = _digs(tel)
     if not tk: return
@@ -562,7 +706,7 @@ def cl_clientes_listar(uid):
     f = cl_fidelidade_get(uid); meta = f.get("meta", 10) or 10; out = []
     for c in cl_clientes_raw(uid).values():
         p = int(c.get("procedimentos", 0))
-        out.append({"nome":c.get("nome",""), "tel":c.get("tel",""), "email":c.get("email",""),
+        out.append({"nome":c.get("nome",""), "tel":c.get("tel",""), "email":c.get("email",""), "nascimento":c.get("nascimento",""),
                     "procedimentos":p, "cadastrado":bool(c.get("cadastrado")),
                     "falta_premio":(meta - (p % meta) if (f.get("ativo") and p>0 and p % meta != 0) else 0),
                     "ganhou":bool(f.get("ativo") and p>0 and p % meta == 0)})
@@ -589,6 +733,31 @@ def cl_bloqueio_remover(uid, bid):
     try: bid=int(bid)
     except Exception: pass
     set_blob(uid, "cl_bloqueios", [x for x in cl_bloqueios_get(uid) if x.get("id")!=bid]); return {"ok":True}
+def cl_calendario(uid, ym=None):
+    """Agenda do mes (ym='YYYY-MM') agrupada por dia: consultas + eventos/compromissos (bloqueios). Pro calendario visual do dono."""
+    import calendar as _cal
+    hoje = datetime.date.today()
+    try: ano, mes = [int(x) for x in (ym or hoje.strftime("%Y-%m")).split("-")[:2]]
+    except Exception: ano, mes = hoje.year, hoje.month
+    if not (1 <= mes <= 12): ano, mes = hoje.year, hoje.month
+    pref = f"{ano:04d}-{mes:02d}"
+    funcs = {f.get("id"): f.get("nome","") for f in cl_func_get(uid)}
+    dias = {}
+    for a in cl_ags_get(uid):
+        if a.get("status") == "desmarcado": continue
+        ini = str(a.get("inicio",""));
+        if not ini.startswith(pref): continue
+        dia = ini.split("T")[0]; hora = (ini.split("T")[1][:5] if "T" in ini else "")
+        dias.setdefault(dia, []).append({"id":a.get("id"), "hora":hora, "titulo":(a.get("cliente") or "Cliente"),
+            "servico":a.get("servico",""), "valor":a.get("valor",0), "status":a.get("status",""),
+            "func":funcs.get(a.get("func_id"),""), "tipo":"consulta"})
+    for b in cl_bloqueios_get(uid):
+        if not str(b.get("data","")).startswith(pref): continue
+        dias.setdefault(b["data"], []).append({"id":b.get("id"), "hora":("" if b.get("dia_todo") else b.get("ini","")),
+            "titulo":(b.get("motivo") or "Compromisso"), "servico":"", "tipo":"evento", "dia_todo":bool(b.get("dia_todo"))})
+    for v in dias.values(): v.sort(key=lambda x: (x.get("hora") or "~"))
+    return {"ok":True, "ano":ano, "mes":mes, "dias":dias,
+            "dias_no_mes":_cal.monthrange(ano,mes)[1], "primeiro_wd":_cal.monthrange(ano,mes)[0]}
 # ---- remarcar (mover de horario, conferindo disponibilidade) ----
 def cl_remarcar(uid, aid, data, hora):
     try: aid=int(aid)
@@ -640,7 +809,7 @@ def cl_pacote_salvar(uid, d):
     ps = cl_pacotes_get(uid); pid = d.get("id") or int(time.time()*1000)
     try: svid = int(d["servico_id"]) if d.get("servico_id") not in (None,"","null") else None
     except Exception: svid = None
-    p = {"id":pid, "nome":(d.get("nome") or "").strip()[:80], "servico_id":svid, "sessoes":max(1,int(d.get("sessoes") or 1)), "preco":float(d.get("preco") or 0)}
+    p = {"id":pid, "nome":(d.get("nome") or "").strip()[:80], "servico_id":svid, "sessoes":max(1,int(_num(d.get("sessoes")) or 1)), "preco":round(_num(d.get("preco")),2)}
     if not p["nome"]: return {"ok":False,"erro":"de um nome ao pacote"}
     ps = [x for x in ps if x.get("id")!=pid]; ps.append(p); set_blob(uid, "cl_pacotes", ps); return {"ok":True, "pacotes":ps}
 def cl_pacote_apagar(uid, pid):
@@ -673,8 +842,8 @@ def cl_estoque_get(uid): return get_blob(uid, "cl_estoque", []) or []
 def cl_estoque_salvar(uid, d):
     es = cl_estoque_get(uid); pid = d.get("id") or int(time.time()*1000)
     cur = next((x for x in es if x.get("id")==pid), {})
-    p = {"id":pid, "nome":(d.get("nome") or "").strip()[:60], "qtd":float(d.get("qtd") if d.get("qtd") is not None else cur.get("qtd",0)),
-         "minimo":float(d.get("minimo") if d.get("minimo") is not None else cur.get("minimo",0)), "unidade":(d.get("unidade") or cur.get("unidade","un"))[:10]}
+    p = {"id":pid, "nome":(d.get("nome") or "").strip()[:60], "qtd":(_num(d.get("qtd")) if d.get("qtd") not in (None,"") else float(cur.get("qtd",0))),
+         "minimo":(_num(d.get("minimo")) if d.get("minimo") not in (None,"") else float(cur.get("minimo",0))), "unidade":(d.get("unidade") or cur.get("unidade","un"))[:10]}
     if not p["nome"]: return {"ok":False,"erro":"nome do produto"}
     es = [x for x in es if x.get("id")!=pid]; es.append(p); es.sort(key=lambda x:x["nome"].lower())
     set_blob(uid, "cl_estoque", es); return {"ok":True, "estoque":es, "alertas":cl_estoque_alertas(uid)}
@@ -727,6 +896,98 @@ def loop_lembretes():
                 if mudou: set_blob(uid, "cl_agendamentos", ags)
         except Exception as e: print("[lembrete]", e)
 # ---- ATENDENTE QUE AGENDA SOZINHA (tool-calling com o cerebro do dono) ----
+# ---- ANUNCIOS: cliente vindo do anuncio (Meta -> WhatsApp) com mensagem-padrao + contexto pro bot ----
+def cl_anuncios_get(uid): return get_blob(uid, "cl_anuncios", []) or []
+def _cl_numero_wa(uid): return _digs(cl_perfil_get(uid).get("telefone") or "")
+def cl_anuncio_link(uid, an):
+    num = _cl_numero_wa(uid)
+    msg = an.get("mensagem") or f"Ola! Vim pelo anuncio de {an.get('nome','')} e quero agendar"
+    return {"mensagem":msg, "link":((f"https://wa.me/55{num}?text=" + urllib.parse.quote(msg)) if num else ""), "tem_numero":bool(num)}
+def cl_anuncio_salvar(uid, d):
+    nome = (d.get("nome") or "").strip()[:60]
+    if not nome: return {"ok":False, "erro":"de um nome ao anuncio"}
+    ans = cl_anuncios_get(uid)
+    try: aid = int(d.get("id")) if d.get("id") not in (None,"","null") else None
+    except Exception: aid = None
+    ex = next((x for x in ans if x.get("id")==aid), None) if aid else None
+    aid = ex["id"] if ex else int(time.time()*1000)
+    sv = cl_servico_by(uid, d.get("servico_id")) if d.get("servico_id") not in (None,"","null") else None
+    msg = (d.get("mensagem") or "").strip() or f"Ola! Vim pelo anuncio de {sv['nome'] if sv else nome} e quero agendar"
+    a = {"id":aid, "nome":nome, "servico_id":(sv["id"] if sv else None), "mensagem":msg[:300]}
+    ans = [x for x in ans if x.get("id")!=aid]; ans.append(a); set_blob(uid, "cl_anuncios", ans)
+    return {"ok":True, "anuncios":ans}
+def cl_anuncio_apagar(uid, aid):
+    try: aid=int(aid)
+    except Exception: pass
+    set_blob(uid, "cl_anuncios", [x for x in cl_anuncios_get(uid) if x.get("id")!=aid]); return {"ok":True}
+def cl_anuncio_match(uid, texto):
+    t = (texto or "").lower()
+    if not t: return None
+    for a in cl_anuncios_get(uid):
+        nome = (a.get("nome") or "").lower()
+        if nome and nome in t: return a
+        sv = cl_servico_by(uid, a.get("servico_id"))
+        if sv and sv["nome"].lower() in t and ("anuncio" in t or "anúncio" in t): return a
+    return None
+def cl_anuncios_listar(uid):
+    out = []
+    for a in cl_anuncios_get(uid):
+        sv = cl_servico_by(uid, a.get("servico_id")); lk = cl_anuncio_link(uid, a)
+        out.append({**a, "servico":(sv["nome"] if sv else ""), "link":lk["link"], "tem_numero":lk["tem_numero"]})
+    return {"ok":True, "anuncios":out, "tem_numero":bool(_cl_numero_wa(uid))}
+# ===== Mercado Pago da clinica (OAuth) - confirma entradas de PIX no resumo =====
+def cl_mp_get(uid): return get_blob(uid, "cl_mp", {}) or {}
+def _cl_mp_redirect(base): return (base or "").rstrip("/") + "/clinica/mp/callback"
+def cl_mp_status(uid):
+    m = cl_mp_get(uid); cid, sec = mp_oauth_creds()
+    return {"ok":True, "ligado":bool(m.get("access_token")), "conta":m.get("nickname",""), "app_ok":bool(cid and sec)}
+def cl_mp_oauth_url(uid, base):
+    cid, sec = mp_oauth_creds()
+    if not (cid and sec): return {"ok":False, "erro":"O Mercado Pago ainda nao foi liberado pela plataforma (falta MP_CLIENT_ID/SECRET)."}
+    url = ("https://auth.mercadopago.com.br/authorization?response_type=code&platform_id=mp&client_id="
+           + urllib.parse.quote(cid) + "&redirect_uri=" + urllib.parse.quote(_cl_mp_redirect(base))
+           + "&state=" + urllib.parse.quote(_sign(f"mp{uid}")))
+    return {"ok":True, "url":url}
+def cl_mp_callback(code, state, base):
+    data = _verify(state or "")
+    if not (data and data.startswith("mp")): return {"ok":False, "erro":"estado invalido"}
+    try: uid = int(data[2:])
+    except Exception: return {"ok":False, "erro":"estado invalido"}
+    cid, sec = mp_oauth_creds()
+    if not (cid and sec and code): return {"ok":False, "erro":"faltam dados"}
+    try:
+        body = json.dumps({"grant_type":"authorization_code","client_id":cid,"client_secret":sec,
+                           "code":code,"redirect_uri":_cl_mp_redirect(base)}).encode()
+        tok = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.mercadopago.com/oauth/token",
+              data=body, headers={"Content-Type":"application/json","Accept":"application/json"}), timeout=15).read().decode())
+        m = {"access_token":tok.get("access_token"), "refresh_token":tok.get("refresh_token"),
+             "user_id":tok.get("user_id"), "em":time.time()}
+        try:
+            me = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.mercadopago.com/users/me",
+                 headers={"Authorization":"Bearer "+m["access_token"]}), timeout=10).read().decode())
+            m["nickname"] = me.get("nickname") or me.get("email","")
+        except Exception: pass
+        set_blob(uid, "cl_mp", m); return {"ok":True, "uid":uid}
+    except Exception as e:
+        print("[cl_mp_callback]", repr(e)); return {"ok":False, "erro":"nao consegui conectar ao Mercado Pago"}
+def cl_mp_desconectar(uid): set_blob(uid, "cl_mp", {}); return {"ok":True}
+def cl_mp_entradas(uid, dias=30):
+    m = cl_mp_get(uid)
+    if not m.get("access_token"): return {"ok":False, "erro":"Mercado Pago nao conectado", "ligado":False}
+    try:
+        ini = (datetime.datetime.now() - datetime.timedelta(days=int(dias))).strftime("%Y-%m-%dT00:00:00.000-03:00")
+        url = ("https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&status=approved&limit=50"
+               "&range=date_created&begin_date=" + urllib.parse.quote(ini) + "&end_date=NOW")
+        r = json.loads(urllib.request.urlopen(urllib.request.Request(url,
+            headers={"Authorization":"Bearer "+m["access_token"]}), timeout=15).read().decode())
+        pix = [x for x in r.get("results", []) if (x.get("payment_method_id")=="pix" or x.get("payment_type_id")=="bank_transfer")]
+        return {"ok":True, "ligado":True, "total":round(sum(float(x.get("transaction_amount") or 0) for x in pix),2), "qtd":len(pix),
+                "lista":[{"valor":x.get("transaction_amount"), "quando":(x.get("date_approved") or x.get("date_created") or "")[:10]} for x in pix[:15]]}
+    except urllib.error.HTTPError as e:
+        if e.code in (401,403): return {"ok":False, "ligado":False, "erro":"a conexao com o Mercado Pago expirou; reconecte", "reconnect":True}
+        return {"ok":False, "erro":f"erro {e.code} no Mercado Pago"}
+    except Exception as e:
+        print("[cl_mp_entradas]", repr(e)); return {"ok":False, "erro":"nao consegui ler as entradas"}
 def cl_bot_agente(uid, mensagem, historico=None, cliente_tel="", cliente_nome=""):
     u = get_user(uid)
     key, base, model, fonte = _llm_resolve(u)
@@ -748,6 +1009,13 @@ def cl_bot_agente(uid, mensagem, historico=None, cliente_tel="", cliente_nome=""
             pr = int(c.get("procedimentos",0)); meta = fdl.get("meta",10) or 10
             if pr>0 and pr%meta==0: stat += f" O cliente JA atingiu a fidelidade: ofereça o premio ({fdl.get('premio','')})."
             elif pr>0: stat += f" Fidelidade: faltam {meta-(pr%meta)} procedimento(s) pro premio ({fdl.get('premio','')})."
+    # cliente veio de anuncio? (detecta na mensagem atual ou na 1a do historico) -> contexto pro bot ja entrar no assunto
+    _an = cl_anuncio_match(uid, mensagem) or (cl_anuncio_match(uid, (historico or [{}])[0].get("content","")) if historico else None)
+    if _an:
+        _sv = cl_servico_by(uid, _an.get("servico_id"))
+        stat += (f" IMPORTANTE: este cliente chegou pelo ANUNCIO '{_an.get('nome')}'"
+                 + (f" (procedimento {_sv['nome']}, R$ {_sv['preco']:.0f})" if _sv else "")
+                 + ". Cumprimente de forma calorosa, confirme o interesse nesse procedimento e conduza direto pro agendamento oferecendo horarios reais.")
     pacs = cl_pacotes_get(uid)
     sysp = (cl_bot_contexto(uid) + f" Hoje e {hoje.isoformat()} ({CL_DIAS_NOME[CL_DIAS[hoje.weekday()]]})." + stat +
             (" Pacotes a venda: " + "; ".join(f"{p['nome']} ({p['sessoes']} sessoes por R$ {p['preco']:.0f})" for p in pacs) + "." if pacs else "") +
@@ -908,6 +1176,12 @@ def cl_wa_receber(payload):
             tel = m.get("from"); txt = (m.get("text") or {}).get("body", "")
             if not (tel and txt): continue
             try:
+                # cliente respondeu uma nota 1-5 logo apos o atendimento? registra avaliacao e agradece
+                _t = txt.strip()
+                if cl_aguardando_aval(uid, tel) and _t in ("1","2","3","4","5"):
+                    cl_avaliar(uid, tel, _t)
+                    _wa_enviar(tel, "Obrigado pela avaliacao! 💖" if int(_t)>=4 else "Obrigado pelo retorno! Vamos melhorar 💪", uid)
+                    continue
                 resp = cl_bot_agente(uid, txt, _cl_hist_get(uid, tel), tel, nome)
                 _cl_hist_add(uid, tel, "user", txt); _cl_hist_add(uid, tel, "assistant", resp)
                 _wa_enviar(tel, resp, uid)

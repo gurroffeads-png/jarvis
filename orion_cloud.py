@@ -52,6 +52,8 @@ CLINICA_SITE_FILE = os.path.join(PASTA, "clinica_site.html")
 # APP_MODE: "orion" (padrao) ou "clinica". No modo clinica, a raiz "/" abre a Clinica+ (nao o Orion).
 APP_MODE = os.environ.get("APP_MODE", "orion").strip().lower()
 ORION_URL = os.environ.get("ORION_URL", "").rstrip("/")   # link cruzado pro Orion quando as nuvens estao separadas
+if not ORION_URL and APP_MODE == "clinica":               # no modo clinica, a aba "Orion" tem que apontar pro Orion (nao pra propria clinica)
+    ORION_URL = "https://orion-l89a.onrender.com"
 
 # ======================= BANCO (SQLite local OU Postgres na nuvem) =======================
 # Se existir DATABASE_URL (ex: Neon), usa Postgres (dados PERSISTEM entre deploys).
@@ -571,11 +573,17 @@ def cloud_chat_web(system, messages, max_tokens=700, u=None, modo=None, esforco=
     tools=[{"type":"function","function":{"name":"buscar_web",
         "description":"Pesquisa na internet. Use SEMPRE que a pergunta for sobre fatos atuais, noticias, precos, eventos recentes, datas ou qualquer coisa que voce nao saiba com certeza.",
         "parameters":{"type":"object","properties":{"consulta":{"type":"string","description":"o termo de busca"}},"required":["consulta"]}}}]
+    cl_on = bool(u and (orion_clinica_conn(u["id"]).get("token")))   # usuario tem Clinica+ conectada?
+    if cl_on:
+        tools += [
+          {"type":"function","function":{"name":"clinica_resumo","description":"Resumo da Clinica+ do usuario (consultas de hoje, agendadas, faturamento do mes, entradas por forma de pagamento, servicos). Use quando ele perguntar sobre a clinica, agenda ou faturamento dele.","parameters":{"type":"object","properties":{}}}},
+          {"type":"function","function":{"name":"clinica_mudar_preco","description":"Muda o preco de um servico na Clinica+ do usuario. Use quando ele pedir pra alterar/atualizar/mudar um preco.","parameters":{"type":"object","properties":{"servico":{"type":"string","description":"nome do servico"},"preco":{"type":"string","description":"novo preco, ex: 200 ou 199,90"}},"required":["servico","preco"]}}},
+        ]
     msgs=[{"role":"system","content":system}]+list(messages)
     def _call(body):
         return _llm_post(base, key, body, timeout=40)
     try:
-        for _ in range(2):
+        for _ in range(3 if cl_on else 2):
             r=_call({"model":model,"max_tokens":max_tokens,"temperature":0.5,"messages":msgs,"tools":tools,"tool_choice":"auto"})
             if u and fonte=="managed": tokens_registrar(u, r.get("usage") or {}, model)
             msg=r["choices"][0]["message"]; tcs=msg.get("tool_calls") or []
@@ -584,11 +592,23 @@ def cloud_chat_web(system, messages, max_tokens=700, u=None, modo=None, esforco=
             for tc in tcs:
                 try: args=json.loads(tc["function"].get("arguments") or "{}")
                 except Exception: args={}
-                q=args.get("consulta") or args.get("query") or ""
-                resumo,fontes=web_search(q) if q else (None,[])
-                cont=(resumo or "Nada encontrado.")
-                if fontes: cont+=" || Fontes: "+"; ".join(f.get("url","") for f in fontes[:3])
-                msgs.append({"role":"tool","tool_call_id":tc.get("id"),"name":"buscar_web","content":cont[:1800]})
+                nome=tc["function"].get("name")
+                if nome=="clinica_resumo":
+                    r2=orion_clinica_call(u["id"], "/api/clinica/resumo")
+                    cont=(("Clinica '%s': hoje %s consulta(s), %s agendada(s), faturamento do mes R$ %s. Entradas: %s. Servicos: %s." % (
+                        r2.get("clinica",""), r2.get("hoje",0), r2.get("futuras",0), r2.get("faturamento_mes",0),
+                        (", ".join(f"{k} R${v}" for k,v in (r2.get("por_pagamento") or {}).items()) or "nenhuma"),
+                        (", ".join(f"{s['nome']} R${s['preco']}" for s in (r2.get("servicos") or [])) or "nenhum")))
+                        if r2.get("ok") else ("Nao consegui ler a Clinica+: "+(r2.get("erro") or "")))
+                elif nome=="clinica_mudar_preco":
+                    r2=orion_clinica_call(u["id"], "/api/clinica/preco", "POST", {"servico":args.get("servico"), "preco":args.get("preco")})
+                    cont=(f"Pronto: {r2.get('servico')} agora custa R$ {r2.get('preco')} na Clinica+." if r2.get("ok") else ("Nao consegui mudar: "+(r2.get("erro") or "")))
+                else:
+                    q=args.get("consulta") or args.get("query") or ""
+                    resumo,fontes=web_search(q) if q else (None,[])
+                    cont=(resumo or "Nada encontrado.")
+                    if fontes: cont+=" || Fontes: "+"; ".join(f.get("url","") for f in fontes[:3])
+                msgs.append({"role":"tool","tool_call_id":tc.get("id"),"name":nome,"content":cont[:1800]})
         r=_call({"model":model,"max_tokens":max_tokens,"temperature":0.5,"messages":msgs})  # resposta final sem ferramenta
         if u and fonte=="managed": tokens_registrar(u, r.get("usage") or {}, model)
         return (r["choices"][0]["message"].get("content") or "").strip()
@@ -746,8 +766,8 @@ def loop_reengajar():
         except Exception as e: print("[reeng]", e)
 
 # ======================= PLANOS / LIMITES =======================
-PLANOS_PRECO = {"free":0.0, "pro":59.99, "trading":49.99, "trafego":89.99, "business":109.99, "adm":0.0}
-PLANOS_NOME = {"free":"Orion Free", "pro":"Orion Pro", "trading":"Orion Trading", "trafego":"Orion Trafego", "business":"Orion Business", "adm":"Orion ADM"}
+PLANOS_PRECO = {"free":0.0, "pro":59.99, "trading":49.99, "trafego":89.99, "clinica":79.0, "business":109.99, "adm":0.0}
+PLANOS_NOME = {"free":"Orion Free", "pro":"Orion Pro", "trading":"Orion Trading", "trafego":"Orion Trafego", "clinica":"Orion Clínica+", "business":"Orion Business", "adm":"Orion ADM"}
 # Cotas por plano (TOKENS):
 #  semana_msgs = pool semanal (zera toda segunda)
 #  fatia_horas = janela que renova porcao "diaria" (Free: 6h; Pro/Business: 24h)
@@ -757,6 +777,7 @@ LIMITES = {
     "pro":      {"semana_msgs": 1400, "fatia_horas": 24, "fatia_msgs": 200,  "docs_mes": 0,  "imagens_dia": 30},
     "trading":  {"semana_msgs": 1400, "fatia_horas": 24, "fatia_msgs": 200,  "docs_mes": 0,  "imagens_dia": 20},
     "trafego":  {"semana_msgs": 2500, "fatia_horas": 24, "fatia_msgs": 350,  "docs_mes": 0,  "imagens_dia": 60},
+    "clinica":  {"semana_msgs": 1400, "fatia_horas": 24, "fatia_msgs": 200,  "docs_mes": 0,  "imagens_dia": 20},
     "business": {"semana_msgs": 7000, "fatia_horas": 24, "fatia_msgs": 1000, "docs_mes": 0,  "imagens_dia": 200},
     "adm":      {"semana_msgs": 10**9,"fatia_horas": 24, "fatia_msgs": 10**9,"docs_mes": 0,  "imagens_dia": 10**9},
 }
@@ -765,6 +786,28 @@ def plano_de(u):
     if u["socio"]: return "business"
     pl = (u["plano"] or "free")
     return pl if pl in LIMITES else "free"
+def tem_clinica(u):
+    """True se o plano do Orion da acesso ao sistema Clinica+ (beneficio do plano 'clinica', e tambem business/adm)."""
+    try: return plano_de(u) in ("clinica", "business", "adm")
+    except Exception: return False
+# ----- Orion -> Clinica+ (integracao por API; o usuario cola a URL + token da Clinica dele) -----
+def orion_clinica_conn(uid): return get_blob(uid, "clinica_conn", {}) or {}
+def orion_clinica_conectar(uid, url, token):
+    c = {"url":(url or "").strip().rstrip("/"), "token":(token or "").strip()}
+    set_blob(uid, "clinica_conn", c)
+    r = orion_clinica_call(uid, "/api/clinica/resumo")   # testa na hora
+    return {"ok":bool(r.get("ok")), "ligado":bool(r.get("ok")), "clinica":r.get("clinica",""), "erro":(None if r.get("ok") else (r.get("erro") or "nao conectou; confira URL e token"))}
+def orion_clinica_call(uid, caminho, method="GET", body=None):
+    c = orion_clinica_conn(uid)
+    if not (c.get("url") and c.get("token")): return {"ok":False, "erro":"conecte sua Clinica+ primeiro"}
+    try:
+        req = urllib.request.Request(c["url"]+caminho, data=(json.dumps(body).encode() if body is not None else None),
+            headers={"X-Clinica-Token":c["token"], "Content-Type":"application/json"}, method=method)
+        return json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
+    except urllib.error.HTTPError as e:
+        return {"ok":False, "erro":("token invalido" if e.code==401 else f"erro {e.code} na Clinica+")}
+    except Exception as e:
+        print("[orion->clinica]", repr(e)); return {"ok":False, "erro":"nao consegui falar com a Clinica+ (confira a URL)"}
 def _semana_iso(): t=datetime.date.today().isocalendar(); return f"{t[0]}-W{t[1]:02d}"
 def _uso_atual(u):
     uso = get_blob(u["id"], "uso", {})
@@ -1675,6 +1718,7 @@ def gcfg_salvar(d):
     set_blob(1, "integra_global", g); return {"ok":True}
 def llm_key(): return gcfg("llm_key","LLM_API_KEY")
 def mp_token(): return gcfg("mp_token","MP_ACCESS_TOKEN")
+def mp_oauth_creds(): return (gcfg("mp_client_id","MP_CLIENT_ID"), gcfg("mp_client_secret","MP_CLIENT_SECRET"))  # app do MP p/ clinicas conectarem (OAuth)
 def pp_creds(): return (gcfg("paypal_client_id","PAYPAL_CLIENT_ID"), gcfg("paypal_secret","PAYPAL_SECRET"), gcfg("paypal_mode","PAYPAL_MODE") or "sandbox")
 def google_creds(): return (gcfg("google_client_id","GOOGLE_CLIENT_ID"), gcfg("google_client_secret","GOOGLE_CLIENT_SECRET"))
 def integra_admin_status():
@@ -2457,11 +2501,23 @@ class H(BaseHTTPRequestHandler):
         elif path == "/clinica/dashboard":
             self._send(cl_dashboard(uid) if (cu or self._cl_admin(uid, cf)) else {"ok":False,"erro":"sem permissao"})
         elif path == "/clinica/agenda": self._send({"ok":True, "agenda":cl_agenda(uid, g("data"))})
+        elif path == "/clinica/calendario": self._send(cl_calendario(uid, g("ym")))
+        elif path == "/clinica/api_token": self._send({"ok":True, "token":cl_api_token(uid)} if cu else {"ok":False,"erro":"so o dono"})
         elif path == "/clinica/disponibilidade": self._send(cl_disponibilidade(uid, g("data"), g("servico"), g("func")))
         elif path == "/clinica/func/eu":
             self._send(cl_func_dashboard(uid, cf["fid"]) if cf else {"ok":False,"erro":"faca login de funcionario"})
         elif path == "/clinica/clientes":
             self._send(cl_clientes_listar(uid) if (cu or self._cl_admin(uid, cf)) else {"ok":False,"erro":"sem permissao"})
+        elif path == "/clinica/aniversariantes":
+            self._send({"ok":True, "aniversariantes":cl_aniversariantes(uid, g("mes"))} if (cu or self._cl_admin(uid, cf)) else {"ok":False,"erro":"sem permissao"})
+        elif path == "/clinica/anuncios":
+            self._send(cl_anuncios_listar(uid) if (cu or self._cl_admin(uid, cf)) else {"ok":False,"erro":"sem permissao"})
+        elif path == "/clinica/mp/status":   self._send(cl_mp_status(uid) if cu else {"ok":False,"erro":"so o dono"})
+        elif path == "/clinica/mp/conectar": self._send(cl_mp_oauth_url(uid, base_url(self)) if cu else {"ok":False,"erro":"so o dono"})
+        elif path == "/clinica/mp/entradas": self._send(cl_mp_entradas(uid) if (cu or self._cl_admin(uid, cf)) else {"ok":False,"erro":"sem permissao"})
+        elif path == "/clinica/avaliacoes":  self._send(cl_avaliacao_resumo(uid) if (cu or self._cl_admin(uid, cf)) else {"ok":False,"erro":"sem permissao"})
+        elif path == "/clinica/retorno":     self._send({"ok":True, "retorno":cl_retorno_get(uid)} if cu else {"ok":False,"erro":"so o dono"})
+        elif path == "/clinica/comissao":    self._send(cl_comissao_periodo(uid, g("ini"), g("fim")) if (cu or self._cl_admin(uid, cf)) else {"ok":False,"erro":"sem permissao"})
         elif path == "/clinica/cliente/ficha":
             self._send(cl_cliente_ficha(uid, g("tel")) if (cu or self._cl_admin(uid, cf)) else {"ok":False,"erro":"sem permissao"})
         elif path == "/clinica/bloqueios": self._send({"ok":True, "bloqueios":cl_bloqueios_get(uid)})
@@ -2532,6 +2588,8 @@ class H(BaseHTTPRequestHandler):
         if dono and path == "/clinica/wa/salvar":      return self._send(cl_wa_set(uid, d))
         if dono and path == "/clinica/promo":          return self._send(cl_promo_enviar(uid, d.get("mensagem"), d.get("alvo","todos")))
         if dono and path == "/clinica/pix/salvar":     return self._send(cl_pix_set(uid, d))
+        if (dono or self._cl_admin(uid, cf)) and path == "/clinica/cliente/salvar": return self._send(cl_cliente_salvar(uid, d))
+        if dono and path == "/clinica/cliente/apagar":  return self._send(cl_cliente_apagar(uid, d.get("tel")))
         if dono and path == "/clinica/cliente/obs":    return self._send(cl_cliente_obs_set(uid, d.get("tel"), d.get("obs")))
         if dono and path == "/clinica/cliente/anamnese": return self._send(cl_anamnese_set(uid, d.get("tel"), d))
         if dono and path == "/clinica/cliente/foto":    return self._send(cl_foto_add(uid, d.get("tel"), d.get("data"), d.get("nota","")))
@@ -2544,11 +2602,16 @@ class H(BaseHTTPRequestHandler):
         if dono and path == "/clinica/estoque/mexer":   return self._send(cl_estoque_mexer(uid, d.get("id"), d.get("delta")))
         if dono and path == "/clinica/assinar": return self._send(cl_assinar(uid, base_url(self)))
         if dono and path == "/clinica/ativar_chave": return self._send(cl_ativar_chave(uid, d.get("chave")))
+        if dono and path == "/clinica/api_token/reset": return self._send(cl_api_token_reset(uid))
         if path == "/clinica/remarcar":  return self._send(cl_remarcar(uid, d.get("id"), d.get("data"), d.get("hora")))
         if dono and path == "/clinica/conta":          return self._send({"ok":True, "conta":conta_extra_set(uid, {"telefone":_digs(d.get("telefone")) or None, "documento":(_digs(d.get("documento")) if _doc_ok(d.get("documento")) else None)})})
         if dono and path == "/clinica/tel/enviar":     return self._send(tel_codigo_enviar(uid, d.get("telefone")))
         if dono and path == "/clinica/tel/validar":    return self._send(tel_codigo_validar(uid, d.get("codigo")))
         if dono and path == "/clinica/fidelidade":     return self._send(cl_fidelidade_set(uid, d))
+        if dono and path == "/clinica/anuncio/salvar":  return self._send(cl_anuncio_salvar(uid, d))
+        if dono and path == "/clinica/anuncio/apagar":  return self._send(cl_anuncio_apagar(uid, d.get("id")))
+        if dono and path == "/clinica/mp/desconectar":  return self._send(cl_mp_desconectar(uid))
+        if dono and path == "/clinica/retorno/salvar":  return self._send(cl_retorno_set(uid, d))
         if path == "/clinica/agendar":   return self._send(cl_agendar(uid, d))   # dono ou funcionario
         if path == "/clinica/desmarcar": return self._send(cl_desmarcar(uid, d.get("id"), d.get("motivo","")))
         if path == "/clinica/concluir":  return self._send(cl_concluir(uid, d.get("id"), d))
@@ -2630,6 +2693,12 @@ class H(BaseHTTPRequestHandler):
     _GET_PUBLICO = ("/","/index.html","/site","/clinica","/clinica/","/agendar","/agendar/","/logo","/icon","/favicon.ico","/manifest.webmanifest","/sw.js",".well-known")
     def _get(self):
         path = self.path.split("?",1)[0]
+        if path.startswith("/api/clinica/"):   # API de integracao (autenticada por token da Clinica+, sem sessao)
+            qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
+            auid = cl_api_uid(self.headers.get("X-Clinica-Token") or (qs.get("token") or [""])[0])
+            if not auid: return self._send({"ok":False,"erro":"token invalido"}, 401)
+            if path == "/api/clinica/resumo": return self._send(cl_api_resumo(auid))
+            return self._send({"ok":False,"erro":"rota nao encontrada"}, 404)
         u = self._user()
         # GUARDA DE BAN: usuario/dispositivo banido so consegue carregar o app estatico (que mostra "suspenso")
         mot = self._ban_motivo(u)
@@ -2680,8 +2749,18 @@ class H(BaseHTTPRequestHandler):
                 info = enriquecer_cnpj(g("doc") or "")
                 self._send({"ok":bool(info), "info":info or {}})
             else: self._send({"ok":False,"erro":"nao encontrado"},404)
+        elif path == "/clinica/mp/callback":   # retorno do OAuth do Mercado Pago (redirect do navegador)
+            qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
+            r = cl_mp_callback((qs.get("code") or [""])[0], (qs.get("state") or [""])[0], base_url(self))
+            self.send_response(302); self.send_header("Location", "/clinica?mp="+("ok" if r.get("ok") else "erro")); self.end_headers()
         elif path.startswith("/clinica/"):
             self._clinica_get(path)
+        elif path.startswith("/orion/clinica/"):   # Orion consultando a Clinica+ do usuario (via API)
+            if not u: self._send({"ok":False,"erro":"faca login"}, 401)
+            elif path == "/orion/clinica/conexao":
+                c = orion_clinica_conn(u["id"]); self._send({"ok":True, "url":c.get("url",""), "ligado":bool(c.get("url") and c.get("token"))})
+            elif path == "/orion/clinica/resumo": self._send(orion_clinica_call(u["id"], "/api/clinica/resumo"))
+            else: self._send({"ok":False,"erro":"nao encontrado"}, 404)
         elif path == "/logo": p=_asset("orion_logo.png","orion_icon.png"); self._file(p,"image/png") if p else self._send(b"",404)
         elif path == "/icon": p=_asset("orion_icon.png"); self._file(p,"image/png") if p else self._send(b"",404)
         elif path == "/favicon.ico": p=_asset("orion.ico"); self._file(p,"image/x-icon") if p else self._send(b"",404)
@@ -2835,6 +2914,11 @@ class H(BaseHTTPRequestHandler):
             try: threading.Thread(target=cl_mp_webhook, args=(d,), daemon=True).start()
             except Exception: pass
             return self._send({"ok":True})
+        if path.startswith("/api/clinica/"):   # API de integracao (autenticada por token, sem sessao)
+            auid = cl_api_uid(self.headers.get("X-Clinica-Token") or d.get("token"))
+            if not auid: return self._send({"ok":False,"erro":"token invalido"}, 401)
+            if path == "/api/clinica/preco": return self._send(cl_api_preco(auid, d.get("servico"), d.get("preco")))
+            return self._send({"ok":False,"erro":"rota nao encontrada"}, 404)
         # ---- ROTAS PUBLICAS (cliente da clinica, sem login) ----
         if path.startswith("/pub/"):
             _ip = self._client_ip()
@@ -2846,7 +2930,7 @@ class H(BaseHTTPRequestHandler):
                                       "cliente":d.get("nome"), "telefone":d.get("telefone"), "func_id":d.get("func_id")}, origem="cliente")
                 return self._send(r)
             if path == "/pub/cliente":
-                cl_cliente_registrar(cuid, d.get("nome"), d.get("telefone"), cadastrado=True, email=d.get("email",""))
+                cl_cliente_registrar(cuid, d.get("nome"), d.get("telefone"), cadastrado=True, email=d.get("email",""), nascimento=d.get("nascimento",""))
                 return self._send({"ok":True})
             return self._send({"ok":False,"erro":"nao encontrado"}, 404)
         u = self._user()
@@ -2855,6 +2939,11 @@ class H(BaseHTTPRequestHandler):
             mot = self._ban_motivo(u)
             if mot: self._send({"ok":False,"banido":True,"motivo":mot}, 403); return
         if path.startswith("/clinica/"): return self._clinica_post(path, d, u)
+        if path.startswith("/orion/clinica/"):   # Orion comandando a Clinica+ do usuario (via API)
+            if not u: return self._send({"ok":False,"erro":"faca login"}, 401)
+            if path == "/orion/clinica/conectar": return self._send(orion_clinica_conectar(u["id"], d.get("url"), d.get("token")))
+            if path == "/orion/clinica/preco": return self._send(orion_clinica_call(u["id"], "/api/clinica/preco", "POST", {"servico":d.get("servico"), "preco":d.get("preco")}))
+            return self._send({"ok":False,"erro":"nao encontrado"}, 404)
         # ---- contas / sessao ----
         if path == "/usuario/criar":
             nome = (d.get("nome") or "").strip()
@@ -2959,6 +3048,8 @@ class H(BaseHTTPRequestHandler):
                          + " || ".join(f"[{c}] {t}" for c,t in _NOTICIAS[:10]) + ".")
             sysp = (PERSONA + f" Hoje e {hoje}." + (f" Trate o usuario como '{trat}'." if trat else "") + diretrizes_contexto(u["id"]) + memoria_contexto(u["id"]) + conhecimento_contexto() + extra
                     + " REGRA ABSOLUTA: e PROIBIDO inventar qualquer informacao (nomes, numeros, precos, datas, fatos, links). Se a pergunta pede um dado factual, atual ou que voce nao tem CERTEZA, use a ferramenta buscar_web ANTES de responder e cite a fonte (com o link). Se a busca nao trouxer o dado, diga claramente que nao encontrou em vez de chutar. Conversa casual pode responder direto, mas nada de fabricar fato.")
+            if orion_clinica_conn(u["id"]).get("token"):
+                sysp += " O usuario tem uma Clinica+ conectada: quando ele perguntar da clinica/agenda/faturamento dele use clinica_resumo; quando pedir pra mudar/atualizar um preco use clinica_mudar_preco e confirme o servico e o valor na resposta."
             conv_atual = next((c for c in _convs_get(u["id"]) if c["id"]==conv_id), None)
             hist = (conv_atual or {}).get("msgs",[])[-12:-1]   # historico sem a ultima msg (que ja vai abaixo)
             modo = d.get("modo") or "avancado"; esforco = d.get("esforco") or "normal"
@@ -3175,6 +3266,7 @@ def main():
     threading.Thread(target=loop_assinaturas, daemon=True).start()
     threading.Thread(target=loop_briefing, daemon=True).start()
     threading.Thread(target=loop_lembretes, daemon=True).start()
+    threading.Thread(target=loop_retorno, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
 
 if __name__ == "__main__":

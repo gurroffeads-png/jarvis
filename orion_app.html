@@ -669,6 +669,13 @@ button{font-family:inherit;cursor:pointer}
     <div id="tradingArea"></div>
   </div></section>
 
+  <!-- CLINICA+ (integracao) -->
+  <section class="view" id="viewClinica"><div class="page" style="max-width:1000px">
+    <h1>Clínica+ ✦</h1>
+    <div class="sub">Conecte sua Clínica+ e acompanhe (e comande) seu negócio direto daqui.</div>
+    <div id="clinicaArea">carregando...</div>
+  </div></section>
+
   <!-- MEMORIA -->
   <section class="view" id="viewMemoria"><div class="page">
     <h1>Memoria</h1><div class="sub">Tudo que o Orion sabe sobre voce, organizado como uma arvore que cresce com o tempo.</div>
@@ -817,6 +824,7 @@ const NAV=[
  {id:'tarefas',nome:'Tarefas',icon:'tarefas'},
  {id:'memoria',nome:'Memoria',icon:'memoria'},
  {id:'trading',nome:'Trading IA',icon:'trading'},
+ {id:'clinica',nome:'Clínica+',icon:'trading',planos:['clinica','business','adm'],cloud:true},
  {id:'integracoes',nome:'Integracoes',icon:'integra'},
  {sec:'Conta'},
  {id:'person',nome:'Personalizacao',icon:'config'},
@@ -883,7 +891,7 @@ function go(id){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const map={home:'viewHome',documentos:'viewDocumentos',rotina:'viewRotina',tarefas:'viewTarefas',
     memoria:'viewMemoria',aprender:'viewAprender',trading:'viewTrading',integracoes:'viewIntegracoes',config:'viewConfig',conta:'viewConta',planos:'viewPlanos',
-    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode',agentes:'viewAgentes',painel:'viewPainel',person:'viewPersonal'};
+    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode',agentes:'viewAgentes',painel:'viewPainel',person:'viewPersonal',clinica:'viewClinica'};
   document.getElementById(map[id]).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.id===id));
   if(id==='config') renderConfig();
@@ -901,11 +909,49 @@ function go(id){
   if(id==='aprender') renderAprender();
   if(id==='trading') renderTrading();
   else stopTradingPoll();
+  if(id==='clinica') renderClinica();
   if(id==='termos') renderTermos();
   if(id==='privacidade') renderPriv();
   if(id==='home') proativoCarregar();
   document.querySelector('.main').scrollTop=0;
 }
+
+// ===================== CLINICA+ (integracao por API) =====================
+async function renderClinica(){
+  const area=document.getElementById('clinicaArea'); if(!area) return; area.innerHTML='carregando...';
+  let cn={}; try{ cn=await (await fetch('/orion/clinica/conexao')).json(); }catch(e){}
+  if(!cn.ligado){
+    area.innerHTML=`<div class="card"><h3>Conectar sua Clínica+</h3>
+      <p class="sub" style="margin:4px 0 12px">Na sua Clínica+, abra a aba <b>Orion → "Conectar ao Orion"</b>, copie o token e cole aqui.</p>
+      <div class="field" style="margin-bottom:10px"><label>Endereço da sua Clínica+</label><input id="clU" value="${esc(cn.url||'https://clinica-5vdp.onrender.com')}"></div>
+      <div class="field" style="margin-bottom:12px"><label>Token de conexão</label><input id="clT" placeholder="clk_..."></div>
+      <button class="btn primary" onclick="clinicaConectar()">Conectar</button> <span id="clMsg" style="margin-left:8px;font-size:13px"></span></div>`;
+    return;
+  }
+  let r={}; try{ r=await (await fetch('/orion/clinica/resumo')).json(); }catch(e){}
+  if(!r.ok){ area.innerHTML=`<div class="card">Não consegui ler a Clínica+: ${esc(r.erro||'erro')}. <button class="btn" onclick="clinicaDesconectar()">Reconectar</button></div>`; return; }
+  const pag=Object.entries(r.por_pagamento||{}).map(([k,v])=>`${esc(k)}: <b>R$ ${Number(v).toFixed(2)}</b>`).join(' &nbsp;·&nbsp; ')||'<span class="muted">sem entradas no mês</span>';
+  const ag=(r.agenda_hoje||[]).filter(a=>a.status==='marcado').map(a=>`<div class="lin"><span>${esc((a.inicio||'').split('T')[1]||'')} · ${esc(a.cliente||'Cliente')}</span><span class="muted">${esc(a.servico||'')}</span></div>`).join('')||'<div class="muted">Nada marcado pra hoje.</div>';
+  const opts=(r.servicos||[]).map(s=>`<option value="${esc(s.nome)}">${esc(s.nome)} (R$ ${Number(s.preco).toFixed(2)})</option>`).join('');
+  area.innerHTML=`
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between"><div><b>${esc(r.clinica||'Sua clínica')}</b> <span style="color:var(--good)">conectada ✓</span></div><button class="btn ghost" onclick="clinicaDesconectar()">Desconectar</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:4px">
+      <div class="card"><div style="font-size:26px;font-weight:800">${r.hoje||0}</div><div class="muted">Consultas hoje</div></div>
+      <div class="card"><div style="font-size:26px;font-weight:800">${r.futuras||0}</div><div class="muted">Agendadas</div></div>
+      <div class="card"><div style="font-size:22px;font-weight:800">R$ ${Number(r.faturamento_mes||0).toFixed(2)}</div><div class="muted">Faturamento do mês</div></div>
+    </div>
+    <div class="card"><h3>Entradas do mês (por forma de pagamento)</h3><div>${pag}</div></div>
+    <div class="card"><h3>Agenda de hoje</h3>${ag}</div>
+    <div class="card"><h3>Mudar preço pelo Orion</h3><div class="sub" style="margin:2px 0 10px">Você altera aqui e o sistema muda na sua Clínica+ na hora.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><select id="clPS" style="flex:1;min-width:160px">${opts}</select><input id="clPV" placeholder="novo preço" style="width:150px"><button class="btn primary" onclick="clinicaPreco()">Aplicar</button></div><span id="clPM" style="font-size:13px"></span></div>`;
+}
+async function clinicaConectar(){ const m=document.getElementById('clMsg'); if(m)m.textContent='conectando...';
+  const r=await (await fetch('/orion/clinica/conectar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:document.getElementById('clU').value.trim(),token:document.getElementById('clT').value.trim()})})).json();
+  if(r.ok) renderClinica(); else if(m) m.textContent=r.erro||'não conectou; confira a URL e o token'; }
+async function clinicaDesconectar(){ await fetch('/orion/clinica/conectar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'',token:''})}); renderClinica(); }
+async function clinicaPreco(){ const m=document.getElementById('clPM'); if(m)m.textContent='aplicando...';
+  const r=await (await fetch('/orion/clinica/preco',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({servico:document.getElementById('clPS').value,preco:document.getElementById('clPV').value})})).json();
+  if(r.ok){ if(m)m.textContent='✓ '+r.servico+' agora R$ '+Number(r.preco).toFixed(2); setTimeout(renderClinica,1000); } else if(m) m.textContent=r.erro||'erro'; }
 
 // ===================== EXPORTAR CSV (dados do negocio) =====================
 function exportarCSV(nome, linhas){
