@@ -3,88 +3,179 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clínica+ · Sistema completo pra sua clínica de estética</title>
-<meta name="description" content="Agenda inteligente, atendente de WhatsApp que agenda sozinha, controle de equipe, faturamento e fidelidade. Tudo num lugar só.">
+<title>Clínica+ · O sistema que automatiza sua clínica de estética</title>
+<meta name="description" content="Agenda inteligente sem conflito, atendente de WhatsApp que agenda sozinha, controle de equipe, PIX, fidelidade e relatórios. Pra clínicas que querem crescer com controle.">
+<meta name="theme-color" content="#e85a9b">
 <style>
-:root{--bg:#0b0e15;--panel:#141a28;--panel2:#1b2333;--line:#26304a;--text:#eef1f8;--dim:#9fb0cf;--accent:#ff7ab8;--accent2:#a87bff;--good:#46d39a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.5}
+:root{--bg:#0b0712;--panel:#15101f;--panel2:#1d1630;--line:#2a2140;--line2:#3a2f54;--text:#f3eef8;--dim:#b7a9c9;--faint:#8b7da3;--accent:#e85a9b;--accent2:#a87bff;--gold:#e7c14b;--good:#46d39a;--radius:18px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.55;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
-.wrap{max-width:1040px;margin:0 auto;padding:0 18px}
-header{position:sticky;top:0;background:rgba(11,14,21,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);z-index:10}
-.nav{display:flex;align-items:center;justify-content:space-between;height:62px}
-.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px}
-.logo .d{width:28px;height:28px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center}
-.btn{display:inline-block;padding:11px 20px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);font-weight:700;cursor:pointer}
-.btn.p{background:linear-gradient(120deg,var(--accent),var(--accent2));border:none;color:#1a0f1f}
-.hero{text-align:center;padding:70px 0 50px;background:radial-gradient(800px 400px at 50% -10%,rgba(168,123,255,.20),transparent 60%),radial-gradient(600px 360px at 80% 0,rgba(255,122,184,.14),transparent 60%)}
-.hero h1{font-size:clamp(30px,5vw,50px);margin:0 0 14px;letter-spacing:-.5px}
+h1,h2,.logo,.pr{font-family:Georgia,'Times New Roman',serif;letter-spacing:.2px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+/* aura viva de fundo */
+.aura{position:fixed;inset:-20%;z-index:-2;pointer-events:none;
+  background:radial-gradient(38% 36% at 20% 14%,rgba(232,90,155,.22),transparent 70%),radial-gradient(40% 40% at 84% 80%,rgba(168,123,255,.20),transparent 70%);
+  filter:blur(50px);animation:drift 26s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(-3%,-2%) scale(1)}100%{transform:translate(4%,3%) scale(1.1)}}
+.grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.04;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+header{position:sticky;top:0;background:rgba(11,7,18,.78);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);z-index:20}
+.nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:21px}
+.logo .d{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:16px;box-shadow:0 6px 16px -4px rgba(232,90,155,.6)}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:12px 22px;border-radius:13px;background:var(--panel2);border:1px solid var(--line2);font-weight:700;cursor:pointer;transition:transform .15s,box-shadow .15s,filter .15s;font-size:15px}
+.btn:hover{transform:translateY(-2px)}
+.btn.p{background:linear-gradient(120deg,var(--accent),var(--accent2));border:none;color:#fff;box-shadow:0 10px 26px -8px rgba(232,90,155,.7);position:relative;overflow:hidden}
+.btn.p::after{content:"";position:absolute;top:0;left:-120%;width:55%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);transform:skewX(-20deg);transition:left .6s}
+.btn.p:hover::after{left:150%}
+/* HERO */
+.hero{position:relative;padding:72px 0 40px}
+.hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:30px;align-items:center}
+.badge{display:inline-flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line2);color:var(--dim);padding:6px 14px;border-radius:30px;font-size:13px;font-weight:600;margin-bottom:18px}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good)}
+.hero h1{font-size:clamp(32px,5.2vw,56px);margin:0 0 16px;line-height:1.08}
 .hero h1 b{background:linear-gradient(120deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
-.hero p{font-size:18px;color:var(--dim);max-width:640px;margin:0 auto 26px}
-.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.fes{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;padding:30px 0}
-.fe{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px}
-.fe .ic{font-size:30px}.fe h3{margin:10px 0 6px;font-size:17px}.fe p{margin:0;color:var(--dim);font-size:14px}
-.sec{padding:46px 0}.sec h2{text-align:center;font-size:30px;margin:0 0 8px}.sec .sub{text-align:center;color:var(--dim);margin:0 0 28px}
+.hero p{font-size:18px;color:var(--dim);max-width:560px;margin:0 0 26px}
+.cta{display:flex;gap:13px;flex-wrap:wrap;align-items:center}
+.cta .micro{color:var(--faint);font-size:13px}
+.heroart{position:relative;display:grid;place-items:center;min-height:300px}
+.heroart .ring{position:absolute;border-radius:50%;border:1px solid var(--line2)}
+.r1{width:300px;height:300px;animation:spin 32s linear infinite}.r2{width:210px;height:210px;animation:spin 22s linear infinite reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+.orb{width:130px;height:130px;filter:drop-shadow(0 14px 34px rgba(168,123,255,.5));animation:flo 5s ease-in-out infinite}
+@keyframes flo{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.chip{position:absolute;background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:8px 12px;font-size:12.5px;font-weight:600;box-shadow:0 12px 30px -14px #000;display:flex;align-items:center;gap:7px;animation:flo 6s ease-in-out infinite}
+.chip.c1{top:8%;left:-2%}.chip.c2{bottom:14%;right:-4%;animation-delay:1.5s}.chip.c3{bottom:40%;left:-8%;animation-delay:.8s}
+/* trust band */
+.trust{display:flex;flex-wrap:wrap;justify-content:center;gap:14px 34px;padding:18px 0 6px;color:var(--dim);font-size:14px}
+.trust b{color:var(--text)}
+/* carrossel propaganda */
+.carousel{position:relative;margin:14px 0}
+.slides{overflow:hidden;border-radius:24px;border:1px solid var(--line2)}
+.track{display:flex;transition:transform .6s cubic-bezier(.5,0,.2,1)}
+.slide{min-width:100%;padding:46px 40px;background:linear-gradient(135deg,rgba(232,90,155,.14),rgba(168,123,255,.10)),var(--panel)}
+.slide h3{font-size:clamp(22px,3.2vw,30px);margin:0 0 10px}
+.slide p{color:var(--dim);font-size:16px;max-width:620px;margin:0}
+.slide .k{font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.dots{display:flex;gap:8px;justify-content:center;margin-top:16px}
+.dots button{width:9px;height:9px;border-radius:50%;border:none;background:var(--line2);cursor:pointer;padding:0;transition:.2s}
+.dots button.on{background:linear-gradient(120deg,var(--accent),var(--accent2));width:24px;border-radius:6px}
+/* sections */
+.sec{padding:54px 0}.sec h2{text-align:center;font-size:clamp(26px,4vw,36px);margin:0 0 8px}.sec .sub{text-align:center;color:var(--dim);margin:0 auto 30px;max-width:560px}
+.fes{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.fe{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px;transition:transform .18s,border-color .18s}
+.fe:hover{transform:translateY(-4px);border-color:var(--accent)}
+.fe .ic{font-size:30px;width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,rgba(232,90,155,.18),rgba(168,123,255,.14));display:grid;place-items:center;margin-bottom:12px}
+.fe h3{margin:0 0 6px;font-size:17px}.fe p{margin:0;color:var(--dim);font-size:14px}
 .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-.step{text-align:center;padding:18px}.step .n{width:42px;height:42px;border-radius:50%;background:var(--panel2);border:1px solid var(--line2,#324063);display:grid;place-items:center;margin:0 auto 10px;font-weight:800;color:var(--accent)}
-.planos{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:start}
-.plan{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px}
-.plan.dest{border-color:var(--accent);box-shadow:0 18px 50px -20px var(--accent)}
-.plan .pr{font-size:34px;font-weight:800;margin:8px 0}
-.plan ul{list-style:none;padding:0;margin:14px 0;color:var(--dim);font-size:14px}.plan li{padding:5px 0;border-bottom:1px solid var(--line)}
-.tag{display:inline-block;background:linear-gradient(120deg,var(--accent),var(--accent2));color:#1a0f1f;font-weight:800;font-size:11px;padding:3px 10px;border-radius:20px;margin-bottom:6px}
-footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:var(--dim);font-size:13px}
+.step{text-align:center;padding:18px}
+.step .n{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;margin:0 auto 12px;font-weight:800;color:#fff;font-size:18px}
+.planos{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:18px;align-items:start}
+.plan{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:28px;position:relative}
+.plan.dest{border-color:var(--accent);box-shadow:0 24px 60px -24px rgba(232,90,155,.6);transform:scale(1.02)}
+.plan .pr{font-size:38px;font-weight:800;margin:8px 0}
+.plan ul{list-style:none;padding:0;margin:16px 0;color:var(--dim);font-size:14px}.plan li{padding:7px 0;border-bottom:1px solid var(--line);display:flex;gap:8px}.plan li::before{content:"✓";color:var(--good);font-weight:800}
+.tag{display:inline-block;background:linear-gradient(120deg,var(--accent),var(--accent2));color:#fff;font-weight:800;font-size:11px;padding:4px 12px;border-radius:20px;margin-bottom:8px}
+.cta-final{text-align:center;background:linear-gradient(135deg,rgba(232,90,155,.16),rgba(168,123,255,.12)),var(--panel);border:1px solid var(--line2);border-radius:28px;padding:50px 24px;margin:20px 0}
+footer{border-top:1px solid var(--line);padding:32px 0;text-align:center;color:var(--faint);font-size:13px}
+@media(max-width:760px){.hero-grid{grid-template-columns:1fr}.heroart{min-height:240px;order:-1}.chip{display:none}.plan.dest{transform:none}}
 </style>
 </head>
 <body>
+<div class="aura"></div><div class="grain"></div>
 <header><div class="wrap nav"><div class="logo"><span class="d">✦</span> Clínica+</div>
-  <div><a class="btn" href="/clinica">Entrar</a> <a class="btn p" href="/clinica">Começar grátis</a></div></div></header>
+  <div style="display:flex;gap:10px"><a class="btn" href="/clinica">Entrar</a> <a class="btn p" href="/clinica">Começar grátis</a></div></div></header>
 
-<section class="hero"><div class="wrap">
-  <h1>Sua clínica de estética <b>no automático</b></h1>
-  <p>Agenda inteligente, uma atendente de WhatsApp que tira dúvidas e marca sozinha, controle da equipe, faturamento e fidelidade. Você cuida dos clientes; o sistema cuida do resto.</p>
-  <div class="cta"><a class="btn p" href="/clinica">Criar minha conta grátis</a><a class="btn" href="#planos">Ver planos</a></div>
+<section class="hero"><div class="wrap hero-grid">
+  <div>
+    <div class="badge"><span class="dot"></span> Feito pra clínicas que querem crescer com controle</div>
+    <h1>Sua clínica de estética <b>no automático</b></h1>
+    <p>Agenda que nunca atropela, uma atendente de WhatsApp que tira dúvidas e marca sozinha 24h, equipe organizada, PIX, fidelidade e relatórios. Você cuida dos clientes; o sistema cuida da parte técnica.</p>
+    <div class="cta"><a class="btn p" href="/clinica">Criar minha conta grátis</a><a class="btn" href="#planos">Ver planos</a></div>
+    <div class="cta" style="margin-top:14px"><span class="micro">✦ Sem cartão pra começar · configura em minutos</span></div>
+  </div>
+  <div class="heroart">
+    <div class="ring r1"></div><div class="ring r2"></div>
+    <svg class="orb" viewBox="0 0 100 100"><defs><radialGradient id="og" cx="40%" cy="32%" r="75%"><stop offset="0%" stop-color="#ffd9ec"/><stop offset="45%" stop-color="#e85a9b"/><stop offset="100%" stop-color="#a87bff"/></radialGradient></defs>
+      <ellipse cx="50" cy="92" rx="22" ry="4" fill="#000" opacity=".3"/><circle cx="50" cy="48" r="30" fill="#e85a9b" opacity=".45"/><circle cx="50" cy="48" r="28" fill="url(#og)"/>
+      <ellipse cx="41" cy="38" rx="10" ry="6" fill="#fff" opacity=".5"/><circle cx="43" cy="48" r="3.4" fill="#2a0c1e"/><circle cx="57" cy="48" r="3.4" fill="#2a0c1e"/><path d="M43 56 q7 5 14 0" fill="none" stroke="#2a0c1e" stroke-width="2.4" stroke-linecap="round"/></svg>
+    <div class="chip c1">🗓️ Agenda sem conflito</div>
+    <div class="chip c2">💬 Atendente 24h</div>
+    <div class="chip c3">💳 Recebe por PIX</div>
+  </div>
 </div></section>
 
 <div class="wrap">
-  <div class="fes">
-    <div class="fe"><div class="ic">💬</div><h3>Atendente de WhatsApp</h3><p>Responde os clientes com a sua tabela de preços e horários, e agenda/desmarca sozinha, 24h por dia.</p></div>
-    <div class="fe"><div class="ic">🗓️</div><h3>Agenda que não atropela</h3><p>Cada serviço com sua duração; a agenda calcula os horários livres e nunca marca dois ao mesmo tempo.</p></div>
-    <div class="fe"><div class="ic">🔗</div><h3>Link de agendamento</h3><p>Mande um link e o cliente marca sozinho, escolhendo serviço, profissional e horário. Cai direto na sua agenda.</p></div>
-    <div class="fe"><div class="ic">👥</div><h3>Equipe organizada</h3><p>Cada profissional com seu login, seus serviços, sua agenda e quanto faturou. Você no controle de tudo.</p></div>
-    <div class="fe"><div class="ic">💳</div><h3>Receba por PIX</h3><p>Cobre um sinal ou o valor por PIX na hora do agendamento — direto na sua conta. Reduz falta.</p></div>
-    <div class="fe"><div class="ic">🎁</div><h3>Fidelidade e promoções</h3><p>Programa de fidelidade automático e disparo de promoções no WhatsApp pros seus clientes.</p></div>
-  </div>
+  <div class="trust"><span>🗓️ <b>Zero</b> horário sobreposto</span><span>💬 Atende e agenda <b>24h</b></span><span>💳 PIX <b>direto na sua conta</b></span><span>⭐ Fidelidade <b>automática</b></span></div>
 
-  <section class="sec"><h2>Como funciona</h2><div class="sub">Em minutos você está rodando.</div>
+  <!-- CARROSSEL DE PROPAGANDA -->
+  <section class="sec" style="padding-top:34px">
+    <div class="carousel">
+      <div class="slides"><div class="track" id="track">
+        <div class="slide"><div class="k">Pare de perder cliente no WhatsApp</div><h3>Uma atendente que nunca dorme</h3><p>Ela responde com a SUA tabela de preços e horários, tira dúvidas e já marca a consulta sozinha — de dia, de noite, no fim de semana. Você acorda com a agenda cheia.</p></div>
+        <div class="slide"><div class="k">Controle de crescimento</div><h3>Saiba exatamente quanto cada profissional faturou</h3><p>Faturamento por pessoa e por forma de pagamento, comissão por período, relatórios e caixa do dia. Decisão com número na mão, não no achismo.</p></div>
+        <div class="slide"><div class="k">Menos falta, mais caixa</div><h3>Confirmação, lembrete e sinal por PIX</h3><p>O sistema confirma e lembra o cliente no WhatsApp, e ainda cobra um sinal por PIX no agendamento — direto na sua conta. Falta despenca.</p></div>
+        <div class="slide"><div class="k">Cliente que volta</div><h3>Fidelidade e retorno no automático</h3><p>A cada X procedimentos, um prêmio. Quem some há um tempo recebe um "sentimos sua falta". Aniversariante ganha mensagem. Tudo sozinho.</p></div>
+      </div></div>
+      <div class="dots" id="dots"></div>
+    </div>
+  </section>
+
+  <section class="sec"><h2>Tudo que sua clínica precisa, num lugar só</h2><div class="sub">Some as planilhas, os blocos de papel e os grupos de WhatsApp bagunçados.</div>
+  <div class="fes">
+    <div class="fe"><div class="ic">💬</div><h3>Atendente de WhatsApp</h3><p>Responde com sua tabela e horários e agenda/desmarca sozinha, 24h por dia.</p></div>
+    <div class="fe"><div class="ic">🗓️</div><h3>Agenda que não atropela</h3><p>Cada serviço com sua duração; calcula os horários livres e nunca marca dois ao mesmo tempo. Por profissional também.</p></div>
+    <div class="fe"><div class="ic">🔗</div><h3>Link de agendamento</h3><p>Mande um link e o cliente marca sozinho, escolhendo serviço, profissional e horário. Cai direto na sua agenda.</p></div>
+    <div class="fe"><div class="ic">👥</div><h3>Equipe organizada</h3><p>Cada profissional com login, serviços, agenda, folga própria e quanto faturou. Você no controle.</p></div>
+    <div class="fe"><div class="ic">💳</div><h3>Receba por PIX</h3><p>Cobre um sinal ou o valor por PIX na hora do agendamento, direto na sua conta. Confirma recebimento com Mercado Pago.</p></div>
+    <div class="fe"><div class="ic">📊</div><h3>Relatórios e fidelidade</h3><p>Faturamento, comissão, avaliação dos clientes, programa de fidelidade e promoções no WhatsApp.</p></div>
+  </div></section>
+
+  <section class="sec"><h2>Comece em minutos</h2><div class="sub">Sem instalação, sem complicação.</div>
     <div class="steps">
-      <div class="step"><div class="n">1</div><b>Crie sua conta</b><p style="color:var(--dim);font-size:14px">Responda umas perguntas rápidas sobre seu negócio.</p></div>
-      <div class="step"><div class="n">2</div><b>Cadastre serviços e horários</b><p style="color:var(--dim);font-size:14px">Preços, durações e os dias que você abre.</p></div>
-      <div class="step"><div class="n">3</div><b>Compartilhe seu link</b><p style="color:var(--dim);font-size:14px">E conecte o WhatsApp pra atendente trabalhar por você.</p></div>
+      <div class="step"><div class="n">1</div><b>Crie sua conta</b><p style="color:var(--dim);font-size:14px">Umas perguntas rápidas sobre seu negócio.</p></div>
+      <div class="step"><div class="n">2</div><b>Serviços e horários</b><p style="color:var(--dim);font-size:14px">Preços, durações e os dias que você abre.</p></div>
+      <div class="step"><div class="n">3</div><b>Compartilhe o link</b><p style="color:var(--dim);font-size:14px">E conecte o WhatsApp pra atendente trabalhar.</p></div>
       <div class="step"><div class="n">4</div><b>Acompanhe tudo</b><p style="color:var(--dim);font-size:14px">Agenda, faturamento e clientes num painel só.</p></div>
     </div>
   </section>
 
   <section class="sec" id="planos"><h2>Planos</h2><div class="sub">Comece de graça. Suba quando crescer.</div>
     <div class="planos">
-      <div class="plan"><h3>Grátis</h3><div class="pr">R$ 0</div><div class="muted" style="color:var(--dim);font-size:13px">pra começar</div>
+      <div class="plan"><h3>Grátis</h3><div class="pr">R$ 0</div><div style="color:var(--dim);font-size:13px">pra começar</div>
         <ul><li>Agenda + link de agendamento</li><li>Até 1 profissional</li><li>Tabela de preços e horários</li><li>Cadastro de clientes</li></ul>
-        <a class="btn p" style="width:100%;text-align:center" href="/clinica">Começar grátis</a></div>
-      <div class="plan dest"><span class="tag">MAIS POPULAR</span><h3>Profissional</h3><div class="pr">R$ 79<span style="font-size:15px;color:var(--dim)">/mês</span></div>
-        <ul><li>Tudo do grátis</li><li>Equipe ilimitada</li><li>Atendente de WhatsApp que agenda</li><li>Confirmação + lembrete automático</li><li>PIX, fidelidade e promoções</li><li>Relatórios e exportação</li></ul>
-        <a class="btn p" style="width:100%;text-align:center" href="/clinica">Assinar</a></div>
-      <div class="plan"><h3>Sob medida</h3><div class="pr">Vamos falar</div><div class="muted" style="color:var(--dim);font-size:13px">redes e franquias</div>
+        <a class="btn p" style="width:100%;justify-content:center" href="/clinica">Começar grátis</a></div>
+      <div class="plan dest"><span class="tag">MAIS POPULAR</span><h3>Profissional</h3><div class="pr">R$ 79<span style="font-size:15px;color:var(--dim);font-family:'Segoe UI'">/mês</span></div><div style="color:var(--dim);font-size:13px">14 dias grátis pra testar</div>
+        <ul><li>Tudo do grátis</li><li>Equipe ilimitada</li><li>Atendente de WhatsApp que agenda</li><li>Confirmação + lembrete + retorno</li><li>PIX, fidelidade e promoções</li><li>Relatórios, comissão e avaliação</li></ul>
+        <a class="btn p" style="width:100%;justify-content:center" href="/clinica">Assinar Profissional</a></div>
+      <div class="plan"><h3>Sob medida</h3><div class="pr" style="font-size:26px">Vamos falar</div><div style="color:var(--dim);font-size:13px">redes e franquias</div>
         <ul><li>Várias unidades</li><li>Suporte dedicado</li><li>Personalização</li></ul>
-        <a class="btn" style="width:100%;text-align:center" href="/clinica">Falar com a gente</a></div>
+        <a class="btn" style="width:100%;justify-content:center" href="/clinica">Falar com a gente</a></div>
     </div>
   </section>
 
-  <section class="sec" style="text-align:center"><h2>Pronta pra automatizar sua clínica?</h2>
-    <div class="cta" style="margin-top:16px"><a class="btn p" href="/clinica">Criar conta grátis</a></div>
-    <p style="color:var(--dim);margin-top:24px">✦ Com tecnologia <b>Orion</b> — seu assistente de IA. <a class="orion-link" href="/" style="color:var(--accent)">conheça</a></p>
-  </section>
+  <section class="sec"><div class="cta-final">
+    <h2 style="margin:0 0 8px">Pronta pra colocar sua clínica no automático?</h2>
+    <p style="color:var(--dim);max-width:520px;margin:0 auto 20px">Junte agenda, WhatsApp, equipe, pagamento e fidelidade num sistema só. Comece grátis hoje.</p>
+    <a class="btn p" href="/clinica" style="font-size:16px;padding:14px 30px">Criar minha conta grátis</a>
+    <p style="color:var(--faint);margin-top:22px;font-size:13px">✦ Com tecnologia <b style="color:var(--accent)">Orion</b> — seu assistente de IA. <a class="orion-link" href="/" style="color:var(--accent)">conheça o Orion</a></p>
+  </div></section>
 </div>
-<footer>Clínica+ · Gestão pra clínicas de estética · powered by Orion ✦</footer>
-<script>if(window.ORION_URL&&window.ORION_URL!=='/'){document.querySelectorAll('.orion-link').forEach(a=>a.href=window.ORION_URL);}</script>
+<footer>Clínica+ · Gestão pra clínicas de estética e salões de beleza · powered by Orion ✦</footer>
+
+<script>
+// carrossel auto-rotativo
+(function(){
+  const track=document.getElementById('track'), dots=document.getElementById('dots');
+  if(!track) return; const n=track.children.length; let i=0;
+  for(let k=0;k<n;k++){ const b=document.createElement('button'); if(k===0)b.className='on'; b.onclick=()=>go(k); dots.appendChild(b); }
+  function go(k){ i=(k+n)%n; track.style.transform='translateX(-'+(i*100)+'%)'; [...dots.children].forEach((d,j)=>d.className=j===i?'on':''); }
+  let t=setInterval(()=>go(i+1),5000);
+  track.parentElement.addEventListener('mouseenter',()=>clearInterval(t));
+  track.parentElement.addEventListener('mouseleave',()=>t=setInterval(()=>go(i+1),5000));
+})();
+// cross-link pro Orion quando as nuvens estão separadas
+if(window.ORION_URL&&window.ORION_URL!=='/'){document.querySelectorAll('.orion-link').forEach(a=>a.href=window.ORION_URL);}
+</script>
 </body>
 </html>

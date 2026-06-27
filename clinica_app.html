@@ -17,6 +17,11 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:radial-gradient(900px 540px at 82% -12%,rgba(168,123,255,.16),transparent 60%),radial-gradient(820px 500px at 8% -8%,rgba(232,90,155,.14),transparent 62%),linear-gradient(180deg,var(--bg),var(--bg2));background-attachment:fixed;
   color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:15px}
+body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;opacity:.55;
+  background:radial-gradient(34% 32% at 22% 16%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 70%),radial-gradient(38% 36% at 82% 82%,color-mix(in srgb,var(--accent2) 18%,transparent),transparent 70%);
+  filter:blur(52px);animation:appAura 30s ease-in-out infinite alternate}
+@keyframes appAura{0%{transform:translate(-2%,-2%) scale(1)}100%{transform:translate(3%,3%) scale(1.08)}}
+@media(prefers-reduced-motion:reduce){body::before{animation:none}}
 a{color:var(--accent)}
 h1,.logo,.authbox h2,.orionpage h2{font-family:Georgia,'Times New Roman',serif;letter-spacing:.2px}
 .hide{display:none!important}
@@ -40,7 +45,9 @@ h1{font-size:25px;margin:0 0 2px}.sub{color:var(--dim);font-size:13px;margin-bot
 .card h3{margin:0 0 12px;font-size:16px}
 .btn{padding:10px 16px;border:1px solid var(--line2);border-radius:12px;background:var(--panel2);color:var(--text);font-weight:700;font-size:14px;cursor:pointer;transition:transform .12s,border-color .12s}
 .btn:hover{border-color:var(--accent);transform:translateY(-1px)}.btn:active{transform:translateY(1px)}
-.btn.primary{background:linear-gradient(120deg,var(--accent),var(--accent2));border:none;color:#fff;box-shadow:0 8px 18px -8px rgba(232,90,155,.6)}
+.btn.primary{background:linear-gradient(120deg,var(--accent),var(--accent2));border:none;color:#fff;box-shadow:0 8px 18px -8px rgba(232,90,155,.6);position:relative;overflow:hidden}
+.btn.primary::after{content:"";position:absolute;top:0;left:-120%;width:55%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-20deg);transition:left .55s}
+.btn.primary:hover::after{left:150%}
 .btn.ghost{background:none}
 .btn.sm{padding:5px 11px;font-size:12px;border-radius:9px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -195,7 +202,7 @@ const api=async(p,m,b)=>{ loadOn(); try{ const r=await fetch(p,{method:m||'GET',
 function temaAplicar(t){ document.documentElement.setAttribute('data-theme', t==='dark'?'dark':'light'); try{ localStorage.setItem('cl_tema', t); }catch(e){} const el=$('temaBtn'); if(el) el.textContent = t==='dark'?'☀️ Tema claro':'🌙 Tema escuro'; }
 function temaToggle(){ const atual=document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light'; temaAplicar(atual==='dark'?'light':'dark'); }
 try{ temaAplicar(localStorage.getItem('cl_tema')||'light'); }catch(e){ temaAplicar('light'); }
-let EST={}, VIEW='dashboard', SERV=[], HOJEISO=new Date().toISOString().slice(0,10), _calYM=null;
+let EST={}, VIEW='dashboard', SERV=[], HOJEISO=new Date().toISOString().slice(0,10), _calYM=null, _FUNCS=[];
 
 // ---------------- boot ----------------
 (async function boot(){
@@ -406,7 +413,7 @@ async function rmConfirma(id){ const h=$('rmHora').value; if(!h){ $('rmMsg').sty
 // ---------------- agenda ----------------
 async function vAgenda(){
   SERV=(await api('/clinica/servicos')).servicos||SERV;   // sempre atualiza (preço/duração podem ter mudado)
-  let funcs=[]; if(EST.sou_dono||EST.sou_admin){ funcs=(await api('/clinica/funcionarios')).funcionarios||[]; }
+  let funcs=[]; if(EST.sou_dono||EST.sou_admin){ funcs=(await api('/clinica/funcionarios')).funcionarios||[]; } _FUNCS=funcs;
   $('view').innerHTML=`<h1>Agenda</h1><div class="sub">Veja o mês inteiro, clique num dia pra marcar, e coloque compromissos (reunião, folga).</div>
     <div class="card">
       <div class="calhead"><button class="btn ghost sm" onclick="calNav(-1)">‹</button><h3 id="calTit" style="margin:0">...</h3><button class="btn ghost sm" onclick="calNav(1)">›</button></div>
@@ -474,11 +481,12 @@ async function evRemover(id,ds){ if(!confirm('Remover compromisso?'))return; awa
 function agEventoForm(){ const box=$('agEvBox'); if(!box) return; box.innerHTML=`<div class="card" style="margin:10px 0 0;background:var(--panel2)">
   <div class="row"><div class="field" style="width:170px"><label>Data</label><input id="evData" type="date" value="${$('agData').value}"></div>
   <div class="field" style="flex:1;min-width:160px"><label>O que é</label><input id="evMot" placeholder="ex: Reunião de equipe"></div></div>
+  ${_FUNCS.length?`<div class="field"><label>De quem é a folga?</label><select id="evFunc"><option value="">Todos (clínica fechada)</option>${_FUNCS.map(f=>`<option value="${f.id}">Só ${esc(f.nome)}</option>`).join('')}</select></div>`:''}
   <label style="display:flex;gap:6px;align-items:center;margin:4px 0;font-size:13px;color:var(--dim)"><input type="checkbox" id="evDia" style="width:auto" checked onchange="document.getElementById('evHoras').style.display=this.checked?'none':'flex'"> dia todo</label>
   <div class="row" id="evHoras" style="display:none"><div class="field" style="width:120px"><label>Início</label><input id="evIni" type="time" value="09:00"></div><div class="field" style="width:120px"><label>Fim</label><input id="evFim" type="time" value="10:00"></div></div>
   <div class="row" style="margin-top:6px"><button class="btn primary sm" onclick="agEventoSalvar()">Adicionar</button><button class="btn ghost sm" onclick="document.getElementById('agEvBox').innerHTML=''">Cancelar</button></div></div>`; }
 async function agEventoSalvar(){ const data=$('evData').value; if(!data) return; const dia=$('evDia').checked;
-  await api('/clinica/bloqueio/add','POST',{data,dia_todo:dia,ini:dia?'':$('evIni').value,fim:dia?'':$('evFim').value,motivo:($('evMot').value||'').trim()||'Compromisso'});
+  await api('/clinica/bloqueio/add','POST',{data,dia_todo:dia,ini:dia?'':$('evIni').value,fim:dia?'':$('evFim').value,func_id:($('evFunc')?$('evFunc').value:''),motivo:($('evMot').value||'').trim()||'Compromisso'});
   $('agEvBox').innerHTML=''; calRender(); agLista(); }
 async function agSlots(){
   const sid=$('agServ')&&$('agServ').value, data=$('agData').value, fid=$('agFunc')?$('agFunc').value:'';

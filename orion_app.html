@@ -87,13 +87,17 @@ button{font-family:inherit;cursor:pointer}
 .cmdk-it .gp{margin-left:auto;font-size:11px;color:var(--faint)}
 .cmdk-it.sel,.cmdk-it:hover{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 22%,transparent),transparent);outline:1px solid var(--line2)}
 .cmdk-empty{padding:22px;text-align:center;color:var(--faint);font-size:13px}
-.sb-sec{font-size:10px;letter-spacing:1.2px;color:var(--faint);text-transform:uppercase;padding:14px 12px 6px;font-weight:700}
-.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;color:var(--dim);
-  font-size:13.5px;font-weight:500;transition:.12s;border:none;background:none;width:100%;text-align:left}
-.nav-item svg{width:17px;height:17px;flex:none;opacity:.85}
-.nav-item:hover{background:var(--panel);color:var(--text)}
-.nav-item.active{background:var(--panel2);color:var(--text)}
-.nav-item.active svg{opacity:1;color:var(--accent)}
+.sb-sec{font-size:10px;letter-spacing:1.4px;color:var(--faint);text-transform:uppercase;padding:15px 12px 6px;font-weight:800;display:flex;align-items:center;gap:8px}
+.sb-sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line2),transparent)}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;color:var(--dim);
+  font-size:13.5px;font-weight:500;transition:transform .16s cubic-bezier(.2,.8,.3,1),background .16s,color .16s;border:none;background:none;width:100%;text-align:left;position:relative}
+.nav-item svg{width:18px;height:18px;flex:none;opacity:.8;transition:transform .16s,opacity .16s,color .16s}
+.nav-item:hover{background:color-mix(in srgb,var(--accent) 9%,var(--panel));color:var(--text);transform:translateX(3px)}
+.nav-item:hover svg{opacity:1;color:var(--accent)}
+.nav-item.active{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 20%,transparent),transparent);color:var(--text);font-weight:600}
+.nav-item.active::before{content:"";position:absolute;left:-3px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--accent),var(--accent2));box-shadow:0 0 12px color-mix(in srgb,var(--accent) 80%,transparent)}
+.nav-item.active svg{opacity:1;color:var(--accent);transform:scale(1.1)}
+.nav-item:active{transform:translateX(3px) scale(.98)}
 .nav-item .lock{margin-left:auto;font-size:10px;color:var(--faint)}
 .sb-foot{border-top:1px solid var(--line);padding:12px 8px 4px;margin-top:6px}
 .sb-plan{font-size:12px;color:var(--dim);margin-bottom:8px}
@@ -110,6 +114,14 @@ button{font-family:inherit;cursor:pointer}
 /* cards sobem suave ao aparecer */
 .page .card{animation:cardIn .35s ease both}
 @keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* ambiencia viva: aura que respira (cor do tema) + grao premium, em TODOS os temas */
+#temaAura{position:fixed;inset:-25%;z-index:-1;pointer-events:none;opacity:.45;
+  background:radial-gradient(38% 36% at 22% 16%,color-mix(in srgb,var(--accent) 30%,transparent),transparent 70%),radial-gradient(42% 40% at 82% 82%,color-mix(in srgb,var(--accent2) 26%,transparent),transparent 70%);
+  filter:blur(46px);animation:auraDrift 28s ease-in-out infinite alternate}
+@keyframes auraDrift{0%{transform:translate(-3%,-2%) scale(1)}50%{transform:translate(4%,3%) scale(1.09)}100%{transform:translate(-2%,4%) scale(1.05)}}
+#temaGrain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.045;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E")}
+@media(prefers-reduced-motion:reduce){#temaAura{animation:none}}
 .page{max-width:920px;margin:0 auto;padding:32px 24px 60px}
 .page h1{font-size:24px;font-weight:700;margin-bottom:6px}
 .page .sub{color:var(--dim);font-size:14px;margin-bottom:26px}
@@ -127,8 +139,10 @@ button{font-family:inherit;cursor:pointer}
   font-size:13.5px;font-weight:600;transition:transform .12s ease,filter .15s ease,background .15s ease,border-color .15s ease,box-shadow .15s ease}
 .btn:hover{background:var(--panel3);border-color:var(--accent);transform:translateY(-1px)}
 .btn:active{transform:translateY(1px) scale(.98)}
-.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#0a0c11;box-shadow:0 6px 16px -6px var(--accent)}
-.btn.primary:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 10px 22px -8px var(--accent)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#0a0c11;box-shadow:0 6px 16px -6px var(--accent);position:relative;overflow:hidden}
+.btn.primary::after{content:"";position:absolute;top:0;left:-120%;width:60%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);transform:skewX(-20deg);transition:left .55s ease}
+.btn.primary:hover::after{left:140%}
+.btn.primary:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 10px 24px -8px var(--accent)}
 .btn.ghost{background:none;box-shadow:none}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .range-row{display:flex;align-items:center;gap:12px}
@@ -933,16 +947,23 @@ async function renderClinica(){
   const pag=Object.entries(r.por_pagamento||{}).map(([k,v])=>`${esc(k)}: <b>R$ ${Number(v).toFixed(2)}</b>`).join(' &nbsp;·&nbsp; ')||'<span class="muted">sem entradas no mês</span>';
   const ag=(r.agenda_hoje||[]).filter(a=>a.status==='marcado').map(a=>`<div class="lin"><span>${esc((a.inicio||'').split('T')[1]||'')} · ${esc(a.cliente||'Cliente')}</span><span class="muted">${esc(a.servico||'')}</span></div>`).join('')||'<div class="muted">Nada marcado pra hoje.</div>';
   const opts=(r.servicos||[]).map(s=>`<option value="${esc(s.nome)}">${esc(s.nome)} (R$ ${Number(s.preco).toFixed(2)})</option>`).join('');
+  const kpi=(ic,cor,val,lab)=>`<div class="card" style="position:relative;overflow:hidden;padding:16px 18px"><div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${cor}"></div><div style="font-size:20px">${ic}</div><div style="font-size:26px;font-weight:800;margin-top:2px">${val}</div><div class="muted" style="font-size:12.5px">${lab}</div></div>`;
   area.innerHTML=`
-    <div class="card" style="display:flex;align-items:center;justify-content:space-between"><div><b>${esc(r.clinica||'Sua clínica')}</b> <span style="color:var(--good)">conectada ✓</span></div><button class="btn ghost" onclick="clinicaDesconectar()">Desconectar</button></div>
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 18%,transparent),transparent),var(--panel)">
+      <div style="display:flex;align-items:center;gap:12px"><div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:20px">🏥</div>
+        <div><div style="font-weight:800;font-size:17px">${esc(r.clinica||'Sua clínica')}</div><div style="color:var(--good);font-size:13px">● conectada e ao vivo</div></div></div>
+      <button class="btn ghost" onclick="clinicaDesconectar()">Desconectar</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:4px">
-      <div class="card"><div style="font-size:26px;font-weight:800">${r.hoje||0}</div><div class="muted">Consultas hoje</div></div>
-      <div class="card"><div style="font-size:26px;font-weight:800">${r.futuras||0}</div><div class="muted">Agendadas</div></div>
-      <div class="card"><div style="font-size:22px;font-weight:800">R$ ${Number(r.faturamento_mes||0).toFixed(2)}</div><div class="muted">Faturamento do mês</div></div>
+      ${kpi('📅','var(--accent)', r.hoje||0, 'Consultas hoje')}
+      ${kpi('🗓️','var(--accent2)', r.futuras||0, 'Agendadas (futuras)')}
+      ${kpi('💰','var(--good)', 'R$ '+Number(r.faturamento_mes||0).toFixed(2), 'Faturamento do mês')}
     </div>
-    <div class="card"><h3>Entradas do mês (por forma de pagamento)</h3><div>${pag}</div></div>
-    <div class="card"><h3>Agenda de hoje</h3>${ag}</div>
-    <div class="card"><h3>Mudar preço pelo Orion</h3><div class="sub" style="margin:2px 0 10px">Você altera aqui e o sistema muda na sua Clínica+ na hora.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+      <div class="card"><h3 style="margin-top:0">💵 Entradas do mês</h3><div>${pag}</div></div>
+      <div class="card"><h3 style="margin-top:0">📋 Agenda de hoje</h3>${ag}</div>
+    </div>
+    <div class="card" style="border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line2))"><h3 style="margin-top:0">⚡ Comandar pelo Orion</h3>
+      <div class="sub" style="margin:2px 0 10px">Mude o preço de um serviço por aqui (ou peça no chat: "muda o preço da limpeza pra 200"). Reflete na Clínica+ na hora.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><select id="clPS" style="flex:1;min-width:160px">${opts}</select><input id="clPV" placeholder="novo preço" style="width:150px"><button class="btn primary" onclick="clinicaPreco()">Aplicar</button></div><span id="clPM" style="font-size:13px"></span></div>`;
 }
 async function clinicaConectar(){ const m=document.getElementById('clMsg'); if(m)m.textContent='conectando...';
@@ -1598,7 +1619,9 @@ function aplicaTema(id){ const t=TEMAS[id]||TEMAS.espaco; const r=document.docum
   let bg=document.getElementById('temaBg');
   if(!bg){ bg=document.createElement('div'); bg.id='temaBg';
     bg.style.cssText='position:fixed;inset:0;z-index:-1;pointer-events:none;transition:opacity .4s'; document.body.appendChild(bg); }
-  bg.style.background=t.bg||''; bg.style.opacity=t.bg?'1':'0'; }
+  bg.style.background=t.bg||''; bg.style.opacity=t.bg?'1':'0';
+  if(!document.getElementById('temaAura')){ const a=document.createElement('div'); a.id='temaAura'; document.body.appendChild(a); }
+  if(!document.getElementById('temaGrain')){ const g=document.createElement('div'); g.id='temaGrain'; document.body.appendChild(g); } }
 function mascoteSVG(skin){ const s=SKINS[skin]||SKINS.cosmo; return '<svg viewBox="0 0 100 100">'+_mascInner(s,'cg'+(_gidN++))+'</svg>'; }
 function aplicaMascote(skin){ const c=document.getElementById('companion'); if(c) c.innerHTML=mascoteSVG(skin)+'<button class="comp-x" onclick="event.stopPropagation();compEsconder()" title="Esconder">&#10005;</button>'; }
 function aplicaAparencia(){ aplicaTema(_PREFS.tema); aplicaMascote(_PREFS.skin); }
