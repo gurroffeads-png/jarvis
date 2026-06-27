@@ -33,9 +33,11 @@ input:focus,select:focus{border-color:var(--accent)}
     <div id="form">
       <div class="card"><h3>1. Escolha o procedimento</h3>
         <select id="serv" onchange="loadSlots()"></select>
+        <div id="svFotoCli" style="margin-top:10px"></div>
         <div id="precoInfo" class="muted" style="margin-top:6px"></div>
         <div id="profWrap" style="display:none;margin-top:10px"><label>Profissional</label><select id="prof" onchange="loadSlots()"></select></div>
       </div>
+      <div id="prodCard"></div>
       <div class="card"><h3>2. Escolha o dia e horário</h3>
         <div class="field"><label>Dia</label><input id="data" type="date" onchange="loadSlots()"></div>
         <label>Horários livres</label><div id="slots" class="slots"></div><input type="hidden" id="hora">
@@ -43,6 +45,7 @@ input:focus,select:focus{border-color:var(--accent)}
       <div class="card"><h3>3. Seus dados</h3>
         <div class="field"><label>Nome</label><input id="nome" placeholder="seu nome"></div>
         <div class="field"><label>Telefone (WhatsApp)</label><input id="tel" placeholder="(00) 90000-0000" inputmode="tel"></div>
+        <div class="field"><label>Data de nascimento <span class="muted">(opcional, pra ganhar mimo de aniversário 🎂)</span></label><input id="nasc" type="date"></div>
         <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim);margin-bottom:6px"><input type="checkbox" id="cad" checked style="width:auto"> Quero me cadastrar e receber benefícios e promoções</label>
         <button class="btn" onclick="agendar()">Confirmar agendamento</button>
         <div id="msg" class="msg"></div>
@@ -62,7 +65,7 @@ const $=(id)=>document.getElementById(id);
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt=(v)=>'R$ '+(Number(v||0)).toLocaleString('pt-BR',{minimumFractionDigits:0});
 const CID=new URLSearchParams(location.search).get('c')||'';
-let INFO={};
+let INFO={}; let PROD=[]; let CART=[];
 (async function(){
   if(!CID){ erro('Link inválido.'); return; }
   let r; try{ r=await (await fetch('/pub/clinica?c='+encodeURIComponent(CID))).json(); }catch(e){ erro('Sem conexão.'); return; }
@@ -74,8 +77,31 @@ let INFO={};
   const t=new Date(); $('data').value=t.toISOString().slice(0,10); $('data').min=t.toISOString().slice(0,10);
   if(r.fidelidade&&r.fidelidade.ativo){ $('fidBox').innerHTML=`<div class="card" style="border-color:var(--accent)"><b>🎁 Programa de fidelidade</b><div class="muted" style="margin-top:4px">A cada ${r.fidelidade.meta} procedimentos você ganha ${esc(r.fidelidade.premio||'um prêmio')}. Cadastre-se pra participar!</div></div>`; }
   if((r.profissionais||[]).length){ $('profWrap').style.display='block'; profRender(); }
+  PROD=(r.produtos||[]).filter(p=>p.qtd>0); prodRender(); svFotoRender();
   loadSlots();
 })();
+function svFotoRender(){ const box=$('svFotoCli'); if(!box) return; const sv=parseInt($('serv').value); const s=(INFO.servicos||[]).find(x=>x.id===sv);
+  box.innerHTML=(s&&s.foto)?`<img src="${s.foto}" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px">`:''; }
+function prodRender(){ const card=$('prodCard'); if(!card) return; if(!PROD.length){ card.innerHTML=''; return; }
+  card.innerHTML=`<div class="card"><h3>🛍️ Produtos (opcional)</h3><div class="muted" style="margin-bottom:8px">Leve junto no dia da consulta. Compre na hora ou reserve pagando só o sinal.</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+      <div style="flex:2;min-width:140px"><label>Produto</label><select id="prodSel">${PROD.map(p=>`<option value="${p.id}">${esc(p.nome)} · ${fmt(p.preco)}</option>`).join('')}</select></div>
+      <div style="width:64px"><label>Qtd</label><input id="prodQt" type="number" min="1" value="1"></div>
+      <div style="width:140px"><label>Como</label><select id="prodModo"><option value="comprar">Levar na hora</option><option value="reservar">Reservar (sinal)</option></select></div>
+      <button class="btn g" style="margin:0" onclick="prodAdd()">+ Add</button>
+    </div><div id="cart" style="margin-top:8px"></div></div>`;
+  cartRender(); }
+function prodAdd(){ const pid=parseInt($('prodSel').value); const p=PROD.find(x=>x.id===pid); if(!p) return;
+  const qt=Math.max(1,parseInt($('prodQt').value)||1); const modo=$('prodModo').value;
+  const ja=CART.filter(c=>c.produto_id===pid).reduce((s,c)=>s+c.qtd,0);
+  if(ja+qt>p.qtd){ alert('Só tem '+p.qtd+' de '+p.nome+' disponível.'); return; }
+  const ex=CART.find(c=>c.produto_id===pid&&c.modo===modo); if(ex) ex.qtd+=qt; else CART.push({produto_id:pid,nome:p.nome,preco:p.preco,qtd:qt,modo});
+  $('prodQt').value='1'; cartRender(); }
+function cartRemove(i){ CART.splice(i,1); cartRender(); }
+function cartRender(){ const el=$('cart'); if(!el) return; if(!CART.length){ el.innerHTML='<div class="muted" style="font-size:12px">Nenhum produto.</div>'; return; }
+  const tot=CART.reduce((s,c)=>s+c.preco*c.qtd,0);
+  el.innerHTML=CART.map((c,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.06)"><span><b>${c.qtd}x ${esc(c.nome)}</b> <span style="font-size:11px;opacity:.7">${c.modo==='comprar'?'leva na hora':'reserva'}</span></span><span>${fmt(c.preco*c.qtd)} <button class="btn g" style="margin:0;padding:2px 8px" onclick="cartRemove(${i})">✕</button></span></div>`).join('')
+    +`<div style="display:flex;justify-content:space-between;margin-top:6px;font-weight:700"><span>Produtos</span><span>${fmt(tot)}</span></div>`; }
 function profRender(){
   const sv=parseInt($('serv').value); const ps=(INFO.profissionais||[]).filter(p=>!p.servicos||!p.servicos.length||p.servicos.map(Number).includes(sv));
   $('prof').innerHTML='<option value="">Qualquer profissional</option>'+ps.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('');
@@ -84,7 +110,7 @@ function erro(t){ $('loading').style.display='none'; $('erro').style.display='';
 function precoSel(){ const o=$('serv').selectedOptions[0]; return o?{p:o.dataset.p,d:o.dataset.d}:{}; }
 let _profLast='';
 async function loadSlots(){
-  const ps=precoSel(); $('precoInfo').textContent=ps.p?`Valor: ${fmt(ps.p)} · duração ${ps.d} min`:'';
+  const ps=precoSel(); $('precoInfo').textContent=ps.p?`Valor: ${fmt(ps.p)} · duração ${ps.d} min`:''; svFotoRender();
   if($('profWrap').style.display!=='none' && _profLast!==$('serv').value){ _profLast=$('serv').value; profRender(); }
   const fid=$('prof')?$('prof').value:'';
   $('hora').value=''; $('slots').innerHTML='<span class="muted">carregando...</span>';
@@ -100,9 +126,9 @@ async function agendar(){
   if(!nome||tel.replace(/\D/g,'').length<10){ m.style.color='#ffb454'; m.textContent='Preencha seu nome e telefone com DDD.'; return; }
   m.style.color='var(--dim)'; m.textContent='Marcando...';
   const fid=$('prof')?$('prof').value:'';
-  const r=await (await fetch('/pub/agendar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({c:CID,servico_id:$('serv').value,data:$('data').value,hora,nome,telefone:tel,func_id:fid})})).json();
+  const r=await (await fetch('/pub/agendar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({c:CID,servico_id:$('serv').value,data:$('data').value,hora,nome,telefone:tel,func_id:fid,produtos:CART})})).json();
   if(!r.ok){ m.style.color='#ff6b6b'; m.textContent=r.erro||'Esse horário não está mais livre. Escolha outro.'; loadSlots(); return; }
-  if($('cad').checked){ try{ await fetch('/pub/cliente',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({c:CID,nome,telefone:tel})}); }catch(e){} }
+  if($('cad').checked){ try{ await fetch('/pub/cliente',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({c:CID,nome,telefone:tel,nascimento:($('nasc')?$('nasc').value:'')})}); }catch(e){} }
   $('form').style.display='none'; $('sucesso').style.display='';
   const o=$('serv').selectedOptions[0];
   $('okDet').textContent=`${o?o.textContent.split(' · ')[0]:''} • ${$('data').value.split('-').reverse().join('/')} às ${hora}`;

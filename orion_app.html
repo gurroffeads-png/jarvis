@@ -119,6 +119,7 @@ button{font-family:inherit;cursor:pointer}
   background:radial-gradient(38% 36% at 22% 16%,color-mix(in srgb,var(--accent) 30%,transparent),transparent 70%),radial-gradient(42% 40% at 82% 82%,color-mix(in srgb,var(--accent2) 26%,transparent),transparent 70%);
   filter:blur(46px);animation:auraDrift 28s ease-in-out infinite alternate}
 @keyframes auraDrift{0%{transform:translate(-3%,-2%) scale(1)}50%{transform:translate(4%,3%) scale(1.09)}100%{transform:translate(-2%,4%) scale(1.05)}}
+#temaParticulas{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.7}
 #temaGrain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.045;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E")}
 @media(prefers-reduced-motion:reduce){#temaAura{animation:none}}
@@ -315,6 +316,8 @@ button{font-family:inherit;cursor:pointer}
 /* carrossel de novidades (home) */
 .novidades{width:100%;max-width:560px;margin:18px auto 0;position:relative;border:1px solid var(--line2);border-radius:16px;overflow:hidden;background:linear-gradient(120deg,rgba(122,162,255,.14),rgba(155,140,255,.10));min-height:88px;display:none}
 .novidades.on{display:block}
+@keyframes nvIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+#nvToast{transition:opacity .4s ease}
 .nv-slide{display:none;padding:16px 44px 16px 18px;animation:nvfade .5s ease}
 .nv-slide.on{display:block}
 .nv-slide .nv-tag{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--accent)}
@@ -690,6 +693,13 @@ button{font-family:inherit;cursor:pointer}
     <div id="clinicaArea">carregando...</div>
   </div></section>
 
+  <!-- CARTEIRA COLETIVA (co-investimento) -->
+  <section class="view" id="viewCarteira"><div class="page" style="max-width:1000px">
+    <h1>Carteira Coletiva 📈</h1>
+    <div class="sub">Junte o dinheiro da família, registre cada compra por pessoa e saiba exatamente de quem é cada valor. Tudo sacável e operável.</div>
+    <div id="carteiraArea">carregando...</div>
+  </div></section>
+
   <!-- MEMORIA -->
   <section class="view" id="viewMemoria"><div class="page">
     <h1>Memoria</h1><div class="sub">Tudo que o Orion sabe sobre voce, organizado como uma arvore que cresce com o tempo.</div>
@@ -838,6 +848,7 @@ const NAV=[
  {id:'tarefas',nome:'Tarefas',icon:'tarefas'},
  {id:'memoria',nome:'Memoria',icon:'memoria'},
  {id:'trading',nome:'Trading IA',icon:'trading'},
+ {id:'carteira',nome:'Carteira Coletiva',icon:'trading',planos:['trading','business','adm'],cloud:true},
  {id:'clinica',nome:'Clínica+',icon:'trading',planos:['clinica','business','adm'],cloud:true},
  {id:'integracoes',nome:'Integracoes',icon:'integra'},
  {sec:'Conta'},
@@ -905,7 +916,7 @@ function go(id){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const map={home:'viewHome',documentos:'viewDocumentos',rotina:'viewRotina',tarefas:'viewTarefas',
     memoria:'viewMemoria',aprender:'viewAprender',trading:'viewTrading',integracoes:'viewIntegracoes',config:'viewConfig',conta:'viewConta',planos:'viewPlanos',
-    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode',agentes:'viewAgentes',painel:'viewPainel',person:'viewPersonal',clinica:'viewClinica'};
+    termos:'viewTermos',privacidade:'viewPrivacidade',code:'viewCode',agentes:'viewAgentes',painel:'viewPainel',person:'viewPersonal',clinica:'viewClinica',carteira:'viewCarteira'};
   document.getElementById(map[id]).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.id===id));
   if(id==='config') renderConfig();
@@ -924,6 +935,7 @@ function go(id){
   if(id==='trading') renderTrading();
   else stopTradingPoll();
   if(id==='clinica') renderClinica();
+  if(id==='carteira') renderCarteira();
   if(id==='termos') renderTermos();
   if(id==='privacidade') renderPriv();
   if(id==='home') proativoCarregar();
@@ -973,6 +985,55 @@ async function clinicaDesconectar(){ await fetch('/orion/clinica/conectar',{meth
 async function clinicaPreco(){ const m=document.getElementById('clPM'); if(m)m.textContent='aplicando...';
   const r=await (await fetch('/orion/clinica/preco',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({servico:document.getElementById('clPS').value,preco:document.getElementById('clPV').value})})).json();
   if(r.ok){ if(m)m.textContent='✓ '+r.servico+' agora R$ '+Number(r.preco).toFixed(2); setTimeout(renderClinica,1000); } else if(m) m.textContent=r.erro||'erro'; }
+
+// ===================== CARTEIRA COLETIVA =====================
+const _cwf=(p,b)=>fetch(p,{method:b?'POST':'GET',headers:b?{'Content-Type':'application/json'}:undefined,body:b?JSON.stringify(b):undefined}).then(r=>r.json());
+async function renderCarteira(){
+  const area=document.getElementById('carteiraArea'); if(!area) return; area.innerHTML='<div class="card">carregando...</div>';
+  const r=await _cwf('/carteira'); if(!r||!r.ok){ area.innerHTML='<div class="card">'+esc((r&&r.erro)||'erro')+'</div>'; return; }
+  const P=r.participantes||[]; const dono=(r.modo!=='participante'); const eu=r.eu||0;
+  const banner=(!dono)?`<div class="card" style="border-color:var(--accent)">📊 Você está na carteira de <b>${esc(r.dono_nome||'titular')}</b> como <b>${esc((P.find(p=>p.id===eu)||{}).nome||'participante')}</b>. Tudo é comprado no nome do titular; vocês dividem porque investem juntos.</div>`:'';
+  const cards=P.length?P.map(p=>{const rm=dono?`<button class="btn ghost" style="padding:2px 8px;font-size:11px" onclick="cwRm(${p.id},'${esc(p.nome)}')">✕</button>`:'';return `<div class="card" style="padding:16px 18px${p.id===eu?';border-color:var(--accent)':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start"><div><b>${esc(p.nome)}</b>${p.id===eu?' <span class="mbadge" style="font-size:10px">você</span>':''}<div class="muted" style="font-size:11px">${esc(p.cpf||'')}${p.email?' · '+esc(p.email):''}</div></div><span class="muted" style="font-size:12px">${p.pct}% ${rm}</span></div>
+      <div style="display:flex;gap:20px;margin-top:8px;flex-wrap:wrap">
+        <div><div style="font-size:20px;font-weight:800;color:var(--good)">R$ ${p.caixa.toFixed(2)}</div><div class="muted" style="font-size:12px">caixa (sacável)</div></div>
+        <div><div style="font-size:20px;font-weight:800">R$ ${p.investido.toFixed(2)}</div><div class="muted" style="font-size:12px">investido</div></div>
+        <div><div style="font-size:20px;font-weight:800;color:var(--accent)">R$ ${p.total.toFixed(2)}</div><div class="muted" style="font-size:12px">total</div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" onclick="cwLancar(${p.id},'deposito')">+ Aporte (PIX)</button><button class="btn" onclick="cwLancar(${p.id},'saque')">Sacar</button>${(r.sandbox&&dono)?`<button class="btn ghost" onclick="cwAjuste(${p.id})">Ajustar</button>`:''}</div>
+    </div>`;}).join(''):'<div class="muted">Cadastre os participantes (você e a família) com CPF e e-mail.</div>';
+  const divInputs=P.map(p=>`<div class="field" style="margin:0"><label>${esc(p.nome.split(' ')[0])}</label><input class="cwdiv" data-pid="${p.id}" inputmode="decimal" placeholder="0,00" style="width:110px"></div>`).join('');
+  const pos=(r.posicoes||[]).length?r.posicoes.map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)"><div><b>${esc(x.ticker)}</b> <span class="muted">R$ ${x.total.toFixed(2)} · ${(x.data||'').split('-').reverse().join('/')}</span><div class="muted" style="font-size:12px">${x.donos.map(d=>esc(d.nome.split(' ')[0])+' R$'+d.valor.toFixed(0)).join(' · ')}</div></div><button class="btn" onclick="cwVender(${x.id},'${esc(x.ticker)}')">Vender</button></div>`).join(''):'<div class="muted">Nenhuma ordem aberta.</div>';
+  const hist=(r.historico||[]).length?r.historico.map(h=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>${({deposito:'⬆ Aporte',saque:'⬇ Saque',compra:'🛒 Compra',venda:'💰 Venda'}[h.tipo]||h.tipo)} ${h.ticker?esc(h.ticker)+' ':''}<span class="muted">${esc(h.quem||'')}</span></span><span><b>R$ ${Number(h.valor).toFixed(2)}</b> <span class="muted">${esc(h.datahora||'')}</span></span></div>`).join(''):'<div class="muted">Sem movimentações ainda.</div>';
+  area.innerHTML=`${banner}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:6px">
+      <div class="card"><div style="font-size:24px;font-weight:800;color:var(--good)">R$ ${r.resumo.caixa.toFixed(2)}</div><div class="muted">Caixa total (livre)</div></div>
+      <div class="card"><div style="font-size:24px;font-weight:800">R$ ${r.resumo.investido.toFixed(2)}</div><div class="muted">Investido</div></div>
+      <div class="card"><div style="font-size:24px;font-weight:800;color:var(--accent)">R$ ${r.resumo.total.toFixed(2)}</div><div class="muted">Patrimônio total</div></div>
+    </div>
+    <div class="card"><h3>👥 Cotistas</h3>${cards}
+      ${dono?`<div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px"><input id="cwNome" placeholder="nome completo"><input id="cwCpf" placeholder="CPF (só números)" inputmode="numeric"><input id="cwNasc" type="date" title="nascimento"><input id="cwEmail" type="email" placeholder="e-mail (acesso da pessoa)"></div>
+      <div style="margin-top:8px"><button class="btn primary" onclick="cwAddPart()">Cadastrar cotista</button> <span class="muted" style="font-size:12px">Com o e-mail, a pessoa entra no Orion pelo próprio login (plano Trading) e opera junto.</span></div><span id="cwPMsg" style="font-size:13px"></span>`:''}</div>
+    ${P.length?`<div class="card"><h3>🛒 Registrar compra (ordem)</h3><div class="sub" style="margin:2px 0 10px">Ativo + quanto é de cada cotista. Sai do caixa e vira posição de cada um.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><div class="field" style="margin:0;width:140px"><label>Ativo</label><input id="cwTicker" placeholder="PETR4" style="text-transform:uppercase"></div>${divInputs}<button class="btn primary" onclick="cwCompra()">Registrar ordem</button></div><span id="cwMsg" style="font-size:13px"></span></div>
+      <div class="card"><h3>📦 Ordens abertas</h3>${pos}</div>`:''}
+    <div class="card"><h3>💳 Depósito por PIX (QR)</h3><div class="sub" style="margin:2px 0 10px">${dono?'Sua chave PIX gera o QR pros cotistas depositarem. ':'Use o QR pra depositar. '}${r.pix.tem_chave?'<span style="color:var(--good)">✓ chave '+esc(r.pix.chave_masc)+'</span>':(dono?'<span style="color:var(--warn)">cadastre sua chave abaixo</span>':'')}</div>
+      ${dono?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><div class="field" style="margin:0;flex:1;min-width:180px"><label>Chave PIX</label><input id="cwChave" placeholder="${r.pix.tem_chave?'•••• (vazio mantém)':'sua chave'}"></div><div class="field" style="margin:0;width:140px"><label>Recebedor</label><input id="cwReceb" value="${esc(r.pix.recebedor||'')}"></div><div class="field" style="margin:0;width:120px"><label>Cidade</label><input id="cwCidade" value="${esc(r.pix.cidade||'')}"></div><button class="btn" onclick="cwPixSalvar()">Salvar</button></div>`:''}
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:end"><div class="field" style="margin:0;width:140px"><label>Valor (opcional)</label><input id="cwQrV" inputmode="decimal" placeholder="0,00"></div><button class="btn primary" onclick="cwQR()">Gerar QR de depósito</button></div><div id="cwQrBox" style="margin-top:10px"></div></div>
+    <div class="card"><h3>🧾 Histórico (data e hora de cada registro)</h3>${hist}</div>
+    ${dono?`<div class="card"><h3>⚙️ Configurações</h3>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" ${r.sandbox?'checked':''} onclick="cwSandbox(this.checked)" style="width:auto"> Modo simulação (treinar operações; libera ajuste de saldos)</label>
+      <div class="muted" style="font-size:12px;margin-top:6px">A interface é idêntica à conta real. Use pra testar sem mexer no dinheiro de verdade.</div></div>`:''}`;
+}
+async function cwAddPart(){ const m=document.getElementById('cwPMsg'); const b={nome:(document.getElementById('cwNome').value||'').trim(),cpf:(document.getElementById('cwCpf').value||'').trim(),nascimento:(document.getElementById('cwNasc').value||''),email:(document.getElementById('cwEmail').value||'').trim()}; if(!b.nome||!b.cpf){ if(m){m.style.color='var(--warn)';m.textContent='Nome e CPF são obrigatórios.';} return; } const r=await _cwf('/carteira/participante',b); if(r.ok) renderCarteira(); else if(m){ m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
+async function cwSandbox(on){ await _cwf('/carteira/sandbox',{on:!!on}); renderCarteira(); }
+async function cwAjuste(pid){ const v=prompt('Ajustar o caixa deste cotista para quanto? (R$) — modo simulação'); if(v===null||!v.trim()) return; const r=await _cwf('/carteira/ajuste',{part_id:pid,valor:v}); if(r.ok) renderCarteira(); else alert(r.erro||'erro'); }
+async function cwRm(id,nome){ if(!confirm('Remover '+nome+'? (o histórico some)')) return; const r=await _cwf('/carteira/participante/rm',{id}); if(r.ok) renderCarteira(); }
+async function cwLancar(pid,tipo){ const v=prompt((tipo==='deposito'?'Valor do aporte':'Valor do saque')+' (R$):'); if(v===null||!v.trim()) return; const r=await _cwf('/carteira/lancar',{tipo,part_id:pid,valor:v}); if(r.ok) renderCarteira(); else alert(r.erro||'erro'); }
+async function cwCompra(){ const m=document.getElementById('cwMsg'); const ticker=(document.getElementById('cwTicker').value||'').trim(); const divisao=[...document.querySelectorAll('.cwdiv')].map(i=>({part_id:i.dataset.pid,valor:i.value})).filter(d=>parseFloat(String(d.valor||'0').replace(',','.'))>0); if(!ticker||!divisao.length){ m.style.color='var(--warn)'; m.textContent='Informe o ativo e ao menos um valor.'; return; } const r=await _cwf('/carteira/compra',{ticker,divisao}); if(r.ok){ renderCarteira(); } else { m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
+async function cwVender(id,tk){ const v=prompt('Quanto você recebeu vendendo '+tk+'? (R$):'); if(v===null||!v.trim()) return; const r=await _cwf('/carteira/vender',{id,proceeds:v}); if(r.ok) renderCarteira(); else alert(r.erro||'erro'); }
+async function cwPixSalvar(){ const r=await _cwf('/carteira/pix',{chave:(document.getElementById('cwChave').value||'').trim(),recebedor:(document.getElementById('cwReceb').value||'').trim(),cidade:(document.getElementById('cwCidade').value||'').trim()}); if(r.ok) renderCarteira(); }
+async function cwQR(){ const box=document.getElementById('cwQrBox'); box.textContent='gerando...'; const r=await _cwf('/carteira/qr',{valor:(document.getElementById('cwQrV').value||'').trim()}); if(!r.ok){ box.textContent=r.erro||'erro'; return; } const img='https://api.qrserver.com/v1/create-qr-code/?size=210x210&data='+encodeURIComponent(r.copia_cola); box.innerHTML='<img src="'+img+'" width="210" height="210" style="border-radius:12px;background:#fff;padding:8px"><div style="margin-top:8px;display:flex;gap:6px;max-width:420px"><input readonly value="'+r.copia_cola.replace(/"/g,'&quot;')+'" onclick="this.select()" style="flex:1"><button class="btn" onclick="var i=this.previousElementSibling;i.select();navigator.clipboard.writeText(i.value);this.textContent=\'✓\'">Copiar</button></div>'; }
 
 // ===================== EXPORTAR CSV (dados do negocio) =====================
 function exportarCSV(nome, linhas){
@@ -1269,7 +1330,7 @@ function aplicaUser(){
   setPlanoBadge(plano);
   carregaPrefs();   // aplica tema + skin do mascote da conta
   tokensCarregar(); // saldo de tokens + modos no chat
-  novidadesRender(); // carrossel de novidades na home
+  novidadesCarregar(); // carrossel de novidades (do backend) + toast de novidade nova
   // re-renderiza a pagina atual que depende do usuario (corrige painel de dono nao aparecer no 1o load)
   if(VIEW==='conta') renderConta(); else if(VIEW==='config') renderConfig(); else if(VIEW==='planos') renderPlanos(); else if(VIEW==='code') renderCode();
   renderNav();
@@ -1391,27 +1452,50 @@ function modesRender(){
 function setModo(id){ _MODO=id; localStorage.setItem('orion_modo',id); modesRender(); }
 function setEsf(id){ _ESF=id; localStorage.setItem('orion_esf',id); modesRender(); }
 // ===================== CARROSSEL DE NOVIDADES (home) =====================
-const NOVIDADES=[
-  {tag:'Novo',h:'Skins e temas pro Orion ✨',p:'Mais de 15 skins de mascote (com chapéu e roupinha) e novos temas do app. Deixe o Orion com a sua cara em Personalização.'},
-  {tag:'Novo',h:'Modos de IA + tokens 🧠',p:'Escolha Rápido, Avançado ou Raciocínio e o nível de esforço. Acompanhe seus tokens e recarregue quando quiser.'},
-  {tag:'Negócio',h:'Prospecção + agentes de IA 🤝',p:'No Tráfego: ache clientes, dispare no WhatsApp e crie agentes de vendas — tudo no Painel.'},
-  {tag:'Mascote',h:'Arraste o Orion pela tela 🛸',p:'Agora o mascote te acompanha onde você quiser. Toque e arraste pra posicionar.'},
+const NOVIDADES_PADRAO=[
+  {id:0,tag:'Novo',h:'Skins e temas pro Orion ✨',p:'Mais de 15 skins de mascote (com chapéu e roupinha) e novos temas do app. Deixe o Orion com a sua cara em Personalização.'},
+  {id:0,tag:'Novo',h:'Modos de IA + tokens 🧠',p:'Escolha Rápido, Avançado ou Raciocínio e o nível de esforço. Acompanhe seus tokens e recarregue quando quiser.'},
+  {id:0,tag:'Negócio',h:'Prospecção + agentes de IA 🤝',p:'No Tráfego: ache clientes, dispare no WhatsApp e crie agentes de vendas, tudo no Painel.'},
 ];
+let NOVIDADES=NOVIDADES_PADRAO.slice();
 let _nvI=0, _nvTimer=null;
+async function novidadesCarregar(){
+  try{ const r=await (await fetch('/novidades?app=orion')).json();
+    if(r&&r.ok&&r.novidades&&r.novidades.length){
+      NOVIDADES=r.novidades.map(n=>({id:n.id||0,tag:n.tag||'Novidade',h:n.titulo||'',p:n.texto||'',link:n.link||''}));
+    } else { NOVIDADES=NOVIDADES_PADRAO.slice(); }
+  }catch(e){ NOVIDADES=NOVIDADES_PADRAO.slice(); }
+  novidadesRender(); novidadesToast();
+}
+function _nvMaxId(){ return NOVIDADES.reduce((m,n)=>Math.max(m,n.id||0),0); }
+function novidadesToast(){   // ticker/notificacao quando tem novidade nova desde a ultima vista
+  const maxId=_nvMaxId(); const visto=Number(localStorage.getItem('orion_nv_seen')||0);
+  if(!USER||USER.convidado||maxId<=visto||maxId===0) return;
+  const nova=NOVIDADES.find(n=>(n.id||0)===maxId)||NOVIDADES[0];
+  let t=document.getElementById('nvToast'); if(t)t.remove();
+  t=document.createElement('div'); t.id='nvToast';
+  t.style.cssText='position:fixed;right:18px;bottom:18px;max-width:330px;z-index:120;background:var(--panel,#15131d);border:1px solid var(--line2,#2a2740);border-left:3px solid var(--ac,#7aa2ff);border-radius:14px;padding:12px 14px;box-shadow:0 14px 40px rgba(0,0,0,.4);cursor:pointer;animation:nvIn .3s ease';
+  t.innerHTML='<div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--ac,#7aa2ff);font-weight:700">✨ '+esc(nova.tag)+'</div><div style="font-weight:600;margin:3px 0 2px">'+esc(nova.h)+'</div><div style="font-size:12.5px;color:var(--dim,#9aa)">'+esc((nova.p||'').slice(0,110))+'</div><div style="font-size:11px;color:var(--faint,#778);margin-top:6px">toque pra ver ·  ✕ dispensar</div>';
+  t.onclick=()=>{ localStorage.setItem('orion_nv_seen',String(maxId)); t.remove(); try{go('home');}catch(e){} const el=document.getElementById('novidades'); if(el){el.scrollIntoView({behavior:'smooth'});} };
+  document.body.appendChild(t);
+  setTimeout(()=>{ if(document.getElementById('nvToast')===t) t.style.opacity='0'; }, 9000);
+  setTimeout(()=>{ if(document.getElementById('nvToast')===t) t.remove(); }, 9500);
+}
 function novidadesRender(){
   const el=document.getElementById('novidades'); if(!el) return;
-  if(localStorage.getItem('orion_nv_off')==='1' || !USER || USER.convidado){ el.classList.remove('on'); return; }
+  if(!USER || USER.convidado || !NOVIDADES.length){ el.classList.remove('on'); return; }
   el.classList.add('on');
   el.innerHTML='<button class="nv-x" onclick="novidadesFechar()">&times;</button>'+
     NOVIDADES.map((n,i)=>`<div class="nv-slide ${i===0?'on':''}"><div class="nv-tag">${esc(n.tag)}</div><h4>${esc(n.h)}</h4><p>${esc(n.p)}</p></div>`).join('')+
     '<div class="nv-dots">'+NOVIDADES.map((n,i)=>`<i class="${i===0?'on':''}" onclick="nvGo(${i})"></i>`).join('')+'</div>'+
-    '<span class="nv-go" onclick="go(\'person\')">Ver ›</span>';
-  _nvI=0; clearInterval(_nvTimer); _nvTimer=setInterval(()=>nvGo((_nvI+1)%NOVIDADES.length), 5000);
+    '<span class="nv-go" onclick="nvAbrir()">Ver ›</span>';
+  _nvI=0; clearInterval(_nvTimer); if(NOVIDADES.length>1) _nvTimer=setInterval(()=>nvGo((_nvI+1)%NOVIDADES.length), 5000);
 }
+function nvAbrir(){ const n=NOVIDADES[_nvI]||{}; if(n.link){ window.open(n.link,'_blank'); } else { go('person'); } }
 function nvGo(i){ _nvI=i; const el=document.getElementById('novidades'); if(!el) return;
   el.querySelectorAll('.nv-slide').forEach((s,ix)=>s.classList.toggle('on',ix===i));
   el.querySelectorAll('.nv-dots i').forEach((d,ix)=>d.classList.toggle('on',ix===i)); }
-function novidadesFechar(){ localStorage.setItem('orion_nv_off','1'); const el=document.getElementById('novidades'); if(el) el.classList.remove('on'); clearInterval(_nvTimer); }
+function novidadesFechar(){ localStorage.setItem('orion_nv_seen',String(_nvMaxId())); const el=document.getElementById('novidades'); if(el) el.classList.remove('on'); clearInterval(_nvTimer); }
 // ===================== APARENCIA: TEMAS + SKINS DO MASCOTE (por plano) =====================
 const TEMAS={
   espaco:{nome:'Espaço',free:true,vars:{}},
@@ -1621,7 +1705,71 @@ function aplicaTema(id){ const t=TEMAS[id]||TEMAS.espaco; const r=document.docum
     bg.style.cssText='position:fixed;inset:0;z-index:-1;pointer-events:none;transition:opacity .4s'; document.body.appendChild(bg); }
   bg.style.background=t.bg||''; bg.style.opacity=t.bg?'1':'0';
   if(!document.getElementById('temaAura')){ const a=document.createElement('div'); a.id='temaAura'; document.body.appendChild(a); }
-  if(!document.getElementById('temaGrain')){ const g=document.createElement('div'); g.id='temaGrain'; document.body.appendChild(g); } }
+  if(!document.getElementById('temaGrain')){ const g=document.createElement('div'); g.id='temaGrain'; document.body.appendChild(g); }
+  temaParticulas(t.part || _partDoTema(id)); }
+// ===== identidade por tema: camada de partículas (cada skin com seu caráter) =====
+const _PART_MAP={ espaco:'estrelas', meianoite:'estrelas', aurora_b:'estrelas', galaxia:'estrelas',
+  esmeralda:'bolhas', oceano:'bolhas', cyber:'chuva', matrix:'matrix', neon:'chuva',
+  ambar:'brasas', ouro:'brasas', rubi:'brasas', cafe:'brasas', vinho:'petalas', rose:'petalas',
+  grafite:'poeira', carbon:'poeira', meta:'poeira' };
+function _partDoTema(id){ return _PART_MAP[id] || 'estrelas'; }
+let _partRAF=null, _partKind='estrelas';
+function _cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#7aa2ff'; }
+function temaParticulas(kind){
+  _partKind=kind;
+  let cv=document.getElementById('temaParticulas');
+  const reduz = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(_partRAF){ cancelAnimationFrame(_partRAF); _partRAF=null; }
+  if(kind==='none' || reduz){ if(cv) cv.remove(); return; }
+  if(!cv){ cv=document.createElement('canvas'); cv.id='temaParticulas'; document.body.appendChild(cv); }
+  const ctx=cv.getContext('2d'); let W=0,H=0,DPR=Math.min(2,window.devicePixelRatio||1);
+  function resize(){ const vw=innerWidth||document.documentElement.clientWidth||1280, vh=innerHeight||document.documentElement.clientHeight||800;
+    W=cv.width=vw*DPR; H=cv.height=vh*DPR; cv.style.width=vw+'px'; cv.style.height=vh+'px'; }
+  cv._resize=resize; resize();
+  if(!window._partResizeBound){ window._partResizeBound=true; window.addEventListener('resize',()=>{ const c=document.getElementById('temaParticulas'); if(c&&c._resize){ clearTimeout(c._rt); c._rt=setTimeout(c._resize,200);} }); }
+  const c1=_cssVar('--accent'), c2=_cssVar('--accent2');
+  const N=Math.max(16,Math.min(60,Math.floor(innerWidth/26)));
+  const P=[]; const rnd=(a,b)=>a+Math.random()*(b-a);
+  for(let i=0;i<N;i++) P.push(_partNovo(kind,W,H,rnd));
+  function step(){
+    ctx.clearRect(0,0,W,H);
+    for(const p of P){ _partTick(kind,p,W,H,rnd); _partDraw(kind,ctx,p,c1,c2,DPR); }
+    _partRAF=requestAnimationFrame(step);
+  }
+  step();
+}
+function _partNovo(kind,W,H,rnd){
+  const base={x:rnd(0,W),y:rnd(0,H),r:rnd(0.6,2.2),a:rnd(.2,.9),vx:rnd(-.2,.2),vy:rnd(-.3,.3),ph:rnd(0,6.28),sp:rnd(.01,.04)};
+  if(kind==='brasas'){ base.y=rnd(0,H); base.vy=-rnd(.2,.7); base.r=rnd(.8,2.6); }
+  else if(kind==='bolhas'){ base.vy=-rnd(.15,.5); base.r=rnd(1.5,5); base.a=rnd(.12,.4); }
+  else if(kind==='petalas'){ base.vy=rnd(.2,.6); base.vx=rnd(-.3,.3); base.r=rnd(2,4.5); base.rot=rnd(0,6.28); base.vr=rnd(-.03,.03); }
+  else if(kind==='matrix'){ base.vy=rnd(1.2,3.2); base.len=rnd(8,22); base.r=rnd(.6,1.2); base.a=rnd(.3,.8); }
+  else if(kind==='chuva'){ base.vy=rnd(2.5,5); base.vx=rnd(.3,.9); base.len=rnd(6,14); base.a=rnd(.2,.5); }
+  else if(kind==='poeira'){ base.vx=rnd(-.12,.12); base.vy=rnd(-.12,.12); base.r=rnd(.5,1.6); base.a=rnd(.12,.4); }
+  return base;
+}
+function _wrap(p,W,H){ const m=10; if(p.x<-m)p.x=W+m; if(p.x>W+m)p.x=-m; if(p.y<-m)p.y=H+m; if(p.y>H+m)p.y=-m; }
+function _partTick(kind,p,W,H,rnd){
+  p.ph+=p.sp;
+  if(kind==='estrelas'){ p.x+=p.vx*0.4; p.y+=p.vy*0.4; p.tw=0.5+0.5*Math.sin(p.ph); }
+  else if(kind==='brasas'){ p.y+=p.vy; p.x+=Math.sin(p.ph)*0.5; if(p.y<-10){p.y=H+10;p.x=rnd(0,W);} }
+  else if(kind==='bolhas'){ p.y+=p.vy; p.x+=Math.sin(p.ph)*0.6; if(p.y<-10){p.y=H+10;p.x=rnd(0,W);} }
+  else if(kind==='petalas'){ p.y+=p.vy; p.x+=p.vx+Math.sin(p.ph)*0.5; p.rot+=p.vr; if(p.y>H+10){p.y=-10;p.x=rnd(0,W);} }
+  else if(kind==='matrix'){ p.y+=p.vy; if(p.y>H+p.len){p.y=-p.len;p.x=rnd(0,W);p.vy=rnd(1.2,3.2);} }
+  else if(kind==='chuva'){ p.y+=p.vy; p.x+=p.vx; if(p.y>H+10){p.y=-10;p.x=rnd(0,W);} }
+  else { p.x+=p.vx; p.y+=p.vy; _wrap(p,W,H); }
+}
+function _hexA(hex,a){ hex=(hex||'').replace('#',''); if(hex.length===3)hex=hex.split('').map(c=>c+c).join(''); const n=parseInt(hex||'7aa2ff',16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+function _partDraw(kind,ctx,p,c1,c2,DPR){
+  const col=(p.x%2<1?c1:c2);
+  if(kind==='matrix'||kind==='chuva'){ ctx.strokeStyle=_hexA(col,p.a); ctx.lineWidth=p.r*DPR; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x-(kind==='chuva'?p.vx*4:0),p.y-(p.len)*DPR); ctx.stroke(); return; }
+  if(kind==='bolhas'){ ctx.strokeStyle=_hexA(col,p.a); ctx.lineWidth=1*DPR; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*DPR,0,6.28); ctx.stroke(); return; }
+  const a=(kind==='estrelas')?(p.a*(p.tw||1)):p.a;
+  ctx.fillStyle=_hexA(col,a);
+  if(kind==='petalas'){ ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot||0); ctx.beginPath(); ctx.ellipse(0,0,p.r*DPR,p.r*0.5*DPR,0,0,6.28); ctx.fill(); ctx.restore(); return; }
+  ctx.beginPath(); ctx.arc(p.x,p.y,p.r*DPR,0,6.28); ctx.fill();
+  if(kind==='brasas'){ ctx.fillStyle=_hexA(col,a*0.25); ctx.beginPath(); ctx.arc(p.x,p.y,p.r*2.4*DPR,0,6.28); ctx.fill(); }
+}
 function mascoteSVG(skin){ const s=SKINS[skin]||SKINS.cosmo; return '<svg viewBox="0 0 100 100">'+_mascInner(s,'cg'+(_gidN++))+'</svg>'; }
 function aplicaMascote(skin){ const c=document.getElementById('companion'); if(c) c.innerHTML=mascoteSVG(skin)+'<button class="comp-x" onclick="event.stopPropagation();compEsconder()" title="Esconder">&#10005;</button>'; }
 function aplicaAparencia(){ aplicaTema(_PREFS.tema); aplicaMascote(_PREFS.skin); }
@@ -2466,6 +2614,7 @@ function renderConta(){
   </div>
   ${conv?'':'<div class="card"><h3>Tokens do Orion</h3><div class="hint" style="margin-bottom:10px">Os tokens medem o uso da IA. Cada plano tem uma cota mensal. Se acabar, voce pode recarregar avulso (planos pagos) ou usar o modo Rapido (gratis).</div><div id="tokBox">carregando...</div></div>'}
   ${(u.criador)?'<div class="card"><h3>Admin - Integrações (linkar tudo)</h3><div class="hint" style="margin-bottom:10px">So o dono ve. Cole aqui as chaves de cada integração pra ligar no servidor (vale como alternativa às variáveis de ambiente). Verde = ligado.</div><div id="integraAdmin">carregando...</div></div>':''}
+  ${(u.criador)?'<div class="card"><h3>Admin - Novidades (avisos nos apps)</h3><div class="hint" style="margin-bottom:10px">Publique avisos/novidades que aparecem como ticker e carrossel pros usuários (Orion e/ou Clínica+). So o dono ve isto.</div><div id="novAdmin">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Admin - Planos personalizados (VIP)</h3><div class="hint" style="margin-bottom:10px">Monte planos sob medida pro cliente (base + tokens extras) e atribua. Os VIPs ganham as skins de Realeza/Diamante.</div><div id="vipAdmin">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Admin - Funil & anúncios</h3><div class="hint" style="margin-bottom:10px">Visita → cadastro → ativação → paywall → pagou, e quem pagou por fonte/campanha (UTM). So o dono ve.</div><div id="funilAdmin">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Admin - custo de tokens</h3><div class="hint" style="margin-bottom:10px">Custo real de API por usuario (so o dono ve).</div><div id="tokAdmin">carregando...</div></div>':''}
@@ -2473,7 +2622,7 @@ function renderConta(){
   ${(u.criador)?'<div class="card" id="adminCard"><h3>Admin - contas e planos</h3><div class="hint" style="margin-bottom:10px">So o dono ve isto. Marque voce e seu socio como Business vitalicio, ou defina o plano de qualquer conta.</div><div id="adminLista">carregando...</div></div>':''}
   ${(u.criador)?'<div class="card"><h3>Controle e moderação</h3><div class="hint" style="margin-bottom:10px">Banir/desbanir usuários e dispositivos e ver o que o Orion aprende ficam no aplicativo separado <b>OrionAdmin</b> (no seu computador), pra manter o painel limpo e o controle blindado fora do navegador.</div></div>':''}`;
   carregarUso(); carregarWa(); if(!conv) carregarTokens();
-  if(u.criador){ carregarAdmin(); carregarTokAdmin(); carregarIntegraAdmin(); carregarVipAdmin(); carregarFunil(); }
+  if(u.criador){ carregarAdmin(); carregarTokAdmin(); carregarIntegraAdmin(); carregarVipAdmin(); carregarFunil(); carregarNovidadesAdmin(); }
 }
 async function carregarFunil(){
   const box=document.getElementById('funilAdmin'); if(!box) return;
@@ -2566,6 +2715,34 @@ async function salvarIntegraAdmin(keys){
     if(r.ok){ piscarSave('INTEGRACAO'); carregarIntegraAdmin(); } else if(m){ m.style.color='var(--warn)'; m.textContent=r.erro||'Nao consegui salvar.'; }
   }catch(e){ if(m) m.textContent='Sem conexao.'; }
 }
+let _NOVADM=[];
+async function carregarNovidadesAdmin(){
+  const box=document.getElementById('novAdmin'); if(!box) return;
+  let r={novidades:[]}; try{ r=await (await fetch('/novidades?admin=1')).json(); }catch(e){}
+  _NOVADM=(r&&r.novidades)||[];
+  const apps={ambos:'Orion + Clínica+',orion:'Só Orion',clinica:'Só Clínica+'};
+  const lista=_NOVADM.length?_NOVADM.map(n=>`<div class="row" style="justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--line2);padding:8px 0">
+      <div style="flex:1"><b>${esc(n.tag)}</b> · ${esc(n.titulo)} ${n.ativo?'':'<span class="hint">(oculto)</span>'}<div class="hint">${esc((n.texto||'').slice(0,90))} · ${esc(apps[n.app]||n.app)}</div></div>
+      <div class="row"><button class="btn" style="padding:5px 9px;font-size:12px" onclick='novAdmEditar(${n.id})'>Editar</button><button class="btn" style="padding:5px 9px;font-size:12px" onclick="novAdmApagar(${n.id})">✕</button></div></div>`).join(''):'<div class="hint">Nenhuma novidade publicada.</div>';
+  box.innerHTML=`<div class="row" style="gap:6px;flex-wrap:wrap">
+      <input type="hidden" id="novId">
+      <input id="novTag" placeholder="Etiqueta (ex: Novo)" style="width:130px">
+      <select id="novApp" style="background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:7px 8px"><option value="ambos">Orion + Clínica+</option><option value="orion">Só Orion</option><option value="clinica">Só Clínica+</option></select>
+      <label class="hint" style="display:flex;align-items:center;gap:5px"><input type="checkbox" id="novAtivo" checked style="width:auto"> ativo</label></div>
+    <input id="novTitulo" placeholder="Título da novidade" style="width:100%;margin-top:6px">
+    <textarea id="novTexto" placeholder="Texto curto do aviso" style="width:100%;height:54px;margin-top:6px"></textarea>
+    <input id="novLink" placeholder="Link opcional (https://...)" style="width:100%;margin-top:6px">
+    <div class="row" style="margin-top:8px"><button class="btn primary" style="padding:7px 12px" onclick="novAdmSalvar()">Publicar</button><button class="btn" style="padding:7px 12px" onclick="novAdmReset()">Limpar</button><span id="novMsg" class="hint"></span></div>
+    <div style="margin-top:10px">${lista}</div>`;
+}
+function novAdmReset(){ ['novId','novTag','novTitulo','novTexto','novLink'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';}); const a=document.getElementById('novAtivo'); if(a)a.checked=true; const ap=document.getElementById('novApp'); if(ap)ap.value='ambos'; }
+function novAdmEditar(id){ const n=_NOVADM.find(x=>x.id===id); if(!n) return; document.getElementById('novId').value=n.id; document.getElementById('novTag').value=n.tag||''; document.getElementById('novTitulo').value=n.titulo||''; document.getElementById('novTexto').value=n.texto||''; document.getElementById('novLink').value=n.link||''; document.getElementById('novApp').value=n.app||'ambos'; document.getElementById('novAtivo').checked=n.ativo!==false; document.getElementById('novTag').focus(); }
+async function novAdmSalvar(){ const m=document.getElementById('novMsg'); const titulo=document.getElementById('novTitulo').value.trim(); if(!titulo){ if(m){m.style.color='var(--warn)';m.textContent='Dê um título.';} return; }
+  const body={id:document.getElementById('novId').value||'',tag:document.getElementById('novTag').value.trim()||'Novidade',titulo,texto:document.getElementById('novTexto').value.trim(),link:document.getElementById('novLink').value.trim(),app:document.getElementById('novApp').value,ativo:document.getElementById('novAtivo').checked};
+  try{ const r=await (await fetch('/novidades/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+    if(r.ok){ piscarSave&&piscarSave('NOVIDADE'); novAdmReset(); carregarNovidadesAdmin(); } else if(m){ m.style.color='var(--warn)'; m.textContent=r.erro||'erro'; }
+  }catch(e){ if(m) m.textContent='Sem conexão.'; } }
+async function novAdmApagar(id){ if(!confirm('Apagar essa novidade?')) return; try{ await fetch('/novidades/apagar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); carregarNovidadesAdmin(); }catch(e){} }
 async function carregarTokens(){
   const box=document.getElementById('tokBox'); if(!box) return;
   let r=null; try{ r=await (await fetch('/tokens')).json(); }catch(e){}

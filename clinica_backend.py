@@ -76,6 +76,14 @@ def cl_servico_salvar(uid, d):
          or next((x for x in sv if (x.get("nome") or "").strip().lower()==nome.lower()), None)
     sid = ex["id"] if ex else int(time.time()*1000)
     s = {"id":sid, "nome":nome, "preco":round(_num(d.get("preco")),2), "duracao":max(5,int(_num(d.get("duracao")) or 60))}
+    if ex:   # preserva campos que nao vieram no form (insumos, foto)
+        for k in ("insumos","foto"):
+            if k in ex: s[k]=ex[k]
+    # foto do servico (base64 data-url, ja redimensionada no front; cap ~700KB pra nao estourar o blob)
+    if "foto" in d:
+        ft = d.get("foto")
+        if ft in (None, "", "null"): s.pop("foto", None)
+        elif isinstance(ft, str) and ft.startswith("data:image") and len(ft) <= 950000: s["foto"]=ft
     sv = [x for x in sv if x.get("id")!=sid]; sv.append(s); sv.sort(key=lambda x:x["nome"].lower())
     set_blob(uid, "cl_servicos", sv); return {"ok":True, "servicos":sv}
 def cl_servico_apagar(uid, sid):
@@ -202,12 +210,19 @@ def cl_agendar(uid, d, origem="painel"):
     disp = cl_disponibilidade(uid, data, sv["id"], fid)
     if not disp.get("ok"): return disp
     if hora not in disp["slots"]: return {"ok":False, "erro":"esse horario nao esta disponivel", "slots":disp["slots"]}
+    # produtos no agendamento (valida estoque ANTES de gravar qualquer coisa)
+    prod_linhas, perr = _cl_prod_parse(uid, d.get("produtos"))
+    if perr: return {"ok":False, "erro":perr}
+    valor_servico = (_num(d.get("valor")) if d.get("valor") not in (None,"") else float(sv.get("preco",0)))
+    prod_total = round(sum(ln["total"] for ln in prod_linhas), 2)
     ags = cl_ags_get(uid); aid = int(time.time()*1000)
     a = {"id":aid, "cliente":(d.get("cliente") or "").strip()[:80], "telefone":(d.get("telefone") or "").strip()[:30],
          "servico_id":sv["id"], "servico":sv["nome"], "func_id":fid, "inicio":f"{data}T{hora}", "duracao":int(sv.get("duracao",60)),
-         "valor":(_num(d.get("valor")) if d.get("valor") not in (None,"") else float(sv.get("preco",0))),
+         "valor_servico":round(valor_servico,2), "produtos":prod_linhas, "valor":round(valor_servico + prod_total, 2),
          "status":"marcado", "pagamento":(d.get("pagamento") or ""), "origem":origem, "criado":time.time()}
     ags.append(a); set_blob(uid, "cl_agendamentos", ags)
+    try: _cl_prod_baixar(uid, prod_linhas)   # reserva/da baixa no estoque ja no agendamento
+    except Exception as e: print("[agendar produtos]", e)
     try:
         if a["telefone"]: cl_cliente_registrar(uid, a["cliente"], a["telefone"])
     except Exception: pass
@@ -222,7 +237,13 @@ def cl_agendar(uid, d, origem="painel"):
     try:   # PIX (sinal ou total) pra agendamento de cliente/atendente, se a clinica ativou
         px = cl_pix_get(uid)
         if px.get("ativo") and origem in ("cliente","atendente") and float(a.get("valor") or 0) > 0:
-            valor = float(a["valor"]) * (px.get("sinal_pct",30)/100.0 if px.get("modo")=="sinal" else 1.0)
+            if px.get("modo")=="sinal":
+                pct = px.get("sinal_pct",30)/100.0
+                prod_comprar = sum(ln["total"] for ln in prod_linhas if ln["modo"]=="comprar")   # comprar na hora = cheio
+                prod_reservar = sum(ln["total"] for ln in prod_linhas if ln["modo"]=="reservar")  # reservar = entra no sinal
+                valor = round((float(a.get("valor_servico",0)) + prod_reservar)*pct + prod_comprar, 2)
+            else:
+                valor = float(a["valor"])   # total
             cob = cl_pix_cobrar(uid, valor, f"{a['servico']} - {a['cliente'] or 'cliente'}")
             if cob.get("ok"):
                 a["pix"] = {"id":cob.get("id"), "valor":cob.get("valor")}; set_blob(uid, "cl_agendamentos", ags)
@@ -232,10 +253,15 @@ def cl_agendar(uid, d, origem="painel"):
 def cl_desmarcar(uid, aid, motivo=""):
     try: aid=int(aid)
     except Exception: pass
-    ags = cl_ags_get(uid); ch = False; nome=""
+    ags = cl_ags_get(uid); ch = False; nome=""; devolver=None
     for a in ags:
-        if a.get("id")==aid: a["status"]="desmarcado"; a["motivo"]=(motivo or "")[:200]; ch=True; nome=a.get("cliente","")
+        if a.get("id")==aid:
+            a["status"]="desmarcado"; a["motivo"]=(motivo or "")[:200]; ch=True; nome=a.get("cliente","")
+            devolver=a.get("produtos")
     set_blob(uid, "cl_agendamentos", ags)
+    try:
+        if devolver: _cl_prod_devolver(uid, devolver)   # produtos nao entregues voltam pro estoque
+    except Exception as e: print("[desmarcar produtos]", e)
     if ch:
         try: notificar(uid, "Consulta desmarcada", f"{nome or 'Cliente'} cancelou. Um horario foi liberado.", "/clinica")
         except Exception: pass
@@ -253,6 +279,7 @@ def cl_concluir(uid, aid, d=None):
             # se o cliente tem pacote pra esse servico, debita 1 sessao (ja foi pago na compra do pacote)
             if tel and _cl_pacote_debitar(uid, tel, svid):
                 a["valor"]=0; a["pagamento"]="pacote"; usou_pacote=True
+            for ln in (a.get("produtos") or []): ln["entregue"]=True   # produtos entregues no atendimento
     set_blob(uid, "cl_agendamentos", ags)
     if tel:
         try: cl_cliente_proc_inc(uid, tel)
@@ -430,9 +457,47 @@ def cl_bot_contexto(uid):
             f"Perguntas frequentes: {faqs}. "
             "REGRAS: responda SO com base nessas informacoes. Se nao souber, ofereca falar com a equipe. "
             "Quando o cliente quiser agendar, pergunte o procedimento e o dia/horario de preferencia e diga que vai verificar a disponibilidade.")
+def cl_bot_fallback(uid, mensagem, historico=None):
+    """Resposta sem IA: usa os dados reais da clinica (precos, horarios, endereco, FAQ). Nunca expoe detalhe tecnico."""
+    p = cl_perfil_get(uid); sv = cl_servicos_get(uid); h = cl_horario_get(uid)
+    nome = p.get("nome") or "nossa clinica"; m = (mensagem or "").lower()
+    def _has(*ks): return any(k in m for k in ks)
+    # cliente veio de ANUNCIO? (na msg atual ou na 1a do historico) -> recepcao calorosa ja puxando o procedimento
+    _an = cl_anuncio_match(uid, mensagem) or (cl_anuncio_match(uid, (historico or [{}])[0].get("content","")) if historico else None)
+    if _an and (not historico or len(historico) <= 1):
+        _sv = cl_servico_by(uid, _an.get("servico_id"))
+        if _sv:
+            return (f"Oi! 💖 Que bom que voce veio pelo nosso anuncio! O {_sv['nome']} sai por R$ {_sv['preco']:.0f} "
+                    f"({_sv['duracao']}min). Quer que eu veja os horarios livres pra voce? Me diz o melhor dia e seu nome + WhatsApp que eu ja deixo reservado. 😊")
+        return (f"Oi! 💖 Que bom que voce veio pelo nosso anuncio! Me conta qual procedimento te interessou que eu ja te passo "
+                f"valor e horarios. Pode mandar seu nome e WhatsApp tambem pra eu reservar.")
+    # FAQ cadastrada primeiro (match por palavra da pergunta)
+    for q in cl_faq_get(uid):
+        perg = (q.get("pergunta") or "").lower()
+        chave = [w for w in re.findall(r"\w+", perg) if len(w) > 3]
+        if chave and sum(1 for w in chave if w in m) >= max(1, len(chave)//3): return q.get("resposta","")
+    if _has("preco","preço","valor","quanto","tabela","custa","precos","preços"):
+        if not sv: return f"Ainda estou montando a tabela de precos da {nome}. Me diz qual procedimento te interessa que eu confirmo com a equipe."
+        return "Nossos valores:\n" + "\n".join(f"- {s['nome']}: R$ {s['preco']:.0f} ({s['duracao']}min)" for s in sv) + "\n\nQuer que eu veja um horario pra voce?"
+    if _has("horario","horário","funciona","aberto","abre","fecha","hora","atende"):
+        dias = "\n".join(f"- {CL_DIAS_NOME[d]}: {(h['dias'][d]['ini']+' as '+h['dias'][d]['fim']) if h['dias'][d].get('aberto') else 'fechado'}" for d in CL_DIAS)
+        return f"Nossos horarios:\n{dias}"
+    if _has("onde","endereco","endereço","local","fica","localiza","chego"):
+        return f"Estamos em {p.get('endereco') or 'um endereco que te passo no WhatsApp'}. Quer agendar uma visita?"
+    if _has("agend","marc","consulta","horario livre","disponiv","reserv","quero marcar"):
+        return ("Posso te ajudar a marcar! Toca em \"Ver agenda e marcar pelo formulario\" aqui em cima pra escolher procedimento, dia e horario. "
+                "Se preferir, me deixa seu nome e WhatsApp nos campos do topo que a equipe te chama.")
+    if _has("oi","ola","olá","bom dia","boa tarde","boa noite","tudo bem","ei"):
+        return f"Oi! 💖 Aqui e o atendente da {nome}. Posso falar dos procedimentos, precos, horarios e ja te ajudar a marcar. O que voce procura?"
+    base = f"Aqui e o atendente da {nome}. "
+    if sv: base += "Atendemos: " + ", ".join(s["nome"] for s in sv[:8]) + ". "
+    return base + "Posso te passar precos, horarios ou ja marcar sua consulta. Como posso ajudar?"
 def cl_bot_responder(uid, mensagem, historico=None):
     u = get_user(uid)
     if not u: return "Atendimento indisponivel no momento."
+    try:
+        if not _llm_resolve(u)[0]: return cl_bot_fallback(uid, mensagem, historico)   # sem IA: FAQ ancorada nos dados
+    except Exception: return cl_bot_fallback(uid, mensagem, historico)
     return cloud_chat(cl_bot_contexto(uid), (historico or [])[-8:] + [{"role":"user","content":mensagem}], 350, u)
 # ---- estado / onboarding ----
 def cl_onboarded(uid): return bool(get_blob(uid, "cl_onboarded", False))
@@ -689,16 +754,23 @@ def cl_cliente_apagar(uid, tel):
     if tk in cs: del cs[tk]; set_blob(uid, "cl_clientes", cs)
     return {"ok":True}
 def cl_aniversariantes(uid, mes=None):
-    """Clientes que fazem aniversario no mes (mes=1..12, padrao o atual)."""
-    mes = int(mes or datetime.date.today().month)
+    """Clientes que fazem aniversario no mes (mes=1..12, padrao o atual). Marca os de hoje + link de parabens."""
+    hoje = datetime.date.today(); mes = int(mes or hoje.month)
+    pnome = cl_perfil_get(uid).get("nome") or "nossa clinica"
     out = []
     for c in cl_clientes_raw(uid).values():
         n = c.get("nascimento") or ""
         if len(n) >= 7:
             try:
-                if int(n[5:7]) == mes: out.append({"nome":c.get("nome",""), "tel":c.get("tel",""), "dia":int(n[8:10]) if len(n)>=10 else 0})
+                if int(n[5:7]) == mes:
+                    dia = int(n[8:10]) if len(n)>=10 else 0
+                    eh_hoje = (dia == hoje.day and mes == hoje.month)
+                    tel = _digs(c.get("tel") or "")
+                    msg = f"Feliz aniversario, {(c.get('nome') or '').split(' ')[0] or 'tudo de bom'}! 🎂 A {pnome} deseja um dia incrivel. Passa aqui que temos um mimo especial pra voce 💖"
+                    out.append({"nome":c.get("nome",""), "tel":tel, "dia":dia, "hoje":eh_hoje,
+                                "link":((f"https://wa.me/55{tel}?text=" + urllib.parse.quote(msg)) if tel else "")})
             except Exception: pass
-    return sorted(out, key=lambda x:x["dia"])
+    return sorted(out, key=lambda x:(not x["hoje"], x["dia"]))
 def cl_cliente_proc_inc(uid, tel):
     tk = _digs(tel)
     if not tk: return
@@ -726,8 +798,9 @@ def cl_publico(uid):
     if not p.get("nome") and not cl_servicos_get(uid): return {"ok":False, "erro":"clinica nao encontrada"}
     return {"ok":True, "nome":p.get("nome","Clinica"), "sobre":p.get("sobre",""), "endereco":p.get("endereco",""),
             "telefone":p.get("telefone",""), "boas_vindas":p.get("boas_vindas",""),
-            "servicos":[{"id":s["id"], "nome":s["nome"], "preco":s["preco"], "duracao":s["duracao"]} for s in cl_servicos_get(uid)],
+            "servicos":[{"id":s["id"], "nome":s["nome"], "preco":s["preco"], "duracao":s["duracao"], "foto":s.get("foto","")} for s in cl_servicos_get(uid)],
             "profissionais":[{"id":f["id"], "nome":f.get("nome",""), "servicos":f.get("servicos",[])} for f in cl_func_get(uid) if f.get("ativo", True) is not False],
+            "produtos":cl_produtos_venda(uid),
             "fidelidade":cl_fidelidade_get(uid), "pix":cl_pix_get(uid)}
 
 # ---- bloqueios/folgas avulsas (alem dos dias fechados fixos) ----
@@ -854,7 +927,9 @@ def cl_estoque_salvar(uid, d):
     es = cl_estoque_get(uid); pid = d.get("id") or int(time.time()*1000)
     cur = next((x for x in es if x.get("id")==pid), {})
     p = {"id":pid, "nome":(d.get("nome") or "").strip()[:60], "qtd":(_num(d.get("qtd")) if d.get("qtd") not in (None,"") else float(cur.get("qtd",0))),
-         "minimo":(_num(d.get("minimo")) if d.get("minimo") not in (None,"") else float(cur.get("minimo",0))), "unidade":(d.get("unidade") or cur.get("unidade","un"))[:10]}
+         "minimo":(_num(d.get("minimo")) if d.get("minimo") not in (None,"") else float(cur.get("minimo",0))), "unidade":(d.get("unidade") or cur.get("unidade","un"))[:10],
+         "preco":(round(_num(d.get("preco")),2) if d.get("preco") not in (None,"") else float(cur.get("preco",0))),
+         "vender":(bool(d.get("vender")) if d.get("vender") is not None else cur.get("vender", False))}
     if not p["nome"]: return {"ok":False,"erro":"nome do produto"}
     es = [x for x in es if x.get("id")!=pid]; es.append(p); es.sort(key=lambda x:x["nome"].lower())
     set_blob(uid, "cl_estoque", es); return {"ok":True, "estoque":es, "alertas":cl_estoque_alertas(uid)}
@@ -867,6 +942,48 @@ def cl_estoque_mexer(uid, pid, delta):
     set_blob(uid, "cl_estoque", es); return {"ok":True, "estoque":es, "alertas":cl_estoque_alertas(uid)}
 def cl_estoque_alertas(uid):
     return [{"nome":p["nome"], "qtd":p.get("qtd",0), "unidade":p.get("unidade","un")} for p in cl_estoque_get(uid) if float(p.get("qtd",0)) <= float(p.get("minimo",0))]
+def cl_produtos_venda(uid):
+    """Produtos marcados pra venda (tem preco>0) com saldo, pra oferecer no agendamento."""
+    out=[]
+    for p in cl_estoque_get(uid):
+        if p.get("vender") and float(p.get("preco",0))>0:
+            out.append({"id":p["id"], "nome":p["nome"], "preco":round(float(p.get("preco",0)),2),
+                        "qtd":round(float(p.get("qtd",0)),2), "unidade":p.get("unidade","un")})
+    return out
+def _cl_prod_parse(uid, itens):
+    """Valida itens de produto pedidos no agendamento contra o estoque. Devolve (linhas, erro)."""
+    if not itens: return [], None
+    es={p["id"]:p for p in cl_estoque_get(uid)}; linhas=[]
+    for it in itens:
+        try: pid=int(it.get("produto_id"))
+        except Exception: continue
+        qt=_num(it.get("qtd")) or 1
+        if qt<=0: continue
+        p=es.get(pid)
+        if not p or not p.get("vender"): return None, f"produto indisponivel"
+        if float(p.get("qtd",0)) < qt: return None, f"sem estoque de {p['nome']} (tem {p.get('qtd',0)})"
+        modo = "comprar" if (it.get("modo") or "comprar")=="comprar" else "reservar"
+        preco=round(float(p.get("preco",0)),2)
+        linhas.append({"produto_id":pid, "nome":p["nome"], "qtd":qt, "preco":preco, "total":round(preco*qt,2),
+                       "modo":modo, "unidade":p.get("unidade","un")})
+    return linhas, None
+def _cl_prod_baixar(uid, linhas):
+    """Da baixa no estoque das linhas (reserva/venda) ao agendar."""
+    if not linhas: return
+    es=cl_estoque_get(uid); mp={p["id"]:p for p in es}
+    for ln in linhas:
+        p=mp.get(ln["produto_id"])
+        if p: p["qtd"]=round(float(p.get("qtd",0)) - float(ln["qtd"]), 2)
+    set_blob(uid,"cl_estoque",es)
+def _cl_prod_devolver(uid, linhas):
+    """Devolve ao estoque (ao desmarcar) os produtos que ainda nao foram entregues."""
+    if not linhas: return
+    es=cl_estoque_get(uid); mp={p["id"]:p for p in es}
+    for ln in linhas:
+        if ln.get("entregue"): continue
+        p=mp.get(ln["produto_id"])
+        if p: p["qtd"]=round(float(p.get("qtd",0)) + float(ln["qtd"]), 2)
+    set_blob(uid,"cl_estoque",es)
 def _cl_estoque_baixa_servico(uid, servico_id):
     """Baixa automatica dos insumos vinculados ao servico (se houver), ao concluir."""
     sv = cl_servico_by(uid, servico_id)

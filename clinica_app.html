@@ -353,9 +353,29 @@ function reminderHTML(){
     <button class="btn sm" onclick="go('negocio')">Completar agora</button></div>`;
 }
 
+// ---------------- ticker de novidades ----------------
+let _NOVCL=[], _novI=0, _novTimer=null;
+async function novTickerLoad(){
+  const el=$('novTicker'); if(!el) return;
+  let r={novidades:[]}; try{ r=await api('/novidades?app=clinica'); }catch(e){}
+  _NOVCL=(r&&r.novidades)||[];
+  const maxId=_NOVCL.reduce((m,n)=>Math.max(m,n.id||0),0);
+  const visto=Number(localStorage.getItem('cl_nov_seen')||0);
+  if(!_NOVCL.length || maxId<=visto){ el.innerHTML=''; return; }
+  _novI=0;
+  el.innerHTML=`<div id="novBar" style="display:flex;align-items:center;gap:10px;background:linear-gradient(100deg,rgba(183,110,121,.16),transparent);border:1px solid var(--linha);border-left:3px solid var(--rosa,#b76e79);border-radius:14px;padding:10px 12px;margin-bottom:12px">
+    <span style="font-size:18px">📣</span><div id="novTxt" style="flex:1;font-size:13.5px;min-width:0"></div>
+    <button class="btn ghost sm" onclick="novTickerFechar(${maxId})">✕</button></div>`;
+  novTickerShow();
+  clearInterval(_novTimer); if(_NOVCL.length>1) _novTimer=setInterval(()=>{ _novI=(_novI+1)%_NOVCL.length; novTickerShow(); }, 6000);
+}
+function novTickerShow(){ const t=$('novTxt'); if(!t) return; const n=_NOVCL[_novI]||{};
+  t.innerHTML=`<b>${esc(n.tag||'Novidade')}:</b> ${esc(n.titulo||'')}${n.texto?` <span style="color:var(--dim)">— ${esc(n.texto)}</span>`:''}${n.link?` <a href="${esc(n.link)}" target="_blank" style="color:var(--rosa,#b76e79)">ver ›</a>`:''}`; }
+function novTickerFechar(maxId){ localStorage.setItem('cl_nov_seen',String(maxId||0)); const el=$('novTicker'); if(el)el.innerHTML=''; clearInterval(_novTimer); }
 // ---------------- dashboard ----------------
 async function vDashboard(){
-  $('view').innerHTML='<h1>Painel da clínica</h1><div class="sub">Visão geral do seu dia e do mês.</div>'+reminderHTML()+'<div id="d"></div>';
+  $('view').innerHTML='<h1>Painel da clínica</h1><div class="sub">Visão geral do seu dia e do mês.</div><div id="novTicker"></div>'+reminderHTML()+'<div id="d"></div>';
+  novTickerLoad();
   const r=await api('/clinica/dashboard'); if(!r.ok){ $('d').innerHTML='<div class="card">Sem permissão.</div>'; return; }
   const pag=Object.entries(r.por_pagamento||{}).map(([k,v])=>`${k}: ${fmt(v)}`).join(' · ')||'sem recebimentos no mês';
   const func=(r.por_funcionario||[]).map(f=>`<div class="lin"><span>${esc(f.funcionario)}${f.comissao_pct?' <span class="muted">('+f.comissao_pct+'%)</span>':''}</span><div style="text-align:right"><b>${fmt(f.faturou)}</b>${f.comissao?'<div class="muted">comissão '+fmt(f.comissao)+'</div>':''}</div></div>`).join('')||'<div class="muted">Sem dados por funcionário ainda.</div>';
@@ -377,7 +397,8 @@ async function vDashboard(){
 async function mpDashLoad(){ const el=$('dmp'); if(!el) return;
   const s=await api('/clinica/mp/status');
   if(!s.app_ok){ el.innerHTML='<div class="muted">A confirmação automática de PIX via Mercado Pago ainda não foi liberada pela plataforma.</div>'; return; }
-  if(!s.ligado){ el.innerHTML='<div class="muted" style="margin-bottom:8px">Conecte sua conta do Mercado Pago pra confirmar automaticamente as entradas de PIX aqui no painel.</div><button class="btn primary" onclick="mpConectar()">Conectar Mercado Pago</button>'; return; }
+  if(!s.ligado){ const ru=location.origin+'/clinica/mp/callback'; el.innerHTML='<div class="muted" style="margin-bottom:8px">Conecte sua conta do Mercado Pago pra confirmar automaticamente as entradas de PIX aqui no painel.</div><button class="btn primary" onclick="mpConectar()">Conectar Mercado Pago</button>'+
+    '<div class="muted" style="margin-top:12px;font-size:12px;border-top:1px solid var(--line);padding-top:10px">Se der "app não está pronto": no painel do Mercado Pago (Suas integrações → seu app → <b>Configurar OAuth / URLs de redirecionamento</b>) cole <b>exatamente</b> esta URL:<div class="row" style="margin-top:5px"><input readonly value="'+ru+'" onclick="this.select()" style="flex:1;font-size:12px"><button class="btn sm" onclick="var i=this.previousElementSibling;i.select();navigator.clipboard.writeText(i.value);this.textContent=\'✓\'">Copiar</button></div>E use o <b>número da aplicação</b> (Client ID, só dígitos) em MP_CLIENT_ID, não o Access Token.</div>'; return; }
   const e=await api('/clinica/mp/entradas');
   if(!e.ok){ el.innerHTML=`<div class="muted">${esc(e.erro||'erro')}</div>`+(e.reconnect?' <button class="btn sm" onclick="mpConectar()">Reconectar</button>':''); return; }
   el.innerHTML=`<div style="font-size:22px;font-weight:800;color:var(--good)">${fmt(e.total)}</div><div class="muted" style="margin-bottom:6px">${e.qtd} PIX nos últimos 30 dias${s.conta?(' · conta '+esc(s.conta)):''}</div>`
@@ -389,7 +410,8 @@ async function mpDesconectar(){ if(!confirm('Desconectar o Mercado Pago?'))retur
 function agendaHTML(lista){
   if(!lista||!lista.length) return '<div class="muted">Nenhuma consulta.</div>';
   return lista.map(a=>{const data=(a.inicio||'').split('T')[0]||'';const hora=(a.inicio||'').split('T')[1]||'';
-    return `<div class="lin"><div><b>${hora}</b> ${data&&VIEW!=='dashboard'?'<span class="muted">'+data.split('-').reverse().join('/')+'</span>':''} · ${esc(a.cliente||'Cliente')} <span class="tag">${esc(a.servico)}</span>${a.func_nome?` <span class="muted">com ${esc(a.func_nome)}</span>`:''}<div class="muted">${esc(a.telefone||'')} · ${fmt(a.valor)}</div></div>
+    const prod=(a.produtos&&a.produtos.length)?`<div class="muted" style="font-size:12px">🛍️ ${a.produtos.map(p=>esc(p.qtd+'x '+p.nome)+(p.modo==='reservar'?' (reserva)':'')).join(', ')}</div>`:'';
+    return `<div class="lin"><div><b>${hora}</b> ${data&&VIEW!=='dashboard'?'<span class="muted">'+data.split('-').reverse().join('/')+'</span>':''} · ${esc(a.cliente||'Cliente')} <span class="tag">${esc(a.servico)}</span>${a.func_nome?` <span class="muted">com ${esc(a.func_nome)}</span>`:''}<div class="muted">${esc(a.telefone||'')} · ${fmt(a.valor)}</div>${prod}</div>
     <div class="row"><button class="btn sm" onclick="concluir(${a.id})">Concluir</button><button class="btn ghost sm" onclick="remarcar(${a.id},'${a.servico_id}')">Remarcar</button><button class="btn ghost sm" onclick="desmarcar(${a.id})">Desmarcar</button></div></div>`;}).join('');
 }
 async function concluir(id){ const pag=prompt('Forma de pagamento (dinheiro, maquininha, pix):','pix'); if(pag===null) return; await api('/clinica/concluir','POST',{id,pagamento:pag}); go(VIEW); }
@@ -430,11 +452,38 @@ async function vAgenda(){
         <div class="field" style="flex:1;min-width:160px"><label>Telefone</label><input id="agTel" placeholder="WhatsApp"></div></div>
       <label>Horários livres</label><div id="agSlots" class="slots"></div>
       <input type="hidden" id="agHora">
+      <div id="agProdBox" style="margin-top:14px"></div>
       <button class="btn primary" style="margin-top:14px" onclick="agMarcar()">Confirmar agendamento</button>
       <div id="agMsg" class="msg"></div>
     </div>
     <div class="card"><h3>Consultas do dia <span id="agDiaLbl" class="muted"></span></h3><div id="agLista"></div></div>`;
-  _calYM=$('agData').value.slice(0,7); calRender(); agSlots(); agLista();
+  _calYM=$('agData').value.slice(0,7); calRender(); agSlots(); agLista(); agProdLoad();
+}
+async function agProdLoad(){ const box=$('agProdBox'); if(!box) return; try{ const r=await api('/clinica/produtos'); AG_PROD=(r&&r.produtos)||[]; }catch(e){ AG_PROD=[]; } AG_CART=[];
+  if(!AG_PROD.length){ box.innerHTML=''; return; }
+  box.innerHTML=`<div style="border:1px solid var(--linha);border-radius:14px;padding:12px;background:var(--panel2)">
+    <div style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:8px">🛍️ Produtos <span class="muted" style="font-weight:400">(opcional — cliente leva ou reserva)</span></div>
+    <div class="row" style="align-items:flex-end">
+      <div class="field" style="flex:2;min-width:150px"><label>Produto</label><select id="agProd">${AG_PROD.map(p=>`<option value="${p.id}">${esc(p.nome)} · ${fmt(p.preco)} ${p.qtd<=0?'(esgotado)':''}</option>`).join('')}</select></div>
+      <div class="field" style="width:80px"><label>Qtd</label><input id="agProdQt" type="number" min="1" value="1"></div>
+      <div class="field" style="width:150px"><label>Como</label><select id="agProdModo"><option value="comprar">Comprar na hora</option><option value="reservar">Reservar (no sinal)</option></select></div>
+      <button class="btn ghost sm" style="margin-bottom:2px" onclick="agAddProd()">+ Add</button>
+    </div>
+    <div id="agCart" style="margin-top:6px"></div></div>`;
+  agCartRender();
+}
+function agAddProd(){ const sel=$('agProd'); if(!sel) return; const pid=parseInt(sel.value,10); const p=AG_PROD.find(x=>x.id===pid); if(!p) return;
+  const qt=Math.max(1,parseInt($('agProdQt').value,10)||1); const modo=$('agProdModo').value;
+  const ja=AG_CART.filter(c=>c.produto_id===pid).reduce((s,c)=>s+c.qtd,0);
+  if(ja+qt>p.qtd){ const m=$('agMsg'); m.style.color='var(--warn)'; m.textContent=`Só tem ${p.qtd} de ${p.nome} em estoque.`; return; }
+  const ex=AG_CART.find(c=>c.produto_id===pid&&c.modo===modo); if(ex){ ex.qtd+=qt; } else { AG_CART.push({produto_id:pid,nome:p.nome,preco:p.preco,qtd:qt,modo}); }
+  $('agProdQt').value='1'; agCartRender(); }
+function agCartRemove(i){ AG_CART.splice(i,1); agCartRender(); }
+function agCartRender(){ const el=$('agCart'); if(!el) return;
+  if(!AG_CART.length){ el.innerHTML='<div class="muted" style="font-size:12px">Nenhum produto adicionado.</div>'; return; }
+  const tot=AG_CART.reduce((s,c)=>s+c.preco*c.qtd,0);
+  el.innerHTML=AG_CART.map((c,i)=>`<div class="lin" style="padding:6px 0"><div><b>${c.qtd}x ${esc(c.nome)}</b> <span class="tag">${c.modo==='comprar'?'leva na hora':'reserva no sinal'}</span></div><div class="row"><b>${fmt(c.preco*c.qtd)}</b><button class="btn ghost sm" onclick="agCartRemove(${i})">✕</button></div></div>`).join('')
+    +`<div class="lin" style="border-top:1px solid var(--linha);margin-top:4px;padding-top:8px"><b>Produtos</b><b style="color:var(--good)">${fmt(tot)}</b></div>`;
 }
 const _MES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 function calNav(delta){ let [y,m]=(_calYM||HOJEISO.slice(0,7)).split('-').map(Number); m+=delta; if(m<1){m=12;y--;} if(m>12){m=1;y++;} _calYM=`${y}-${String(m).padStart(2,'0')}`; calRender(); }
@@ -501,9 +550,10 @@ function agPick(el,h){ document.querySelectorAll('#agSlots .slot').forEach(s=>s.
 async function agMarcar(){
   const hora=$('agHora').value; const m=$('agMsg');
   if(!hora){ m.style.color='var(--warn)'; m.textContent='Escolha um horário livre.'; return; }
-  const r=await api('/clinica/agendar','POST',{servico_id:$('agServ').value,data:$('agData').value,hora,cliente:$('agCli').value.trim(),telefone:$('agTel').value.trim(),func_id:($('agFunc')?$('agFunc').value:'')});
-  if(!r.ok){ m.style.color='var(--bad)'; m.textContent=r.erro||'Não consegui marcar.'; agSlots(); return; }
-  m.style.color='var(--good)'; m.textContent='Consulta marcada! ✓'; $('agCli').value='';$('agTel').value='';$('agHora').value=''; agSlots();
+  const r=await api('/clinica/agendar','POST',{servico_id:$('agServ').value,data:$('agData').value,hora,cliente:$('agCli').value.trim(),telefone:$('agTel').value.trim(),func_id:($('agFunc')?$('agFunc').value:''),produtos:AG_CART});
+  if(!r.ok){ m.style.color='var(--bad)'; m.textContent=r.erro||'Não consegui marcar.'; agSlots(); agProdLoad(); return; }
+  const a=r.agendamento||{}; const extra=(a.produtos&&a.produtos.length)?` · ${a.produtos.length} produto(s), total ${fmt(a.valor)}`:'';
+  m.style.color='var(--good)'; m.textContent='Consulta marcada! ✓'+extra; $('agCli').value='';$('agTel').value='';$('agHora').value=''; agSlots(); agProdLoad();
 }
 async function agLista(){ const data=$('agData').value; const lbl=$('agDiaLbl'); if(lbl) lbl.textContent='('+data.split('-').reverse().join('/')+')';
   const r=await api('/clinica/agenda?data='+data); const el=$('agLista'); if(el) el.innerHTML=agendaHTML((r.agenda||[])); }
@@ -570,6 +620,13 @@ async function vClientes(){
       <div class="row"><input id="lk" value="${esc(link)}" readonly style="flex:1;min-width:200px"><button class="btn primary" onclick="navigator.clipboard.writeText($('lk').value);this.textContent='Copiado!'">Copiar</button>
       <a class="btn" href="${esc(link)}" target="_blank">Abrir</a>
       <a class="btn" target="_blank" href="https://wa.me/?text=${encodeURIComponent('Agende sua consulta por aqui: '+link)}">Enviar no WhatsApp</a></div></div>
+    ${(function(){const cid=((EST.link_agendamento||'').match(/c=(\d+)/)||[])[1]||''; if(!cid)return ''; const snip='<script src="'+location.origin+'/orion-widget.js" data-clinica="'+cid+'"><\/script>';
+      return `<div class="card"><h3>✨ Atendente Orion no seu site</h3>
+      <div class="muted" style="margin-bottom:8px">Põe um chat flutuante no seu site (igual WhatsApp) onde o Orion tira dúvidas e já marca consulta. Cole este código antes de <b>&lt;/body&gt;</b> no seu site:</div>
+      <textarea id="wgCode" readonly style="width:100%;height:64px;font-family:monospace;font-size:12px;border:1px solid var(--linha);border-radius:10px;padding:8px;background:var(--panel2);color:var(--ink)">${esc(snip)}</textarea>
+      <div class="row" style="margin-top:8px"><button class="btn primary" onclick="navigator.clipboard.writeText($('wgCode').value);this.textContent='Copiado!'">Copiar código</button>
+        <a class="btn" href="/widget?c=${cid}" target="_blank">Testar o atendente</a></div>
+      <div class="muted" style="margin-top:8px;font-size:12px">Dá pra mudar a cor (<code>data-cor="#b76e79"</code>) ou o lado (<code>data-lado="esquerda"</code>). O atendente usa o cérebro de IA configurado nas suas integrações.</div></div>`;})()}
     <div class="card"><h3>🎁 Programa de fidelidade</h3>
       <div class="muted" style="margin-bottom:10px">Você escolhe: a cada X procedimentos o cliente ganha um prêmio. Só conta clientes cadastrados.</div>
       <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><input type="checkbox" id="fdAtivo" style="width:auto" ${f.ativo?'checked':''}> Ativar fidelidade</label>
@@ -595,8 +652,11 @@ async function cliSalvar(){ const tel=$('clTel').value.trim(); const m=$('clMsg'
   const r=await api('/clinica/cliente/salvar','POST',{nome:$('clNome').value.trim(),tel,email:$('clEmail').value.trim(),nascimento:$('clNasc').value,cadastrado:true});
   if(r.ok){ m.style.color='var(--good)'; m.textContent='Cliente salvo ✓'; vClientes(); } else { m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
 async function anivLoad(){ const r=await api('/clinica/aniversariantes'); const a=(r&&r.aniversariantes)||[]; const c=$('anivCard'),l=$('anivLista'); if(!c||!a.length) return;
-  c.style.display='block'; l.innerHTML=a.map(x=>`<div class="lin"><div><b>${esc(x.nome||'(sem nome)')}</b> <span class="muted">dia ${x.dia}</span></div><a class="btn ghost sm" target="_blank" href="https://wa.me/55${esc((x.tel||'').replace(/\D/g,''))}?text=${encodeURIComponent('Feliz aniversário! 🎉 Aqui é da '+((EST.perfil&&EST.perfil.nome)||'sua clínica')+'. Desejamos tudo de bom! 💖')}">Parabenizar</a></div>`).join(''); }
-let _PACS=[];
+  const hoje=a.filter(x=>x.hoje).length;
+  c.style.display='block';
+  l.innerHTML=(hoje?`<div class="muted" style="margin-bottom:8px;color:var(--good)">🎉 ${hoje} fazem aniversário HOJE! Mande um carinho.</div>`:'')
+    +a.map(x=>`<div class="lin" style="${x.hoje?'border-left:3px solid var(--good);padding-left:8px':''}"><div><b>${esc(x.nome||'(sem nome)')}</b> <span class="${x.hoje?'tag':'muted'}" ${x.hoje?'style="color:var(--good)"':''}>${x.hoje?'🎂 hoje!':'dia '+x.dia}</span></div>${x.link?`<a class="btn ${x.hoje?'primary':'ghost'} sm" target="_blank" href="${esc(x.link)}">Parabenizar</a>`:'<span class="muted">sem WhatsApp</span>'}</div>`).join(''); }
+let _PACS=[]; let EST_PROD=[]; let AG_PROD=[]; let AG_CART=[];
 async function fichaCliente(tel){
   const r=await api('/clinica/cliente/ficha?tel='+encodeURIComponent(tel)); if(!r.ok){ return; } const c=r.cliente; const a=c.anamnese||{};
   if(!_PACS.length){ _PACS=(await api('/clinica/pacotes')).pacotes||[]; }
@@ -642,6 +702,11 @@ async function vServicos(){
       <div class="row"><div class="field" style="flex:2;min-width:160px"><label>Nome</label><input id="svNome" placeholder="ex: Limpeza de pele"></div>
       <div class="field" style="width:130px"><label>Preço (R$)</label><input id="svPreco" inputmode="decimal" placeholder="150,00"></div>
       <div class="field" style="width:140px"><label>Duração (min)</label><input id="svDur" type="number" placeholder="60"></div></div>
+      <div class="row" style="align-items:center">
+        <div class="field" style="flex:1;min-width:160px"><label>Foto do serviço (aparece pro cliente)</label><input id="svFotoFile" type="file" accept="image/*" onchange="svFotoPick(this)"></div>
+        <div id="svFotoBox" style="width:88px;height:88px;border-radius:14px;border:1px dashed var(--linha);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--panel2);font-size:11px;color:var(--faint);text-align:center">sem foto</div>
+        <input type="hidden" id="svFoto"><button class="btn ghost sm hide" id="svFotoRm" onclick="svFotoLimpar()">Remover foto</button>
+      </div>
       <button class="btn primary" id="svBtn" onclick="svSalvar()">Adicionar</button> <button class="btn ghost hide" id="svCancel" onclick="svReset()">Cancelar</button></div>
     <div class="card"><h3>Sua tabela</h3><div id="svLista"></div></div>
     <div class="card"><h3>📦 Pacotes de sessão</h3><div class="muted" style="margin-bottom:10px">Venda blocos de sessões (ex: 10 limpezas) com desconto. A cada atendimento o sistema debita 1 sessão automaticamente. Você vende o pacote na ficha do cliente.</div>
@@ -673,10 +738,14 @@ async function pixLoad(){ const box=$('pixBox'); if(!box) return; const r=await 
 }
 async function pixSalvar(){ const r=await api('/clinica/pix/salvar','POST',{ativo:$('pxAtivo').checked,modo:$('pxModo').value,sinal_pct:$('pxPct').value,chave:$('pxChave').value.trim(),tipo_chave:$('pxTipo').value,recebedor:$('pxRec').value.trim(),cidade:$('pxCid').value.trim(),maquininha:$('pxMaq').value.trim()}); const m=$('pxMsg'); if(r.ok){ m.style.color='var(--good)'; m.textContent='Salvo ✓'; pixLoad(); } else { m.style.color='var(--bad)'; m.textContent=r.erro||'erro'; } }
 async function pixLimpar(){ if(!confirm('Remover a chave PIX?')) return; await api('/clinica/pix/salvar','POST',{limpar_chave:true,ativo:false}); pixLoad(); }
-function svRender(){ $('svLista').innerHTML=SERV.length?SERV.map(s=>`<div class="lin"><div><b>${esc(s.nome)}</b> <span class="tag">${s.duracao} min</span></div><div class="row"><b>${fmt(s.preco)}</b><button class="btn ghost sm" onclick="svEditar(${s.id})">Editar</button><button class="btn ghost sm" onclick="svApagar(${s.id})">✕</button></div></div>`).join(''):'<div class="muted">Nenhum serviço ainda.</div>'; }
-function svEditar(id){ const s=SERV.find(x=>x.id===id); if(!s) return; $('svId').value=s.id; $('svNome').value=s.nome; $('svPreco').value=String(s.preco).replace('.',','); $('svDur').value=s.duracao; $('svTit').textContent='Editar serviço'; $('svBtn').textContent='Salvar alteração'; $('svCancel').classList.remove('hide'); $('svNome').focus(); }
-function svReset(){ $('svId').value=''; $('svNome').value='';$('svPreco').value='';$('svDur').value=''; $('svTit').textContent='Novo serviço'; $('svBtn').textContent='Adicionar'; $('svCancel').classList.add('hide'); }
-async function svSalvar(){ const nome=$('svNome').value.trim(); if(!nome) return; const r=await api('/clinica/servico/salvar','POST',{id:$('svId').value||'',nome,preco:$('svPreco').value,duracao:$('svDur').value}); if(r.ok){ SERV=r.servicos; svReset(); svRender(); } else { alert(r.erro||'erro'); } }
+function svRender(){ $('svLista').innerHTML=SERV.length?SERV.map(s=>`<div class="lin"><div style="display:flex;align-items:center;gap:10px">${s.foto?`<img src="${s.foto}" style="width:46px;height:46px;border-radius:10px;object-fit:cover;flex:none">`:'<div style="width:46px;height:46px;border-radius:10px;background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:18px;flex:none">💆</div>'}<div><b>${esc(s.nome)}</b> <span class="tag">${s.duracao} min</span></div></div><div class="row"><b>${fmt(s.preco)}</b><button class="btn ghost sm" onclick="svEditar(${s.id})">Editar</button><button class="btn ghost sm" onclick="svApagar(${s.id})">✕</button></div></div>`).join(''):'<div class="muted">Nenhum serviço ainda.</div>'; }
+function _svFotoShow(d){ const box=$('svFotoBox'); $('svFoto').value=d||''; if(d){ box.innerHTML=`<img src="${d}" style="width:100%;height:100%;object-fit:cover">`; $('svFotoRm').classList.remove('hide'); } else { box.textContent='sem foto'; $('svFotoRm').classList.add('hide'); } }
+function svFotoPick(inp){ const f=inp.files&&inp.files[0]; if(!f) return; imgResize(f, 640, d=>_svFotoShow(d)); }
+function svFotoLimpar(){ const fi=$('svFotoFile'); if(fi) fi.value=''; _svFotoShow(''); }
+function imgResize(file, max, cb){ const rd=new FileReader(); rd.onload=e=>{ const img=new Image(); img.onload=()=>{ let{width:w,height:h}=img; if(w>h&&w>max){h=h*max/w;w=max;} else if(h>max){w=w*max/h;h=max;} const cv=document.createElement('canvas'); cv.width=w; cv.height=h; cv.getContext('2d').drawImage(img,0,0,w,h); cb(cv.toDataURL('image/jpeg',0.82)); }; img.src=e.target.result; }; rd.readAsDataURL(file); }
+function svEditar(id){ const s=SERV.find(x=>x.id===id); if(!s) return; $('svId').value=s.id; $('svNome').value=s.nome; $('svPreco').value=String(s.preco).replace('.',','); $('svDur').value=s.duracao; const fi=$('svFotoFile'); if(fi)fi.value=''; _svFotoShow(s.foto||''); $('svTit').textContent='Editar serviço'; $('svBtn').textContent='Salvar alteração'; $('svCancel').classList.remove('hide'); $('svNome').focus(); }
+function svReset(){ $('svId').value=''; $('svNome').value='';$('svPreco').value='';$('svDur').value=''; const fi=$('svFotoFile'); if(fi)fi.value=''; _svFotoShow(''); $('svTit').textContent='Novo serviço'; $('svBtn').textContent='Adicionar'; $('svCancel').classList.add('hide'); }
+async function svSalvar(){ const nome=$('svNome').value.trim(); if(!nome) return; const r=await api('/clinica/servico/salvar','POST',{id:$('svId').value||'',nome,preco:$('svPreco').value,duracao:$('svDur').value,foto:($('svFoto').value||'')}); if(r.ok){ SERV=r.servicos; svReset(); svRender(); } else { alert(r.erro||'erro'); } }
 async function svApagar(id){ if(!confirm('Apagar serviço?')) return; await api('/clinica/servico/apagar','POST',{id}); SERV=SERV.filter(s=>s.id!==id); svRender(); }
 
 // ---------------- estoque ----------------
@@ -686,18 +755,23 @@ async function vEstoque(){
   estRender();
 }
 async function estRender(){
-  const r=await api('/clinica/estoque'); const es=(r&&r.estoque)||[]; const al=(r&&r.alertas)||[];
-  const lista=es.length?es.map(p=>{const baixo=al.some(a=>a.nome===p.nome);return `<div class="lin" style="${baixo?'border-left:3px solid var(--warn);padding-left:8px':''}"><div><b>${esc(p.nome)}</b> ${baixo?'<span class="tag" style="color:var(--warn)">acabando</span>':''}<div class="muted">mín: ${p.minimo} ${esc(p.unidade)}</div></div>
-    <div class="row"><button class="btn ghost sm" onclick="estMexer(${p.id},-1)">−</button><b style="min-width:46px;text-align:center">${p.qtd} ${esc(p.unidade)}</b><button class="btn ghost sm" onclick="estMexer(${p.id},1)">+</button><button class="btn ghost sm" onclick="estApagar(${p.id})">✕</button></div></div>`;}).join(''):'<div class="muted">Nenhum produto. Cadastre acima.</div>';
+  const r=await api('/clinica/estoque'); const es=(r&&r.estoque)||[]; const al=(r&&r.alertas)||[]; EST_PROD=es;
+  const lista=es.length?es.map(p=>{const baixo=al.some(a=>a.nome===p.nome);return `<div class="lin" style="${baixo?'border-left:3px solid var(--warn);padding-left:8px':''}"><div><b>${esc(p.nome)}</b> ${baixo?'<span class="tag" style="color:var(--warn)">acabando</span>':''}${(p.vender&&p.preco>0)?`<span class="tag" style="color:var(--good)">à venda ${fmt(p.preco)}</span>`:''}<div class="muted">mín: ${p.minimo} ${esc(p.unidade)}</div></div>
+    <div class="row"><button class="btn ghost sm" onclick="estMexer(${p.id},-1)">−</button><b style="min-width:46px;text-align:center">${p.qtd} ${esc(p.unidade)}</b><button class="btn ghost sm" onclick="estMexer(${p.id},1)">+</button><button class="btn ghost sm" onclick="estEditar(${p.id})">✎</button><button class="btn ghost sm" onclick="estApagar(${p.id})">✕</button></div></div>`;}).join(''):'<div class="muted">Nenhum produto. Cadastre acima.</div>';
   $('est').innerHTML=`${al.length?`<div class="card" style="border-color:var(--warn);background:linear-gradient(100deg,rgba(255,180,84,.12),transparent)"><b>⚠️ Repor: </b>${al.map(a=>esc(a.nome)).join(', ')}</div>`:''}
-    <div class="card"><h3>Novo produto</h3><div class="row"><div class="field" style="flex:1;min-width:150px"><label>Produto</label><input id="esNome" placeholder="ex: Ácido glicólico"></div>
+    <div class="card"><h3 id="esTit">Novo produto</h3><input type="hidden" id="esId"><div class="row"><div class="field" style="flex:1;min-width:150px"><label>Produto</label><input id="esNome" placeholder="ex: Ácido glicólico"></div>
       <div class="field" style="width:110px"><label>Quantidade</label><input id="esQtd" type="number" value="0"></div>
       <div class="field" style="width:100px"><label>Mínimo</label><input id="esMin" type="number" value="0"></div>
       <div class="field" style="width:90px"><label>Unidade</label><input id="esUn" placeholder="un, ml, g"></div></div>
-      <button class="btn primary" onclick="estSalvar()">Adicionar</button></div>
+      <div class="row" style="align-items:center"><div class="field" style="width:150px"><label>Preço de venda (R$)</label><input id="esPreco" inputmode="decimal" placeholder="0,00"></div>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim);margin-top:18px"><input type="checkbox" id="esVender" style="width:auto"> Vender no agendamento</label></div>
+      <div class="muted" style="margin:2px 0 10px">Marque "vender no agendamento" e ponha um preço pra oferecer o produto na hora de marcar a consulta (cliente compra na hora ou reserva no sinal). O estoque baixa sozinho.</div>
+      <button class="btn primary" id="esBtn" onclick="estSalvar()">Adicionar</button> <button class="btn ghost hide" id="esCancel" onclick="estReset()">Cancelar</button></div>
     <div class="card"><h3>Seus produtos</h3>${lista}</div>`;
 }
-async function estSalvar(){ const nome=$('esNome').value.trim(); if(!nome) return; await api('/clinica/estoque/salvar','POST',{nome,qtd:$('esQtd').value,minimo:$('esMin').value,unidade:$('esUn').value.trim()||'un'}); estRender(); }
+function estReset(){ ['esId','esNome','esPreco'].forEach(i=>{const e=$(i);if(e)e.value='';}); $('esQtd').value='0';$('esMin').value='0';$('esUn').value=''; $('esVender').checked=false; $('esTit').textContent='Novo produto'; $('esBtn').textContent='Adicionar'; $('esCancel').classList.add('hide'); }
+function estEditar(id){ const p=(EST_PROD||[]).find(x=>x.id===id); if(!p) return; $('esId').value=p.id; $('esNome').value=p.nome; $('esQtd').value=p.qtd; $('esMin').value=p.minimo; $('esUn').value=p.unidade||''; $('esPreco').value=p.preco?String(p.preco).replace('.',','):''; $('esVender').checked=!!p.vender; $('esTit').textContent='Editar produto'; $('esBtn').textContent='Salvar'; $('esCancel').classList.remove('hide'); $('esNome').focus(); }
+async function estSalvar(){ const nome=$('esNome').value.trim(); if(!nome) return; await api('/clinica/estoque/salvar','POST',{id:$('esId').value||'',nome,qtd:$('esQtd').value,minimo:$('esMin').value,unidade:$('esUn').value.trim()||'un',preco:$('esPreco').value,vender:$('esVender').checked}); estReset(); estRender(); }
 async function estMexer(id,delta){ await api('/clinica/estoque/mexer','POST',{id,delta}); estRender(); }
 async function estApagar(id){ if(!confirm('Apagar produto?')) return; await api('/clinica/estoque/apagar','POST',{id}); estRender(); }
 

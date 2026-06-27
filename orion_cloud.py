@@ -48,6 +48,7 @@ HTML_FILE = os.path.join(PASTA, "orion_app.html")
 SITE_FILE = os.path.join(PASTA, "orion_site.html")
 CLINICA_FILE = os.path.join(PASTA, "clinica_app.html")
 CLIENTE_FILE = os.path.join(PASTA, "clinica_cliente.html")
+WIDGET_FILE = os.path.join(PASTA, "orion_widget.html")
 CLINICA_SITE_FILE = os.path.join(PASTA, "clinica_site.html")
 # APP_MODE: "orion" (padrao) ou "clinica". No modo clinica, a raiz "/" abre a Clinica+ (nao o Orion).
 APP_MODE = os.environ.get("APP_MODE", "orion").strip().lower()
@@ -714,6 +715,43 @@ def loop_noticias():
         except Exception: pass
         time.sleep(600)
 
+# ======================= NOVIDADES (broadcast do dono pros apps: Orion + Clinica+) =======================
+def novidades_all():
+    n = get_blob(1, "novidades", None)
+    return n if isinstance(n, list) else []
+def novidades_get(app="orion", incluir_inativas=False):
+    """Lista de avisos/novidades pra mostrar no app (ticker + carrossel). app: orion|clinica."""
+    out=[]
+    for n in novidades_all():
+        if not incluir_inativas and not n.get("ativo", True): continue
+        alvo = n.get("app","ambos")
+        if not incluir_inativas and alvo not in ("ambos", app): continue
+        out.append(n)
+    out.sort(key=lambda x: x.get("criado",0), reverse=True)
+    return out
+def novidades_salvar(d):
+    titulo = (d.get("titulo") or "").strip()[:120]
+    if not titulo: return {"ok":False, "erro":"de um titulo pra novidade"}
+    ns = novidades_all()
+    try: nid = int(d.get("id")) if d.get("id") not in (None,"","null") else None
+    except Exception: nid = None
+    item = next((x for x in ns if x.get("id")==nid), None)
+    if not item:
+        item = {"id": int(time.time()*1000), "criado": time.time()}; ns.append(item)
+    item["tag"]   = (d.get("tag") or "Novidade")[:24]
+    item["titulo"]= titulo
+    item["texto"] = (d.get("texto") or "").strip()[:400]
+    item["link"]  = (d.get("link") or "").strip()[:200]
+    item["app"]   = d.get("app") if d.get("app") in ("ambos","orion","clinica") else "ambos"
+    item["ativo"] = bool(d.get("ativo")) if d.get("ativo") is not None else True
+    set_blob(1, "novidades", ns[-100:])
+    return {"ok":True, "novidades": novidades_get("orion", incluir_inativas=True)}
+def novidades_apagar(nid):
+    try: nid=int(nid)
+    except Exception: pass
+    set_blob(1, "novidades", [x for x in novidades_all() if x.get("id")!=nid])
+    return {"ok":True, "novidades": novidades_get("orion", incluir_inativas=True)}
+
 # ======================= PUSH ("Orion te chama") =======================
 VAPID_PUBLIC = os.environ.get("VAPID_PUBLIC", "BDbH8ACxeYEOyAaF8IqWqBSWu_dKg_LwBCRWxG8rtwE6oVwfMNhgG5BtutYhTDObRTFpeZ8mMkzPqwPJ2hmBV0Y")
 VAPID_PRIVATE = os.environ.get("VAPID_PRIVATE", "").replace("\\n", "\n")
@@ -790,6 +828,165 @@ def tem_clinica(u):
     """True se o plano do Orion da acesso ao sistema Clinica+ (beneficio do plano 'clinica', e tambem business/adm)."""
     try: return plano_de(u) in ("clinica", "business", "adm")
     except Exception: return False
+# ===================== CARTEIRA COLETIVA (co-investimento: voce + familia, dinheiro juntado) =====================
+def coinv_get(uid):
+    c = get_blob(uid, "coinv", None)
+    if not isinstance(c, dict): c = {}
+    for k,dv in (("participantes",[]),("pix",{}),("lan",[]),("pos",[])): c.setdefault(k,dv)
+    return c
+def _coinv_save(uid, c): set_blob(uid, "coinv", c)
+def _coinv_calc(c):
+    """caixa (sacavel/operavel) e investido por participante, a partir dos lancamentos + posicoes (fonte da verdade)."""
+    saldo = {p["id"]:{"caixa":0.0,"investido":0.0} for p in c["participantes"]}
+    for l in c["lan"]:
+        pid=l.get("part_id")
+        if pid not in saldo: continue
+        if l.get("tipo")=="deposito": saldo[pid]["caixa"]+=float(l.get("valor") or 0)
+        elif l.get("tipo")=="saque":  saldo[pid]["caixa"]-=float(l.get("valor") or 0)
+    for pos in c["pos"]:
+        for pid,v in (pos.get("custo") or {}).items():
+            ipid=int(pid)
+            if ipid in saldo:
+                saldo[ipid]["caixa"]-=float(v or 0)
+                if pos.get("status")!="vendida": saldo[ipid]["investido"]+=float(v or 0)
+        if pos.get("status")=="vendida":
+            for pid,v in (pos.get("proceeds") or {}).items():
+                ipid=int(pid)
+                if ipid in saldo: saldo[ipid]["caixa"]+=float(v or 0)
+    return saldo
+def _cpf_masc(cpf):
+    c=_digs(cpf); return ("***."+c[3:6]+"."+c[6:9]+"-**") if len(c)==11 else ""
+def coinv_estado(uid, eu_part=None, modo="dono"):
+    c=coinv_get(uid); saldo=_coinv_calc(c); parts=[]; caixa_t=inv_t=0.0
+    for p in c["participantes"]:
+        s=saldo.get(p["id"],{"caixa":0,"investido":0}); cx=round(s["caixa"],2); iv=round(s["investido"],2)
+        parts.append({"id":p["id"],"nome":p["nome"],"cpf":_cpf_masc(p.get("cpf")),"nascimento":p.get("nascimento",""),"email":p.get("email",""),
+                      "caixa":cx,"investido":iv,"total":round(cx+iv,2)}); caixa_t+=cx; inv_t+=iv
+    tot=caixa_t+inv_t
+    for p in parts: p["pct"]=round((p["total"]/tot*100) if tot>0 else 0,1)
+    nome={p["id"]:p["nome"] for p in c["participantes"]}
+    abertas=[{"id":pos["id"],"ticker":pos.get("ticker",""),"data":pos.get("data",""),
+              "total":round(sum(float(v or 0) for v in (pos.get("custo") or {}).values()),2),
+              "donos":[{"nome":nome.get(int(pid),"?"),"valor":round(float(v or 0),2)} for pid,v in (pos.get("custo") or {}).items()]}
+             for pos in c["pos"] if pos.get("status")!="vendida"]
+    def _dh(l):
+        em=l.get("em")
+        try: return datetime.datetime.fromtimestamp(em).strftime("%d/%m/%Y %H:%M") if em else (l.get("data","").split("-")[::-1] and "/".join(l.get("data","").split("-")[::-1]))
+        except Exception: return l.get("data","")
+    hist=[]
+    for l in c["lan"]: hist.append({"tipo":l.get("tipo"),"data":l.get("data",""),"datahora":_dh(l),"metodo":l.get("metodo","pix"),"quem":nome.get(l.get("part_id"),"?"),"valor":float(l.get("valor") or 0),"ticker":""})
+    for pos in c["pos"]:
+        vend=pos.get("status")=="vendida"
+        hist.append({"tipo":("venda" if vend else "compra"),"data":(pos.get("venda_data") or pos.get("data","")),"datahora":_dh({"em":pos.get("em"),"data":(pos.get("venda_data") or pos.get("data",""))}),"ticker":pos.get("ticker",""),
+                     "valor":round(sum(float(v or 0) for v in ((pos.get("proceeds") if vend else pos.get("custo")) or {}).values()),2),
+                     "quem":", ".join(nome.get(int(pid),"?") for pid in (pos.get("custo") or {}))})
+    hist=sorted(hist,key=lambda x:str(x.get("data","")),reverse=True)[:60]
+    px=c.get("pix",{})
+    _gu=get_user(uid); _dn=(_gu["nome"] if _gu else "")
+    return {"ok":True,"modo":modo,"eu":eu_part,"sandbox":bool(c.get("sandbox")),"dono_nome":_dn,
+            "participantes":parts,"resumo":{"caixa":round(caixa_t,2),"investido":round(inv_t,2),"total":round(tot,2)},
+            "posicoes":abertas,"historico":hist,
+            "pix":{"tem_chave":bool(px.get("chave")),"chave_masc":((px.get("chave","")[:3]+"***"+px.get("chave","")[-3:]) if len(px.get("chave",""))>7 else ""),"tipo":px.get("tipo",""),"recebedor":px.get("recebedor",""),"cidade":px.get("cidade","")}}
+def _coinv_eidx(): return get_blob(1,"coinv_eidx",{}) or {}
+def _coinv_eidx_set(email, owner, pid):
+    e=(email or "").strip().lower()
+    if not e: return
+    idx=_coinv_eidx(); idx[e]={"owner":int(owner),"part":int(pid)}; set_blob(1,"coinv_eidx",idx)
+def _coinv_resolve(u):
+    """(owner_uid, part_id, modo). Dono = tem carteira propria. Participante = foi cadastrado (pelo e-mail) na carteira de outro -> acessa junto."""
+    uid=u["id"]
+    if coinv_get(uid).get("participantes"): return uid, None, "dono"
+    try: em=(u["email"] or "").strip().lower()
+    except Exception: em=""
+    if em:
+        ref=_coinv_eidx().get(em)
+        if ref and int(ref.get("owner",0))!=uid: return int(ref["owner"]), int(ref.get("part") or 0), "participante"
+    return uid, None, "dono"
+def coinv_part_add(uid, d):
+    if isinstance(d,str): d={"nome":d}
+    nome=(d.get("nome") or "").strip()[:60]; cpf=_digs(d.get("cpf"))
+    email=(d.get("email") or "").strip().lower(); nasc=(d.get("nascimento") or "").strip()[:10]
+    if len(nome)<2: return {"ok":False,"erro":"informe o nome completo"}
+    if len(cpf)!=11: return {"ok":False,"erro":"CPF inválido (11 dígitos)"}
+    if email and ("@" not in email or "." not in email.split("@")[-1]): return {"ok":False,"erro":"e-mail inválido"}
+    c=coinv_get(uid)
+    if any(p.get("cpf")==cpf for p in c["participantes"]): return {"ok":False,"erro":"já existe participante com esse CPF"}
+    pid=int(time.time()*1000)
+    c["participantes"].append({"id":pid,"nome":nome,"cpf":cpf,"email":email,"nascimento":nasc,"criado":time.time()})
+    _coinv_save(uid,c)
+    if email: _coinv_eidx_set(email, uid, pid)   # a pessoa acessa pelo proprio login (mesmo e-mail) e opera junto
+    return coinv_estado(uid)
+def coinv_sandbox_set(uid, on):
+    c=coinv_get(uid); c["sandbox"]=bool(on); _coinv_save(uid,c); return {"ok":True,"sandbox":c["sandbox"]}
+def coinv_ajuste(uid, part_id, valor):
+    """Apenas no modo simulação (sandbox): ajusta o caixa de um participante pro valor informado."""
+    c=coinv_get(uid)
+    if not c.get("sandbox"): return {"ok":False,"erro":"ajuste manual só disponível no modo simulação"}
+    try: part_id=int(part_id)
+    except Exception: return {"ok":False,"erro":"participante inválido"}
+    alvo=round(_num(valor),2); atual=_coinv_calc(c).get(part_id,{}).get("caixa",0); delta=round(alvo-atual,2)
+    if delta==0: return coinv_estado(uid)
+    c["lan"].append({"id":int(time.time()*1000),"tipo":("deposito" if delta>0 else "saque"),"part_id":part_id,"valor":abs(delta),
+                     "data":datetime.date.today().isoformat(),"em":time.time(),"metodo":"ajuste","nota":"ajuste (simulação)"})
+    _coinv_save(uid,c); return coinv_estado(uid)
+def coinv_part_rm(uid, pid):
+    try: pid=int(pid)
+    except Exception: pass
+    c=coinv_get(uid); c["participantes"]=[p for p in c["participantes"] if p["id"]!=pid]; _coinv_save(uid,c); return coinv_estado(uid)
+def coinv_pix_set(uid, d):
+    c=coinv_get(uid); px=c.get("pix",{})
+    for k in ("tipo","recebedor","cidade"):
+        if k in d: px[k]=str(d.get(k) or "")[:60]
+    if (d.get("chave") or "").strip(): px["chave"]=d["chave"].strip()
+    if d.get("limpar"): px.pop("chave",None)
+    c["pix"]=px; _coinv_save(uid,c); return coinv_estado(uid)
+def coinv_qr(uid, valor=None, descricao="aporte"):
+    c=coinv_get(uid); px=c.get("pix",{})
+    if not px.get("chave"): return {"ok":False,"erro":"cadastre sua chave PIX primeiro (na carteira)"}
+    cc=pix_brcode(px["chave"], px.get("recebedor") or "INVESTIDOR", px.get("cidade") or "BRASIL", (round(_num(valor),2) if valor else None))
+    if not cc: return {"ok":False,"erro":"chave PIX invalida"}
+    return {"ok":True,"copia_cola":cc,"valor":(round(_num(valor),2) if valor else None)}
+def coinv_lancar(uid, tipo, part_id, valor, data="", nota=""):
+    if tipo not in ("deposito","saque"): return {"ok":False,"erro":"tipo invalido"}
+    try: part_id=int(part_id)
+    except Exception: return {"ok":False,"erro":"participante invalido"}
+    v=round(_num(valor),2)
+    if v<=0: return {"ok":False,"erro":"valor invalido"}
+    c=coinv_get(uid)
+    if not any(p["id"]==part_id for p in c["participantes"]): return {"ok":False,"erro":"participante nao encontrado"}
+    if tipo=="saque" and (_coinv_calc(c).get(part_id,{}).get("caixa",0) < v): return {"ok":False,"erro":"caixa insuficiente desse participante"}
+    c["lan"].append({"id":int(time.time()*1000),"tipo":tipo,"part_id":part_id,"valor":v,"data":(data or datetime.date.today().isoformat()),"em":time.time(),"metodo":"pix","nota":str(nota or "")[:120]})
+    _coinv_save(uid,c); return coinv_estado(uid)
+def coinv_compra(uid, ticker, divisao, data="", nota=""):
+    ticker=(ticker or "").strip().upper()[:14]
+    if not ticker: return {"ok":False,"erro":"informe o ativo (ex: PETR4)"}
+    c=coinv_get(uid); custo={}
+    for d in (divisao or []):
+        try: pid=int(d.get("part_id"))
+        except Exception: continue
+        val=round(_num(d.get("valor")),2)
+        if val<=0: continue
+        if not any(p["id"]==pid for p in c["participantes"]): return {"ok":False,"erro":"participante invalido"}
+        custo[str(pid)]=round(custo.get(str(pid),0)+val,2)
+    if not custo: return {"ok":False,"erro":"informe pelo menos um valor por participante"}
+    saldo=_coinv_calc(c)
+    for pid,val in custo.items():
+        if saldo.get(int(pid),{}).get("caixa",0) < val:
+            nm=next((p["nome"] for p in c["participantes"] if str(p["id"])==pid),"participante")
+            return {"ok":False,"erro":f"caixa insuficiente de {nm} (precisa R$ {val:.2f}). Faça um aporte primeiro."}
+    c["pos"].append({"id":int(time.time()*1000),"ticker":ticker,"data":(data or datetime.date.today().isoformat()),"em":time.time(),"custo":custo,"status":"aberta","nota":str(nota or "")[:120]})
+    _coinv_save(uid,c); return coinv_estado(uid)
+def coinv_vender(uid, pos_id, proceeds, data=""):
+    try: pos_id=int(pos_id)
+    except Exception: pass
+    pr=round(_num(proceeds),2)
+    if pr<=0: return {"ok":False,"erro":"informe o valor recebido na venda"}
+    c=coinv_get(uid); pos=next((x for x in c["pos"] if x["id"]==pos_id and x.get("status")!="vendida"), None)
+    if not pos: return {"ok":False,"erro":"posicao nao encontrada"}
+    ctot=sum(float(v or 0) for v in pos.get("custo",{}).values()) or 1
+    pos["proceeds"]={pid:round(pr*(float(v or 0)/ctot),2) for pid,v in pos.get("custo",{}).items()}  # devolve proporcional ao custo (lucro/prejuizo junto)
+    pos["status"]="vendida"; pos["venda_data"]=(data or datetime.date.today().isoformat())
+    _coinv_save(uid,c); return coinv_estado(uid)
 # ----- Orion -> Clinica+ (integracao por API; o usuario cola a URL + token da Clinica dele) -----
 def orion_clinica_conn(uid): return get_blob(uid, "clinica_conn", {}) or {}
 def orion_clinica_conectar(uid, url, token):
@@ -2524,6 +2721,7 @@ class H(BaseHTTPRequestHandler):
         elif path == "/clinica/lembrete": self._send({"ok":True, "lembrete":cl_lembrete_get(uid)})
         elif path == "/clinica/pacotes": self._send({"ok":True, "pacotes":cl_pacotes_get(uid)})
         elif path == "/clinica/estoque": self._send({"ok":True, "estoque":cl_estoque_get(uid), "alertas":cl_estoque_alertas(uid)})
+        elif path == "/clinica/produtos": self._send({"ok":True, "produtos":cl_produtos_venda(uid)})
         elif path == "/clinica/plano": self._send({"ok":True, **cl_plano_info(uid), "preco":cl_preco()})
         elif path == "/clinica/wa": self._send({"ok":True, "wa":cl_wa_get(uid), "webhook":(base_url(self)+"/webhook/whatsapp"), "verify":(gcfg("whatsapp_verify","WHATSAPP_VERIFY_TOKEN") or "orion")})
         elif path == "/clinica/pix": self._send({"ok":True, "pix":cl_pix_get(uid)})
@@ -2725,6 +2923,32 @@ class H(BaseHTTPRequestHandler):
             self._send_html(CLINICA_FILE)
         elif path in ("/agendar","/agendar/"):
             self._send_html(CLIENTE_FILE)
+        elif path in ("/widget","/widget/"):   # chat do atendente Orion (vai dentro do iframe no site do parceiro)
+            self._send_html(WIDGET_FILE)
+        elif path in ("/orion-widget.js","/widget.js"):   # loader: cria a bolha flutuante + iframe no site do parceiro
+            origin = base_url(self)
+            js = ("""(function(){
+  var s=document.currentScript||(function(){var x=document.getElementsByTagName('script');return x[x.length-1];})();
+  var cid=s.getAttribute('data-clinica')||s.getAttribute('data-c')||'';
+  var cor=s.getAttribute('data-cor')||'#b76e79';
+  var pos=s.getAttribute('data-lado')==='esquerda'?'left':'right';
+  var O='%ORIGIN%';
+  if(!cid){console.warn('orion-widget: faltou data-clinica');return;}
+  var btn=document.createElement('div');
+  btn.innerHTML='\\u2728';
+  btn.style.cssText='position:fixed;bottom:20px;'+pos+':20px;width:60px;height:60px;border-radius:50%;background:'+cor+';color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:2147483646;transition:transform .2s';
+  btn.onmouseenter=function(){btn.style.transform='scale(1.08)'};btn.onmouseleave=function(){btn.style.transform='scale(1)'};
+  var box=document.createElement('div');
+  box.style.cssText='position:fixed;bottom:90px;'+pos+':20px;width:380px;max-width:calc(100vw - 32px);height:560px;max-height:calc(100vh - 120px);border:0;border-radius:18px;overflow:hidden;box-shadow:0 16px 50px rgba(0,0,0,.3);z-index:2147483646;display:none;background:#fff';
+  var ifr=document.createElement('iframe');
+  ifr.src=O+'/widget?c='+encodeURIComponent(cid);
+  ifr.style.cssText='width:100%;height:100%;border:0';ifr.allow='clipboard-write';
+  box.appendChild(ifr);
+  var open=false;
+  btn.onclick=function(){open=!open;box.style.display=open?'block':'none';btn.innerHTML=open?'\\u2715':'\\u2728';};
+  document.body.appendChild(btn);document.body.appendChild(box);
+})();""").replace("%ORIGIN%", origin)
+            self._send(js.encode("utf-8"), 200, "application/javascript; charset=utf-8")
         elif path == "/clinica/manifest.webmanifest":
             self._send(json.dumps({"name":"Clínica+","short_name":"Clínica+","start_url":"/clinica","scope":"/clinica",
                 "display":"standalone","orientation":"portrait","background_color":"#0b0e15","theme_color":"#ff7ab8","lang":"pt-BR",
@@ -2761,6 +2985,10 @@ class H(BaseHTTPRequestHandler):
                 c = orion_clinica_conn(u["id"]); self._send({"ok":True, "url":c.get("url",""), "ligado":bool(c.get("url") and c.get("token"))})
             elif path == "/orion/clinica/resumo": self._send(orion_clinica_call(u["id"], "/api/clinica/resumo"))
             else: self._send({"ok":False,"erro":"nao encontrado"}, 404)
+        elif path == "/carteira":
+            if not u: self._send({"ok":False,"erro":"faca login"})
+            else:
+                own,part,modo=_coinv_resolve(u); self._send(coinv_estado(own,part,modo))
         elif path == "/logo": p=_asset("orion_logo.png","orion_icon.png"); self._file(p,"image/png") if p else self._send(b"",404)
         elif path == "/icon": p=_asset("orion_icon.png"); self._file(p,"image/png") if p else self._send(b"",404)
         elif path == "/favicon.ico": p=_asset("orion.ico"); self._file(p,"image/x-icon") if p else self._send(b"",404)
@@ -2824,6 +3052,14 @@ class H(BaseHTTPRequestHandler):
         elif path == "/prefs": self._send({"ok":True,"prefs":prefs_get(u["id"]), "onboarding": bool((get_blob(u["id"],"onboarding_ok",{}) or {}).get("feito"))} if u else {"ok":True,"prefs":{}})
         elif path == "/code/hist": self._send(orion_code_hist(u) if u else {"ok":False,"erro":"faca login"})
         elif path == "/fluxo": self._send({"ok":True,"fluxo":fluxo_get(u["id"])} if u else {"ok":False,"erro":"faca login"})
+        elif path == "/novidades":
+            _qs = urllib.parse.parse_qs(self.path.split("?",1)[1]) if "?" in self.path else {}
+            _gq = lambda k: (_qs.get(k) or [""])[0]
+            _app = (_gq("app") or "orion").strip().lower()
+            if _gq("admin") and u and u["criador"]:
+                self._send({"ok":True, "novidades": novidades_get("orion", incluir_inativas=True), "admin":True})
+            else:
+                self._send({"ok":True, "novidades": novidades_get(_app if _app in ("orion","clinica") else "orion")})
         elif path == "/tokens":
             if u:
                 pl=plano_de(u); st=tokens_estado(u); st.pop("_w",None)
@@ -2927,11 +3163,24 @@ class H(BaseHTTPRequestHandler):
             except Exception: cuid = 0
             if path == "/pub/agendar":
                 r = cl_agendar(cuid, {"servico_id":d.get("servico_id"), "data":d.get("data"), "hora":d.get("hora"),
-                                      "cliente":d.get("nome"), "telefone":d.get("telefone"), "func_id":d.get("func_id")}, origem="cliente")
+                                      "cliente":d.get("nome"), "telefone":d.get("telefone"), "func_id":d.get("func_id"),
+                                      "produtos":d.get("produtos")}, origem="cliente")
                 return self._send(r)
             if path == "/pub/cliente":
-                cl_cliente_registrar(cuid, d.get("nome"), d.get("telefone"), cadastrado=True, email=d.get("email",""), nascimento=d.get("nascimento",""))
+                if len(_digs(d.get("telefone") or "")) < 10: return self._send({"ok":False,"erro":"informe um telefone valido com DDD"})
+                cl_cliente_registrar(cuid, (d.get("nome") or "").strip(), d.get("telefone"), cadastrado=True,
+                                     email=(d.get("email") or "").strip(), nascimento=(d.get("nascimento") or "").strip())
                 return self._send({"ok":True})
+            if path == "/pub/atendente":   # Orion atendente embutido no site do parceiro (widget)
+                if not _rate_ok(self._client_ip(), "pubatend", 30, 120): return self._send({"ok":False,"erro":"muitas mensagens, espere um pouquinho"})
+                msg = (d.get("msg") or d.get("mensagem") or "").strip()[:1000]
+                if not cuid or not msg: return self._send({"ok":False,"erro":"mensagem vazia"})
+                hist = d.get("historico") if isinstance(d.get("historico"), list) else []
+                hist = [{"role":("user" if (h.get("role")=="user") else "assistant"), "content":str(h.get("content") or "")[:1000]} for h in hist[-8:]]
+                tel = _digs(d.get("telefone") or ""); nome = (d.get("nome") or "").strip()[:80]
+                try: resp = cl_bot_agente(cuid, msg, hist, cliente_tel=tel, cliente_nome=nome)
+                except Exception as e: print("[pub atendente]", e); resp = "Tive um probleminha aqui, pode repetir?"
+                return self._send({"ok":True, "resposta":resp})
             return self._send({"ok":False,"erro":"nao encontrado"}, 404)
         u = self._user()
         # GUARDA DE BAN: bloqueia qualquer acao de usuario/dispositivo banido (so deixa deslogar)
@@ -2943,6 +3192,19 @@ class H(BaseHTTPRequestHandler):
             if not u: return self._send({"ok":False,"erro":"faca login"}, 401)
             if path == "/orion/clinica/conectar": return self._send(orion_clinica_conectar(u["id"], d.get("url"), d.get("token")))
             if path == "/orion/clinica/preco": return self._send(orion_clinica_call(u["id"], "/api/clinica/preco", "POST", {"servico":d.get("servico"), "preco":d.get("preco")}))
+            return self._send({"ok":False,"erro":"nao encontrado"}, 404)
+        if path.startswith("/carteira/"):   # carteira coletiva (co-investimento; titular + participantes compartilham)
+            if not u: return self._send({"ok":False,"erro":"faca login"}, 401)
+            own,part,modo=_coinv_resolve(u); dono=(modo=="dono"); soTit={"ok":False,"erro":"só o titular da conta pode fazer isso"}
+            if path=="/carteira/participante":     return self._send(coinv_part_add(own, d) if dono else soTit)
+            if path=="/carteira/participante/rm":   return self._send(coinv_part_rm(own, d.get("id")) if dono else soTit)
+            if path=="/carteira/pix":               return self._send(coinv_pix_set(own, d) if dono else soTit)
+            if path=="/carteira/sandbox":           return self._send(coinv_sandbox_set(own, d.get("on")) if dono else soTit)
+            if path=="/carteira/ajuste":            return self._send(coinv_ajuste(own, d.get("part_id"), d.get("valor")) if dono else soTit)
+            if path=="/carteira/qr":                return self._send(coinv_qr(own, d.get("valor")))
+            if path=="/carteira/lancar":            return self._send(coinv_lancar(own, d.get("tipo"), d.get("part_id"), d.get("valor"), d.get("data",""), d.get("nota","")))
+            if path=="/carteira/compra":            return self._send(coinv_compra(own, d.get("ticker"), d.get("divisao") or [], d.get("data",""), d.get("nota","")))
+            if path=="/carteira/vender":            return self._send(coinv_vender(own, d.get("id"), d.get("proceeds"), d.get("data","")))
             return self._send({"ok":False,"erro":"nao encontrado"}, 404)
         # ---- contas / sessao ----
         if path == "/usuario/criar":
@@ -3107,6 +3369,10 @@ class H(BaseHTTPRequestHandler):
             self._send(checkout_tokens(u, d.get("pacote",""), d.get("provedor"), base_url(self)) if u else {"ok":False,"msg":"faca login"})
         elif path == "/admin/integra/salvar":
             self._send(gcfg_salvar(d) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/novidades/salvar":
+            self._send(novidades_salvar(d) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
+        elif path == "/novidades/apagar":
+            self._send(novidades_apagar(d.get("id")) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/banir":
             self._send(banir(d.get("tipo"), d.get("valor"), d.get("motivo","")) if (u and u["criador"]) else {"ok":False,"erro":"so o dono"})
         elif path == "/admin/desbanir":
